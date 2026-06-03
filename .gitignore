@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Xcode / Swift
+.build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+xcuserdata/
+.swiftpm/
+
+# Node / browser extension
+node_modules/
+dist/
+*.log
+.env
+.env.local
+
+# Python (spike tooling)
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Spike artifacts (regenerated on demand)
+spike/**/screenshots/
+spike/**/*.jsonl
+spike/**/.build/
+
+# Secrets
+*.pem
+*.key
+.secrets/
