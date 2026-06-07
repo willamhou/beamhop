@@ -8,3 +8,11 @@ dist/
 *.log
 screenshots/
 .build/
+
+# compiled spike binaries (rebuildable from source)
+s3-chatgpt-ax/probe_chatgpt
+s3-chatgpt-ax/paste_test
+s4-chrome-native-messaging/host/beamhop-bridge
+s4-chrome-native-messaging/host/com.beamhop.bridge.json
+s6-ax-selected-text/axprobe
+s6-ax-selected-text/results.jsonl
