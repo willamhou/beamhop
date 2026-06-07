@@ -1,15 +1,19 @@
 import Cocoa
 import ApplicationServices
+import Carbon
 
-// Run from a Terminal that has BOTH:
-//   - Accessibility permission   (System Settings → Privacy & Security → Accessibility)
-//   - Input Monitoring permission (System Settings → Privacy & Security → Input Monitoring)
-// Triggers on each Cmd+Shift+P press; logs one JSON line per probe to stdout.
-
-func currentFrontApp() -> (bundleID: String, name: String, pid: pid_t)? {
-    guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
-    return (app.bundleIdentifier ?? "unknown", app.localizedName ?? "unknown", app.processIdentifier)
-}
+// SAFE read-only AX probe. You select text yourself, then press ⌘⇧P — the probe reads the
+// frontmost app's app/window/selection via AX and prints one JSON line. It NEVER synthesizes
+// keystrokes into your apps.
+//
+// Permissions: only Accessibility (System Settings → Privacy & Security → Accessibility).
+// The hotkey uses Carbon RegisterEventHotKey, so NO Input Monitoring is needed.
+//
+// Incorporates the 2026-06-07 spike findings:
+//  - query the SYSTEM-WIDE focused element (app-element query returns nil for most apps)
+//  - opt Chromium/Electron into AX with AXManualAccessibility / AXEnhancedUserInterface
+//  - fall back to traversing the focused window for any populated kAXSelectedText
+//  - read AXURL on web areas (Safari/Chrome)
 
 func axAttr(_ el: AXUIElement, _ key: String) -> AnyObject? {
     var v: CFTypeRef?
@@ -17,68 +21,93 @@ func axAttr(_ el: AXUIElement, _ key: String) -> AnyObject? {
     return r == .success ? v : nil
 }
 
-func focusedElement(forPID pid: pid_t) -> AXUIElement? {
-    let app = AXUIElementCreateApplication(pid)
-    guard let v = axAttr(app, kAXFocusedUIElementAttribute as String) else { return nil }
-    guard CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
+func enableManualAX(_ app: AXUIElement) {
+    AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+}
+
+func systemFocusedElement() -> AXUIElement? {
+    let sys = AXUIElementCreateSystemWide()
+    guard let v = axAttr(sys, kAXFocusedUIElementAttribute as String),
+          CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
     return (v as! AXUIElement)
 }
 
+func findSelectedText(_ el: AXUIElement, depth: Int = 0) -> String? {
+    if let s = axAttr(el, kAXSelectedTextAttribute as String) as? String, !s.isEmpty { return s }
+    if depth > 8 { return nil }
+    if let kids = axAttr(el, kAXChildrenAttribute as String) as? [AXUIElement] {
+        for k in kids { if let s = findSelectedText(k, depth: depth + 1) { return s } }
+    }
+    return nil
+}
+
 func probe() -> [String: Any] {
-    guard let front = currentFrontApp() else { return ["error": "no front app"] }
+    guard let app = NSWorkspace.shared.frontmostApplication else { return ["error": "no front app"] }
+    let pid = app.processIdentifier
     var result: [String: Any] = [
         "ts": ISO8601DateFormatter().string(from: Date()),
-        "bundle_id": front.bundleID,
-        "app_name": front.name,
-        "pid": Int(front.pid),
+        "bundle_id": app.bundleIdentifier ?? "unknown",
+        "app_name": app.localizedName ?? "unknown",
+        "pid": Int(pid),
     ]
-    let appEl = AXUIElementCreateApplication(front.pid)
+    let appEl = AXUIElementCreateApplication(pid)
+    enableManualAX(appEl)
+    usleep(120_000)  // let Chromium/Electron build its AX tree after opt-in
+
+    var focusedWindow: AXUIElement?
     if let win = axAttr(appEl, kAXFocusedWindowAttribute as String),
        CFGetTypeID(win) == AXUIElementGetTypeID() {
-        let winEl = win as! AXUIElement
-        result["window_title"] = axAttr(winEl, kAXTitleAttribute as String) as? String ?? ""
+        focusedWindow = (win as! AXUIElement)
+        result["window_title"] = axAttr(focusedWindow!, kAXTitleAttribute as String) as? String ?? ""
     } else {
         result["window_title"] = ""
     }
-    if let focused = focusedElement(forPID: front.pid) {
+
+    let focused = systemFocusedElement()
+    if let focused = focused {
         result["focused_role"] = axAttr(focused, kAXRoleAttribute as String) as? String ?? ""
         result["focused_subrole"] = axAttr(focused, kAXSubroleAttribute as String) as? String ?? ""
-        result["selected_text"] = axAttr(focused, kAXSelectedTextAttribute as String) as? String ?? ""
-        // URL — Safari/Chrome expose AXURL on the web area
+        var sel = axAttr(focused, kAXSelectedTextAttribute as String) as? String ?? ""
+        if sel.isEmpty, let win = focusedWindow { sel = findSelectedText(win) ?? "" }
+        result["selected_text"] = sel
         if let urlVal = axAttr(focused, "AXURL"), CFGetTypeID(urlVal) == CFURLGetTypeID() {
             result["url"] = (urlVal as! NSURL).absoluteString ?? ""
         }
     } else {
-        result["selected_text"] = ""
+        var sel = ""
+        if let win = focusedWindow { sel = findSelectedText(win) ?? "" }
+        result["selected_text"] = sel
         result["focused_role"] = ""
+        result["focused_note"] = "no system-wide focused element"
     }
     return result
 }
 
-// Trap Cmd+Shift+P as the probe hotkey
-let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
-                            eventsOfInterest: mask, callback: { _, _, event, _ in
-    let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-    let flags = event.flags
-    // Cmd + Shift + P (keycode 35)
-    if keycode == 35 && flags.contains(.maskCommand) && flags.contains(.maskShift) {
-        let r = probe()
-        if let d = try? JSONSerialization.data(withJSONObject: r),
-           let s = String(data: d, encoding: .utf8) {
-            print(s)
-            fflush(stdout)
-        }
+func emit() {
+    let r = probe()
+    if let d = try? JSONSerialization.data(withJSONObject: r),
+       let s = String(data: d, encoding: .utf8) {
+        print(s)
+        fflush(stdout)
     }
-    return Unmanaged.passRetained(event)
-}, userInfo: nil)
-
-guard let tap = tap else {
-    fputs("event tap failed; grant Input Monitoring + Accessibility permission to this terminal\n", stderr)
-    exit(1)
 }
-let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-CGEvent.tapEnable(tap: tap, enable: true)
-fputs("[probe] ready — select text in any app, then press Cmd+Shift+P\n", stderr)
-CFRunLoopRun()
+
+// Global hotkey ⌘⇧P via Carbon (no Input Monitoring needed).
+let hotKeyID = EventHotKeyID(signature: OSType(0x42484F50), id: 1) // 'BHOP'
+var hotKeyRef: EventHotKeyRef?
+let mods = UInt32(cmdKey | shiftKey)
+let keyP: UInt32 = 35 // 'p'
+RegisterEventHotKey(keyP, mods, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+
+var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed))
+InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
+    emit()
+    return noErr
+}, 1, &spec, nil, nil)
+
+if !AXIsProcessTrusted() {
+    fputs("[probe] WARNING: Accessibility not granted to this terminal — selections will read empty.\n", stderr)
+}
+fputs("[probe] ready — select text in any app, then press ⌘⇧P. Ctrl+C to stop.\n", stderr)
+RunLoop.current.run()

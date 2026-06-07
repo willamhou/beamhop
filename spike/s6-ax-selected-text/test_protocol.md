@@ -3,15 +3,21 @@
 ## One-time setup (manual — required before first run)
 1. System Settings → Privacy & Security → **Accessibility** → enable your terminal app
    (Terminal / iTerm — whichever you run `./axprobe` from).
-2. System Settings → Privacy & Security → **Input Monitoring** → enable the same terminal.
-3. Fully quit & reopen the terminal so the permissions take effect.
+   - ✅ **Input Monitoring is NO LONGER needed** — the upgraded probe uses a Carbon global
+     hotkey, not an event tap.
+2. If you just granted it, a freshly-spawned `./axprobe` picks it up (no terminal restart
+   usually needed). The probe warns on stderr if Accessibility isn't active.
 
-## Run
+## Run (safe, read-only — you select the text, the probe only reads)
 ```bash
 cd spike/s6-ax-selected-text
+swiftc -O AXProbe.swift -o axprobe -framework Cocoa -framework ApplicationServices -framework Carbon
 ./axprobe | tee results.jsonl
 ```
 You should see `[probe] ready …` on stderr. Leave it running.
+
+> This probe NEVER types into your apps. (The throw-away `axprobe_once` + `driver.sh` did
+> synthetic ⌘A and are NOT recommended — see the incident note in notes.md.)
 
 ## For each app
 1. Open the app and bring its window forward.

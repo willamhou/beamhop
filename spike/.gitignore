@@ -16,3 +16,5 @@ s4-chrome-native-messaging/host/beamhop-bridge
 s4-chrome-native-messaging/host/com.beamhop.bridge.json
 s6-ax-selected-text/axprobe
 s6-ax-selected-text/results.jsonl
+s6-ax-selected-text/axprobe_once
+s6-ax-selected-text/recovered_note*
