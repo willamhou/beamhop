@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Beamhop Spike S4",
+  "version": "0.0.1",
+  "description": "Native messaging round-trip throughput spike",
+  "permissions": ["nativeMessaging", "activeTab"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html" }
+}

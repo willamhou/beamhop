@@ -1,0 +1,7 @@
+{
+  "name": "com.beamhop.bridge",
+  "description": "Beamhop spike S4 native host",
+  "path": "__HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__EXT_ID__/"]
+}
