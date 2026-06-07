@@ -314,10 +314,13 @@ MCP 协议下，agent 必须主动调 tool / 读 resource，server 没法主动�
 
 Claude Code 的 MCP 配置不是 `~/.config/claude-code/mcp.json`（V1 写错了）。实测（CLI `claude` 2.1.168）确认的实际机制：
 
-- **注册命令（实测语法）**：`claude mcp add <name> -- <绝对路径的 beamhop-mcp-binary>`
-  - ⚠️ **没有 `--command` 参数**（V2 的 `--transport stdio --command <bin>` 写法在 2.1.168 上不存在）。stdio 是默认 transport，命令须跟在 `--` 之后。scope 默认 `local`。
-- **配置落地**：写入 `~/.claude.json`，键在 `projects["<git 仓库根>"].mcpServers["<name>"]`，存的是 **绝对路径**。
-  - ⚠️ `local` scope 按 **git 仓库根**（非 cwd）归类；存的是绝对路径 → Beamhop 的 MCP server 二进制必须装在 **稳定位置**（如 app bundle 内或固定的 `~/Library/Application Support/Beamhop/bin/`），不能用 build 目录路径。
+- **注册命令（实测语法）**：`claude mcp add beamhop -s user -- <绝对路径的 beamhop-mcp-binary>`
+  - ⚠️ **没有 `--command` 参数**（V2 的 `--transport stdio --command <bin>` 写法在 2.1.168 上不存在）。stdio 是默认 transport，命令须跟在 `--` 之后。
+  - ⚠️ **必须显式 `-s user`（用户级 / 全局），不能用默认的 `local`**。`local` scope 按 **git 仓库根**（非 cwd）归类，只在注册时所在的那个仓库内可见 —— 用户之后在别的项目里跑 Claude Code 时 `fetch_capture` 会消失，金线断掉。`-s user` 把 server 写到 `~/.claude.json` 顶层 `mcpServers`，**任意目录（含非 git 目录）均可见**。已实测：从 `/tmp` 调用工具成功。
+- **配置落地**：
+  - `-s user`（推荐）→ `~/.claude.json` 顶层 `mcpServers["beamhop"]`。
+  - `-s local`（不要用）→ `projects["<git 仓库根>"].mcpServers[...]`。
+  - 两种都存 **绝对路径** → Beamhop 的 MCP server 二进制必须装在 **稳定位置**（如 app bundle 内或固定的 `~/Library/Application Support/Beamhop/bin/`），不能用 build 目录路径。
 - **stdio server 实现要求（实测踩坑，必须遵守，否则客户端 30s 超时报 "Failed to connect"）**：
   1. 传输是 **换行分隔的 JSON-RPC**（newline-delimited），**不是** LSP 的 `Content-Length` 帧；
   2. 读 stdin 必须用 **非阻塞流式读**（POSIX `read()` / 边到边解析），**不能**用会阻塞到读满或 EOF 的 `FileHandle.read(upToCount:)`，否则单条 `initialize` 在 stdin 未关闭时永远不被处理；
@@ -592,7 +595,7 @@ NSApp.setActivationPolicy(.accessory)  // 菜单栏 app，不在 Dock 占位
    ③ 写入 native messaging host manifest 到对应浏览器目录
    ④ "跳过，仅用 AX 抓取" 是头等选项
 4. Agent 注册（按需）：
-   ① Claude Code：检测 `claude` 是否在 PATH，若是则调 `claude mcp add beamhop -- <abs-bin>`（V2.1 实测语法，详见 §7.3；注意无 `--command` 参数）；
+   ① Claude Code：检测 `claude` 是否在 PATH，若是则调 `claude mcp add beamhop -s user -- <abs-bin>`（V2.1 实测语法，详见 §7.3；注意无 `--command` 参数，且必须 `-s user` 全局注册否则跨项目失效）；
       否则提示手动复制命令到终端（V2 修正：V1 写的 `~/.config/claude-code/mcp.json` 路径是错的）
    ② Claude Cowork：仅在 Week 0 Spike 通过后开放；流程视 Spike 结论
    ③ ChatGPT Desktop：检测安装即可，无需注册
@@ -758,7 +761,7 @@ ALTER TABLE captures ADD COLUMN capture_duration_ms INTEGER;      -- 抓取耗�
 
 | # | 假设 | 验证方法 | 通过标准 | 失败处理 | 结果（2026-06-07） |
 |---|---|---|---|---|---|
-| S1 | Claude Code MCP 注册可一键自动化 | 实际跑 `claude mcp add beamhop -- <bin>`，写一个 hello-world MCP server 返回固定 capture | server 注册成功 + Claude Code 一次会话里能调到 tool 拿到数据 | 改为提示用户手动复制命令；不影响 MVP 推进 | **✅ PASS** — 实测通过；纠正命令语法 + stdio 实现两处假设（详见 §7.3 + `spike/s1-claude-code-mcp/`） |
+| S1 | Claude Code MCP 注册可一键自动化 | 实际跑 `claude mcp add beamhop -s user -- <bin>`，写一个 hello-world MCP server 返回固定 capture | server 注册成功 + Claude Code 一次会话里能调到 tool 拿到数据 | 改为提示用户手动复制命令；不影响 MVP 推进 | **✅ PASS** — 实测通过；纠正命令语法 / stdio 实现 / 必须 `-s user` 全局注册 三处假设（详见 §7.3 + `spike/s1-claude-code-mcp/`） |
 | S2 | Claude Cowork connector/plugin 机制 | 阅读 Anthropic Cowork 当前公开文档；如有 SDK 实测注册一个最小 connector | connector 注册可一键完成 + 流程稳定 | Cowork 推迟 Phase 1.5；MVP 仅做剪贴板 handoff | 🚧 文档调研完成（`.mcpb` 本地连接器），运行时待验证（Claude.app 未装）→ 初步 DEFER |
 | S3 | ChatGPT Desktop AX 粘贴稳定性 | 用 Accessibility Inspector 抓取当前版 + 上一个稳定版的输入框路径快照对比 | 路径在两个版本中完全一致或可用稳定 fallback 规则 | 仅做剪贴板 handoff；不在 MVP 自动按回车 | 🚧 probe/paste 已编译，BLOCKED（ChatGPT.app 未装） |
 | S4 | Chrome native messaging 全链路 | 写最小扩展 + native host，验证 1MB 消息分片 + 错误恢复 | 端到端往返 < 100ms + 大正文分片正确 | 改为本地 HTTP 端口（弹防火墙）；可接受 | 🟡 已构建 + 进程级验证（ping + 900KB echo 字节一致 ~7.6ms），待 Chrome 内实测 |

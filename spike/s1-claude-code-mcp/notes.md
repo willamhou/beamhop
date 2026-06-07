@@ -55,12 +55,26 @@ Transport defaults to stdio; `--transport` is optional. Scope defaults to `local
    Root cause was diagnosed from `~/Library/Caches/claude-cli-nodejs/<project>/mcp-logs-beamhop-hello/*.jsonl`:
    `"connection timed out after 30000ms"`. (Useful debugging path for the real product.)
 
-### Scope/path notes
-- "local" scope is keyed by the **git repo root**, not cwd: registering from
-  `spike/s1-claude-code-mcp` stored the entry under project `/Users/willamhou/Codes/beamhop`.
-- The stored `command` is an **absolute path**. If the binary moves, the server breaks —
-  Beamhop must register a stable install location (e.g. inside the app bundle / a fixed
-  `~/Library/Application Support/Beamhop/bin` path), not a build-dir path.
+### ⚠️ Correction 3 — MUST register at `-s user` (global), not default `local` (codex review catch)
+The default scope is `local`, which is keyed by the **git repo root**, not cwd: registering
+from `spike/s1-claude-code-mcp` stored the entry under project `/Users/willamhou/Codes/beamhop`.
+**That breaks Beamhop's gold path** — the user runs Claude Code in arbitrary projects, and a
+local-scoped server only exists inside the one repo it was registered under, so `fetch_capture`
+would be missing everywhere else.
+
+Fix (verified): `claude mcp add beamhop -s user -- <abs-bin>` writes to the **top-level**
+`mcpServers` in `~/.claude.json` and is visible from **any** directory. Confirmed by calling
+the tool successfully from `/tmp` (non-git):
+```
+$ cd /tmp && claude mcp list | grep beamhop-hello
+beamhop-hello: /abs/.../HelloServer  - ✓ Connected
+# in-session call from /tmp returned the exact payload
+```
+
+### Path note
+- The stored `command` is an **absolute path** (both scopes). If the binary moves, the server
+  breaks — Beamhop must register a stable install location (e.g. inside the app bundle / a
+  fixed `~/Library/Application Support/Beamhop/bin` path), not a build-dir path.
 
 ## Spec patch needed (for Task 7)
 - §7.3 「前置条件」: replace `claude mcp add --command` with
@@ -73,8 +87,9 @@ Transport defaults to stdio; `--transport` is optional. Scope defaults to `local
 ```json
 "claude_code": {
   "cli_version": "2.1.168",
-  "mcp_add_command": "claude mcp add <name> -- <abs-bin>",
-  "config_path": "~/.claude.json (projects[<git-root>].mcpServers)",
+  "mcp_add_command": "claude mcp add beamhop -s user -- <abs-bin>",
+  "scope": "user (global) — REQUIRED; default 'local' is git-root-scoped and breaks cross-project use",
+  "config_path": "~/.claude.json (top-level mcpServers for -s user)",
   "stdio_framing": "newline-delimited JSON (NOT Content-Length)",
   "status": "PASS"
 }
