@@ -1,0 +1,13 @@
+# S1 transcript — Claude Code calling beamhop_fetch_capture
+# Date: 2026-06-07  CLI: claude 2.1.168
+
+## claude mcp list
+beamhop-hello: /Users/willamhou/Codes/beamhop/spike/s1-claude-code-mcp/.build/release/HelloServer  - ✓ Connected
+
+## Non-interactive session
+$ claude -p "请用 beamhop_fetch_capture 工具拉取 id=test ..." --allowedTools mcp__beamhop-hello__beamhop_fetch_capture
+返回的 `text` 字段内容：
+
+```
+SPIKE_S1_OK: this is the fixed capture payload from hello-server.
+```
