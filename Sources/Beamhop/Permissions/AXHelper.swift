@@ -43,7 +43,9 @@ enum AXHelper {
         var v: CFTypeRef?
         guard AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &v) == .success,
               let v, CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
-        return (v as! AXUIElement)
+        let el = v as! AXUIElement
+        AXUIElementSetMessagingTimeout(el, 0.8)   // codex: bound subsequent reads on this element
+        return el
     }
 
     // MARK: low-level reads

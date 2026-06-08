@@ -25,16 +25,20 @@ enum ClipboardService {
         return snapshots
     }
 
-    private static func restore(_ snapshots: [ItemSnapshot]) {
+    /// Returns false if the clipboard might not have been fully restored (codex).
+    @discardableResult
+    private static func restore(_ snapshots: [ItemSnapshot]) -> Bool {
         let pb = NSPasteboard.general
         pb.clearContents()
-        guard !snapshots.isEmpty else { return }
+        guard !snapshots.isEmpty else { return true }
+        var ok = true
         let items: [NSPasteboardItem] = snapshots.map { snap in
             let item = NSPasteboardItem()
-            for (type, data) in snap { item.setData(data, forType: type) }
+            for (type, data) in snap { if !item.setData(data, forType: type) { ok = false } }
             return item
         }
-        pb.writeObjects(items)
+        if !pb.writeObjects(items) { ok = false }
+        return ok
     }
 
     private static func sendCmdV() {
@@ -58,7 +62,9 @@ enum ClipboardService {
         usleep(50_000)                       // spec §12.3 step 4
         if pressEnter { sendReturn() }
         usleep(30_000)
-        restore(snapshots)                   // spec §12.3 step 5
+        if !restore(snapshots) {             // spec §12.3 step 5
+            Notifier.error("剪贴板可能未完整恢复", "建议检查你的剪贴板")
+        }
     }
 
     private static func sendReturn() {

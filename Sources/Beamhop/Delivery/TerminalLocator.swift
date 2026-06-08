@@ -7,17 +7,19 @@ enum TerminalLocator {
         "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp", "com.mitchellh.ghostty",
     ]
 
-    struct Target { let app: NSRunningApplication; let bundleID: String }
+    struct Target { let app: NSRunningApplication; let bundleID: String; let wasFrontmost: Bool }
 
-    /// Prefer the frontmost terminal; otherwise any running terminal.
+    /// Prefer the frontmost terminal (so auto-Enter targets the window the user is looking at);
+    /// otherwise any running terminal but flagged `wasFrontmost=false` so the caller won't auto-Enter
+    /// into a window the user can't see (codex: avoid sending ⏎ to the wrong terminal).
     static func locate() -> Target? {
         if let front = NSWorkspace.shared.frontmostApplication,
            let b = front.bundleIdentifier, terminalBundleIDs.contains(b) {
-            return Target(app: front, bundleID: b)
+            return Target(app: front, bundleID: b, wasFrontmost: true)
         }
         for app in NSWorkspace.shared.runningApplications {
             if let b = app.bundleIdentifier, terminalBundleIDs.contains(b) {
-                return Target(app: app, bundleID: b)
+                return Target(app: app, bundleID: b, wasFrontmost: false)
             }
         }
         return nil

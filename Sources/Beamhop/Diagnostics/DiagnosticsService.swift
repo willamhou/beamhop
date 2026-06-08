@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import BeamhopCore
 
 enum DiagState { case ok, fail, warn, todo
     var symbol: String {
@@ -69,7 +70,8 @@ struct DiagnosticsService {
                        // Week 1: command preview only (host binary is Week 2). codex.
                        fixTitle: registered ? nil : "复制注册命令",
                        fix: registered ? nil : {
-                           let cmd = "claude mcp add beamhop -s user -- <Beamhop host 绝对路径>"
+                           // Week 2: command preview incl. --db (real one-click register is a follow-up).
+                           let cmd = "claude mcp add beamhop -s user -- <BeamhopMCP 绝对路径> --db \(AppPaths.databaseURL.path)"
                            NSPasteboard.general.clearContents()
                            NSPasteboard.general.setString(cmd, forType: .string)
                        })

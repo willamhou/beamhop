@@ -15,8 +15,10 @@ final class BrowserBridgeServer {
     private let socketPath: String
     private var listenFD: Int32 = -1
     private var connFD: Int32 = -1
-    private let connLock = NSLock()      // serialize requests + guard connFD
+    private let connLock = NSLock()      // guards connFD only (short critical sections)
+    private let requestLock = NSLock()   // serializes requests (codex: don't hold connLock during IO)
     private var seq: Int = 0
+    private let maxChunks = 4096
 
     init(socketPath: String? = nil) {
         let dir = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/beamhop")
@@ -77,36 +79,42 @@ final class BrowserBridgeServer {
     /// Send a request and await the (possibly chunked) response. Returns the parsed `result`
     /// dict, or nil on no-connection / timeout / error.
     func request(type: String, timeout: TimeInterval = 5) -> [String: Any]? {
-        connLock.lock(); defer { connLock.unlock() }
-        guard connFD >= 0 else { return nil }
-        let fd = connFD
+        requestLock.lock(); defer { requestLock.unlock() }   // serialize requests (no connLock during IO)
+
+        connLock.lock(); let fd = connFD; connLock.unlock()
+        guard fd >= 0 else { return nil }
         seq += 1
         let reqID = seq
 
         let req: [String: Any] = ["reqID": reqID, "type": type]
         guard let body = try? JSONSerialization.data(withJSONObject: req), writeFrame(fd, body) else {
-            dropConnLocked(); return nil
+            drop(fd); return nil
         }
 
         // Reassemble: accept single-frame {reqID, ok, result/error} or multi-frame chunks.
         var chunks: [Int: String] = [:]
-        var expectedTotal = -1
+        var total = -1
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            guard let frame = readFrame(fd) else { dropConnLocked(); return nil }
+            guard let frame = readFrame(fd) else { drop(fd); return nil }
             guard let msg = try? JSONSerialization.jsonObject(with: frame) as? [String: Any],
                   (msg["reqID"] as? Int) == reqID else { continue }
             if let chunk = msg["chunk"] as? [String: Any],
-               let seqN = chunk["seq"] as? Int, let total = chunk["total"] as? Int,
+               let seqN = chunk["seq"] as? Int, let t = chunk["total"] as? Int,
                let data = chunk["data"] as? String {
+                guard t > 0, t <= maxChunks, seqN >= 0, seqN < t else {
+                    log.error("bad chunk seq=\(seqN) total=\(t)"); return nil
+                }
+                total = t
                 chunks[seqN] = data
-                expectedTotal = total
                 if chunks.count == total {
-                    let joined = (0..<total).compactMap { chunks[$0] }.joined()
-                    return parseResult(joined)
+                    // require every seq present before joining (codex: no silent drop)
+                    guard (0..<total).allSatisfy({ chunks[$0] != nil }) else {
+                        log.error("missing chunk(s) in reassembly"); return nil
+                    }
+                    return parseResult((0..<total).map { chunks[$0]! }.joined())
                 }
             } else {
-                // single frame
                 return resultFrom(msg)
             }
         }
@@ -124,8 +132,11 @@ final class BrowserBridgeServer {
         return resultFrom(m)
     }
 
-    private func dropConnLocked() {
-        if connFD >= 0 { close(connFD); connFD = -1 }
+    /// Close the connection only if it's still the fd we were using (avoid closing a newer one).
+    private func drop(_ fd: Int32) {
+        connLock.lock()
+        if connFD == fd { close(connFD); connFD = -1 }
+        connLock.unlock()
     }
 
     // MARK: framing (4-byte LE + body)

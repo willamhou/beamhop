@@ -93,8 +93,11 @@ func handle(_ msg: [String: Any]) {
     case "resources/read":
         let params = msg["params"] as? [String: Any]
         let uri = params?["uri"] as? String ?? ""
-        let capID: String? = uri == "capture://latest" ? nil
-            : (uri.hasPrefix("capture://") ? String(uri.dropFirst("capture://".count)) : nil)
+        // codex: validate the scheme — don't let a stray uri fall through to "latest".
+        guard uri == "capture://latest" || uri.hasPrefix("capture://") else {
+            rpcError(id: id, code: -32602, message: "invalid resource uri: \(uri)"); return
+        }
+        let capID: String? = uri == "capture://latest" ? nil : String(uri.dropFirst("capture://".count))
         let r = captureText(id: capID)
         if r.isError { rpcError(id: id, code: -32002, message: r.text) }
         else {

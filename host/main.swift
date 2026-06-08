@@ -82,12 +82,14 @@ guard let sock = connectAppSocket(SOCK_PATH) else {
 }
 log("connected to app socket")
 
-// relay Chrome → app
+// relay Chrome → app. On end, half-close the socket (codex: don't exit(0) from a worker thread
+// while the main thread may be writing a response) so the main loop's readFrame returns and we
+// exit cleanly from main.
 let t1 = Thread {
     while let frame = readFrame(chromeIn) {
         if !writeFrame(sock, frame) { break }
     }
-    close(sock); exit(0)
+    shutdown(sock, SHUT_RDWR)   // unblocks the main thread's readFrame(sock)
 }
 t1.start()
 

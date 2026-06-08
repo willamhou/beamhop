@@ -49,15 +49,11 @@ final class CaptureService {
 
         let durationMs = Int(Date().timeIntervalSince(t0) * 1000)
 
-        // truncate for delivery/preview; DB keeps the full text (codex: no contradiction).
-        var body = read.selectedText
-        var truncated = false
-        if let b = body, b.count > maxBodyChars {
-            // keep full in DB; mark truncated so delivery/preview layers know to cut.
-            truncated = true
-            _ = b
-        }
-        body = read.selectedText
+        // DB keeps full text; `truncated` flags that delivery/preview layers must cut. Check BOTH
+        // selected text AND the (browser) extracted body (codex).
+        let truncated = (read.selectedText?.count ?? 0) > maxBodyChars
+            || (extractedBody?.count ?? 0) > maxBodyChars
+        let body = read.selectedText
 
         let source: Source = isBrowser(front.bundleID) ? .browser : .ax
         let capture = Capture(

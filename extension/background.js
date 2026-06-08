@@ -63,13 +63,14 @@ async function onRequest(req) {
 }
 
 async function captureActiveTab() {
+  const ext_version = chrome.runtime.getManifest().version;
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (!tab || !tab.id) return { error: 'no active tab' };
+  if (!tab || !tab.id) return { error: 'no active tab', ext_version };
   const [{ result } = {}] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: extractInPage,
   });
-  return result || { url: tab.url, title: tab.title };
+  return { ...(result || { url: tab.url, title: tab.title }), ext_version };
 }
 
 // Runs in the page (injected). Readability is added in a later step; for now: url/title/meta/selection.

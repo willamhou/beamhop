@@ -31,15 +31,17 @@ enum ClaudeCodeDelivery {
         guard front else { return "无法把终端切到前台" }
 
         let trigger = PromptRenderer.claudeCodeTrigger(capture, userNote: userNote)
-        // codex review: only auto-Enter when we're confident claude is running; else paste, let user confirm.
-        let autoEnter = TerminalLocator.claudeLikelyRunning()
+        // codex: auto-Enter ONLY when the located terminal was the frontmost one AND a claude
+        // process is likely running — otherwise we could send ⏎ into the wrong window. When unsure,
+        // paste and let the user press Enter.
+        let autoEnter = target.wasFrontmost && TerminalLocator.claudeLikelyRunning()
         do {
             try ClipboardService.safePaste(trigger, pressEnter: autoEnter)
         } catch {
             return "剪贴板无法保护,已放弃自动粘贴(请手动粘贴)"
         }
         if !autoEnter {
-            Notifier.info("已粘贴触发 prompt 到终端", "未检测到运行中的 Claude Code,请你按回车确认发送")
+            Notifier.info("已粘贴触发 prompt 到终端", "请确认是目标终端窗口后按回车发送")
         }
         return nil
     }
