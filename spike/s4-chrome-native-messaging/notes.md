@@ -26,9 +26,11 @@ manual part is loading the extension in Chrome and clicking the buttons.
 3. `cd host && ./install.sh <EXTENSION_ID>` — generates the host manifest with the
    absolute binary path + your ext ID and installs it to every Chromium browser found.
 4. Reload the extension (refresh icon on its card).
-5. Click the toolbar icon → "Ping native host" → expect `{pong:true, host_version:"0.0.1"}`.
-6. "Send 900KB payload" → record round-trip ms.
-7. "Run 10 round-trip benchmark" → record median + p95 below.
+5. Click the toolbar icon → "Ping native host" → expect `{pong:true, host_version:"0.0.2"}`.
+6. "10x 900KB round-trip benchmark" → record median + p95 below.
+7. Boundary probe (proves Chrome's host→extension ~1MB limit): click "echo 900 KB",
+   "echo 1.1 MB", "echo 2 MB" in turn. Expectation: 900KB succeeds; 1.1MB & 2MB FAIL
+   (host disconnects / message dropped) → confirms app-layer chunking is required.
 8. Repeat in Arc / Brave / Edge if installed (each needs its own extension load + reload).
 
 If "Specified native messaging host not found": check the manifest path, that the ext ID

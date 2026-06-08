@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html>
-<body style="width:300px; font-family: -apple-system, sans-serif; padding: 12px;">
+<body style="width:340px; font-family: -apple-system, sans-serif; padding: 12px;">
   <button id="ping">Ping native host</button>
-  <button id="big">Send 900KB payload</button>
-  <button id="bench">Run 10 round-trip benchmark</button>
-  <pre id="out" style="font-size: 11px; max-height: 200px; overflow: auto;"></pre>
+  <button id="bench">10x 900KB round-trip benchmark</button>
+  <div style="margin:8px 0; font-size:12px;">Host→extension size limit probe:</div>
+  <button data-size="921600">echo 900 KB</button>
+  <button data-size="1153434">echo 1.1 MB</button>
+  <button data-size="2097152">echo 2 MB</button>
+  <pre id="out" style="font-size: 11px; max-height: 240px; overflow: auto;"></pre>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -25,14 +25,29 @@ func readExactly(_ count: Int) -> Data? {
     return data
 }
 
+func writeFrame(_ obj: [String: Any]) {
+    let data: Data
+    do { data = try JSONSerialization.data(withJSONObject: obj) }
+    catch {
+        // never crash the host; emit a framed error instead
+        let fallback = "{\"error\":\"encode failed\"}".data(using: .utf8)!
+        var l = UInt32(fallback.count).littleEndian
+        stdout.write(Data(bytes: &l, count: 4)); stdout.write(fallback); return
+    }
+    var lenLE = UInt32(data.count).littleEndian
+    stdout.write(Data(bytes: &lenLE, count: 4))
+    stdout.write(data)
+}
+
 while true {
     guard let lenData = readExactly(4) else { break }
-    let len = lenData.withUnsafeBytes { $0.load(as: UInt32.self).littleEndian }
+    // loadUnaligned avoids an alignment trap on the 4-byte slice
+    let len = lenData.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian }
     guard len > 0 && len < 64 * 1024 * 1024 else { log("bad length \(len)"); break }
     guard let body = readExactly(Int(len)) else { break }
 
     guard let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
-        log("bad json"); continue
+        log("bad json"); writeFrame(["error": "bad json"]); continue
     }
     let id = obj["id"] as? Int ?? 0
     let kind = obj["kind"] as? String ?? ""
@@ -41,15 +56,19 @@ while true {
     switch kind {
     case "ping":
         resp["pong"] = true
-        resp["host_version"] = "0.0.1"
+        resp["host_version"] = "0.0.2"
     case "echo":
-        resp["body"] = obj["body"] ?? ""
+        // echo body back. If "size" is given, generate a payload of that many bytes here so
+        // the EXTENSION->host message stays tiny and we test the host->extension limit.
+        if let size = obj["size"] as? Int, size > 0 {
+            resp["body"] = String(repeating: "A", count: size)
+            resp["generated"] = true
+        } else {
+            resp["body"] = obj["body"] ?? ""
+        }
     default:
         resp["error"] = "unknown kind"
     }
-
-    let respData = try! JSONSerialization.data(withJSONObject: resp)
-    var lenLE = UInt32(respData.count).littleEndian
-    stdout.write(Data(bytes: &lenLE, count: 4))
-    stdout.write(respData)
+    log("kind=\(kind) id=\(id) -> resp bytes ~\((resp["body"] as? String)?.count ?? 0)")
+    writeFrame(resp)
 }
