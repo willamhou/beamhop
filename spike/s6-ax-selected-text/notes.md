@@ -1,9 +1,10 @@
 # S6 — AX selected-text probe
 
-## Status: 🟡 PARTIAL — automated probe run 2026-06-07 (5/8 apps installed)
-Accessibility granted to Terminal; ran a race-proof one-shot probe (`axprobe_once`, no
-hotkey → no Input Monitoring needed) that self-activates each app, waits until it's truly
-frontmost, sends ⌘A, then reads. Slack / Cursor / iTerm were NOT installed → only 5/8 tested.
+## Status: 🟡 PARTIAL — full 8-app sweep done 2026-06-08
+Accessibility granted to Terminal; race-proof read-only probe (`axprobe_once`: self-activate
+→ wait until frontmost → one ⌘A → read; no Input Monitoring needed). All 8 apps installed.
+Result: app/window/url captured 8/8; selected_text 4 clean PASS + Mail conditional + 3 LIMITED.
+See the full table + per-app strategy below.
 
 ### ⚠️ Methodology caveat / incident
 Synthetic `⌘A` is NOT representative for list-based apps (Mail/Notes list select rows, not
@@ -12,19 +13,30 @@ it was fully recovered from the probe's captured output. **Lesson: never drive s
 keystrokes/undo into the user's live apps.** The production capture path is read-only AX
 on the user's *own* manual selection (the original `AXProbe` hotkey design is the safe one).
 
-## Findings (what actually works)
+## Findings — full 8-app sweep (2026-06-08, all 8 installed)
 
-| app | bundle_id | app_name | window_title | selected_text | url | focused_role | verdict |
-|---|---|---|---|---|---|---|---|
-| Chrome | ✓ | ✓ | ✓ | ✅ full page text | ✅ | AXWebArea | **PASS** (needs AXManualAccessibility opt-in) |
-| Notes | ✓ | ✓ | ✓ | ✅ full note text (incl. 中文) | – | AXTextArea | **PASS** (native AppKit text) |
-| Safari | ✓ | ✓ | ✓ | ❌ empty | ✅ | AXWebArea | **LIMITED** — web selection only via `AXSelectedTextMarkerRange`, not `kAXSelectedText` |
-| VS Code | ✓ | ✓ | ✓ | ❌ empty | – | AXTextArea | **LIMITED** — Electron/Monaco selection not exposed via `kAXSelectedText` |
-| Mail | ✓ | ✓ | ✓ | ❌ (list) | – | AXTable | **INCONCLUSIVE** — ⌘A hit message list; selecting in a message body (native text) should work |
-| (TextEdit, baseline) | ✓ | ✓ | ✓ | ✅ full (incl. 中文) | – | AXTextArea | proves native `kAXSelectedText` works |
-| Slack | – | – | – | – | – | – | not installed |
-| Cursor | – | – | – | – | – | – | not installed (Electron → expect LIMITED like VS Code) |
-| iTerm | – | – | – | – | – | – | not installed |
+Method: race-proof read-only probe (self-activate → wait until frontmost → one ⌘A → read).
+The 4 scored fields = app_name, bundle_id, window_title, selected_text.
+
+| app | app_name | bundle_id | window_title | selected_text | url | role | score | verdict |
+|---|---|---|---|---|---|---|---|---|
+| Chrome  | ✓ | ✓ | ✓ | ✅ 4911 chars | ✅ | AXWebArea | 4/4 | **PASS** (needs AXManualAccessibility opt-in) |
+| Notes   | ✓ | ✓ | ✓ | ✅ full (中文) | – | AXTextArea | 4/4 | **PASS** (native AppKit) |
+| iTerm   | ✓ | ✓ | ✓ | ✅ 83 chars | – | AXTextArea | 4/4 | **PASS** (terminal text) |
+| Slack   | ✓ | ✓ | ✓ | ✅ 191 chars (on sign-in page) | – | AXWebArea* | 4/4 | **PASS (capability)** — Chromium exposes it; tested signed-out |
+| Mail    | ✓ | ✓ | ✓ | ❌ (⌘A hit message list) | – | AXTable | 3/4 | **CONDITIONAL** — list selected, not body; a body selection is native text → should pass |
+| Safari  | ✓ | ✓ | ✓ | ❌ empty | ✅ | AXWebArea | 3/4 | **LIMITED** — web selection only via `AXSelectedTextMarkerRange`, not `kAXSelectedText` |
+| VS Code | ✓ | ✓ | ✓ | ❌ empty | – | AXTextArea | 3/4 | **LIMITED** — Electron/Monaco not via `kAXSelectedText` |
+| Cursor  | ✓ | ✓ | ✓ | ❌ empty | – | (welcome) | 3/4 | **LIMITED** — Electron/Monaco, same as VS Code |
+| (TextEdit baseline) | ✓ | ✓ | ✓ | ✅ full (中文) | – | AXTextArea | — | proves native `kAXSelectedText` works |
+
+### Aggregate
+- **app_name + bundle_id + window_title: 8/8 reliably captured** (the core provenance fields).
+- **selected_text via plain `kAXSelectedText`: 4 clean PASS** (Chrome, Notes, iTerm, Slack) +
+  Mail conditional (needs body-not-list selection) + 3 LIMITED (Safari, VS Code, Cursor).
+- vs the ≥6/8 bar: **strictly 4–5/8 out of the box → PARTIAL.** The shortfall is concentrated
+  and has known fixes: Safari needs the text-marker API; Electron editors (VS Code/Cursor)
+  need a different strategy (or clipboard fallback); Mail needs body-vs-list focus handling.
 
 ### Critical implementation details for Beamhop (the real value of this spike)
 1. **Query the SYSTEM-WIDE focused element** (`AXUIElementCreateSystemWide()` →
@@ -40,10 +52,29 @@ on the user's *own* manual selection (the original `AXProbe` hotkey design is th
    body, plain `NSTextField`/`NSTextView`): `kAXSelectedText` works directly, Unicode-safe.
 5. URL is available via the `AXURL` attribute on web areas (Chrome + Safari confirmed).
 
-## Aggregate (preliminary): 2 clean PASS (Chrome, Notes) + native baseline (TextEdit) proven.
-Cannot reach the formal ≥6/8 bar without (a) installing Slack/Cursor/iTerm and (b) testing
-with real in-content text selections (not synthetic ⌘A). Safari & Electron need the special
-handling noted above to count as full.
+## Conclusion
+[x] **PARTIAL** (4–5/8 full via plain `kAXSelectedText`; below the ≥6/8 bar but with a
+concentrated, fixable shortfall). Per the plan's fail-handling, the LIMITED apps go to the
+Compatibility Matrix as "limited" — this does NOT block the MVP gold path (Chrome capture is
+a clean PASS).
+
+### Per-app strategy for Beamhop (the actionable output)
+- **Native AppKit (Notes, Mail body, TextEdit, most fields) + terminals (iTerm):** plain
+  `kAXSelectedText` — ship as-is.
+- **Chromium (Chrome, Slack, Arc/Brave/Edge):** set `AXManualAccessibility` first, then
+  `kAXSelectedText` on the `AXWebArea` — works; also yields `AXURL`.
+- **Safari:** provenance (app/window/url) works; for selected text use the
+  `AXSelectedTextMarkerRange` text-marker API (extra work) OR fall back to clipboard.
+- **Electron editors (VS Code, Cursor):** `kAXSelectedText` does NOT reflect Monaco's
+  selection → fall back to clipboard handoff for these.
+- **Mail:** ensure focus is the message body (native text), not the message list/table.
+
+## Spec patch
+- §6.2 AX 能力表: replace the per-app columns with the measured verdicts above + the
+  per-app strategy; add an "AX 取词策略" note (native / Chromium-opt-in / Safari-marker /
+  Electron-clipboard).
+- Compatibility Matrix v0: per-app `selected_text` support = full / via-opt-in / limited.
+- §6.x impl notes: query SYSTEM-WIDE focused element; set AXManualAccessibility on Chromium/Electron.
 
 ## Hypothesis
 AX API reliably reads app name, bundle id, window title, and selected text from
