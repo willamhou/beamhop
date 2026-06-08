@@ -66,18 +66,48 @@ async function captureActiveTab() {
   const ext_version = chrome.runtime.getManifest().version;
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab || !tab.id) return { error: 'no active tab', ext_version };
-  const [{ result } = {}] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: extractInPage,
-  });
-  return { ...(result || { url: tab.url, title: tab.title }), ext_version };
+  const target = { tabId: tab.id };
+  try {
+    // 1) load Readability into the isolated world, 2) extract.
+    await chrome.scripting.executeScript({ target, files: ['vendor/readability.js'] });
+    const [{ result } = {}] = await chrome.scripting.executeScript({ target, func: extractInPage });
+    return { ...(result || { url: tab.url, title: tab.title }), ext_version };
+  } catch (e) {
+    // chrome:// pages, PDFs, blocked tabs → fall back to tab metadata only.
+    return { url: tab.url, title: tab.title, selection: '', body: '', error: e?.message, ext_version };
+  }
 }
 
-// Runs in the page (injected). Readability is added in a later step; for now: url/title/meta/selection.
+// Runs in the page (isolated world). Uses Readability (injected above) for the article body,
+// plus light GitHub structured extraction.
 function extractInPage() {
   const sel = String(window.getSelection?.() || '');
   const meta = document.querySelector('meta[name="description"]')?.content || '';
-  return { url: location.href, title: document.title, meta, selection: sel };
+
+  let body = '';
+  try {
+    const R = window.__BeamhopReadability?.Readability;
+    if (R) {
+      const article = new R(document.cloneNode(true)).parse();
+      if (article && article.textContent) body = article.textContent.trim();
+    }
+  } catch (e) { /* Readability can throw on odd DOMs; body stays empty */ }
+
+  let github = null;
+  if (location.hostname.endsWith('github.com')) {
+    // priority order — .js-issue-title is the canonical PR/issue title; a bare h1 (search header)
+    // appears earlier in the DOM so must NOT win.
+    const titleEl = document.querySelector('.js-issue-title')
+      || document.querySelector('[data-testid="issue-title"]')
+      || document.querySelector('.markdown-title')
+      || document.querySelector('article h1, .repository-content h1');
+    const kind = location.pathname.includes('/pull/') ? 'pr'
+      : location.pathname.includes('/issues/') ? 'issue'
+      : (location.pathname.match(/\/blob\/|\/tree\//) ? 'code' : 'repo');
+    github = { kind, title: titleEl ? titleEl.textContent.trim() : '' };
+  }
+
+  return { url: location.href, title: document.title, meta, selection: sel, body, github };
 }
 
 // keep the service worker alive + connected

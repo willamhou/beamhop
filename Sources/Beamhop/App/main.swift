@@ -38,7 +38,9 @@ if CommandLine.arguments.contains("--bridge-test") {
         let url = cap["url"] as? String ?? "?"
         let title = cap["title"] as? String ?? "?"
         let sel = (cap["selection"] as? String ?? "")
-        print("CAPTURE -> url=\(url) | title=\(title) | selection_len=\(sel.count)")
+        let body = (cap["body"] as? String ?? "")
+        let gh = (cap["github"] as? [String: Any]).map { "\($0["kind"] ?? "?"):\($0["title"] ?? "")" } ?? "—"
+        print("CAPTURE -> url=\(url) | title=\(title) | selection_len=\(sel.count) | body_len=\(body.count) | github=\(gh)")
     } else { print("CAPTURE -> FAILED") }
     exit(0)
 }

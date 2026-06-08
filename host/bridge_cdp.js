@@ -58,9 +58,10 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   try {
     await sleep(1500);
     const { id: extId } = await send('Extensions.loadUnpacked', { path: EXTDIR });
-    console.error('loaded extension', extId, EXTID && extId !== EXTID ? '(WARN: != precomputed)' : '');
-    // open a real page so capture_active_tab has content
-    await send('Target.createTarget', { url: 'https://example.com' });
+    console.error('loaded extension', extId);
+    // open a content-rich page so Readability has an article to parse
+    const url = process.argv[4] || 'https://en.wikipedia.org/wiki/Accessibility';
+    await send('Target.createTarget', { url });
     console.error('opened example.com; holding Chrome for harness…');
     await sleep(14000);
   } catch (e) { console.error('CDP error', e.message); }
