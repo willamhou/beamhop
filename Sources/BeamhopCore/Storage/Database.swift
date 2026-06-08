@@ -4,6 +4,7 @@ import GRDB
 public enum DatabaseError: Error, Equatable {
     case fts5Unavailable
     case trigramUnavailable
+    case fileNotFound
 }
 
 /// Owns the GRDB connection. On open it (1) self-checks FTS5 + trigram support, (2) runs an
@@ -28,7 +29,29 @@ public final class Database {
 
         self.queue = try DatabaseQueue(path: path.path)
         self.recoveredFromCorruption = recovered
+
+        // Enable WAL so a separate read-only process (BeamhopMCP) can read without blocking
+        // writes (Week 2 Task 0.2). Must run OUTSIDE a transaction → writeWithoutTransaction.
+        let mode = try queue.writeWithoutTransaction { db in
+            try String.fetchOne(db, sql: "PRAGMA journal_mode=WAL;")
+        }
+        if mode?.lowercased() != "wal" {
+            FileHandle.standardError.write(Data("[beamhop] WARN journal_mode=\(mode ?? "nil"), expected wal\n".utf8))
+        }
+
         try Migrations.migrator().migrate(queue)
+    }
+
+    /// Read-only opener for the MCP server process (Week 2 Task 0.2 / codex review):
+    /// NO migration, NO corruption recovery, NO directory/file creation. Throws if the DB
+    /// is missing so the caller can return a structured MCP error instead of fabricating a DB.
+    public static func openReadOnly(path: URL) throws -> DatabaseQueue {
+        guard FileManager.default.fileExists(atPath: path.path) else {
+            throw DatabaseError.fileNotFound
+        }
+        var config = Configuration()
+        config.readonly = true
+        return try DatabaseQueue(path: path.path, configuration: config)
     }
 
     /// In-memory probe that the linked SQLite supports FTS5 and the `trigram` tokenizer.

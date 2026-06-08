@@ -1,6 +1,22 @@
 import Foundation
 import BeamhopCore
 
+// `--seed <db-path>`: insert one sample capture into the given DB and exit (dev helper for
+// testing the MCP server end-to-end).
+if let i = CommandLine.arguments.firstIndex(of: "--seed"), i + 1 < CommandLine.arguments.count {
+    let url = URL(fileURLWithPath: CommandLine.arguments[i + 1])
+    let store = CaptureStore(try Database(path: url))
+    let c = Capture(source: .ax, appBundleID: "com.apple.Safari", appName: "Safari",
+                    windowTitle: "Fix race condition in queue",
+                    url: "https://github.com/foo/bar/pull/123",
+                    selectedText: "if (q.size > 0) { ... }",
+                    domainHint: .githubPR,
+                    pid: 4242, captureMethod: "ax")
+    try store.insert(c)
+    print("seeded \(c.id) -> \(url.path) (\(try store.count()) total)")
+    exit(0)
+}
+
 // Minimal XCTest-free test runner (CLT has no XCTest). Mirrors StorageTests.
 // Exits non-zero on any failure.
 
@@ -100,7 +116,10 @@ do {
     do {
         let (store, url) = try freshStore()
         try store.insert(sample())
+        // realistic corruption under WAL: garbage the main file AND drop -wal/-shm
+        // (data lives in -wal, so corrupting only the main file is recoverable, not corruption)
         try Data("not a sqlite database".utf8).write(to: url)
+        for s in ["-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + s) }
         let db = try Database(path: url)
         check(db.recoveredFromCorruption, "recoveredFromCorruption == true")
         check(try CaptureStore(db).count() == 0, "rebuilt DB is empty")

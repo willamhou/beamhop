@@ -21,6 +21,13 @@ let package = Package(
             dependencies: ["BeamhopCore"],
             path: "Sources/Beamhop"
         ),
+        // Beamhop's own MCP server (stdio JSON-RPC). Registered with Claude Code via
+        // `claude mcp add beamhop -s user -- <bin> --db <inbox.sqlite>`. Reads the DB read-only.
+        .executableTarget(
+            name: "BeamhopMCP",
+            dependencies: ["BeamhopCore"],
+            path: "Sources/BeamhopMCP"
+        ),
         // XCTest-free runner so storage logic can be validated under Command Line Tools
         // (XCTest ships with full Xcode). Mirrors Tests/BeamhopCoreTests/StorageTests.swift.
         .executableTarget(
