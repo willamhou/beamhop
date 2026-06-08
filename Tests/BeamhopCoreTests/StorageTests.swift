@@ -111,8 +111,10 @@ final class StorageTests: XCTestCase {
             let store = try makeStore()
             try store.insert(sample())
         }
-        // corrupt the file
+        // realistic corruption under WAL: garbage the main file AND drop -wal/-shm (data lives
+        // in -wal, so corrupting only the main file would be recoverable, not corruption)
         try Data("not a sqlite database".utf8).write(to: dbURL)
+        for s in ["-wal", "-shm"] { try? FileManager.default.removeItem(atPath: dbURL.path + s) }
         // reopen → should back up the broken file and rebuild empty
         let db = try Database(path: dbURL)
         XCTAssertTrue(db.recoveredFromCorruption)
