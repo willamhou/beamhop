@@ -2,7 +2,9 @@
 
 > macOS 桌面 app — 在浏览器 / IDE / Notes / PDF / Figma 等任意 app 间抓取上下文，一键投递到任意外部 AI agent（Claude Code、Claude Cowork、ChatGPT Desktop 等）。
 
-**状态**：Phase 1 MVP — Week 0 Spike 6/6 完成 → spec V2.1；**Week 1 地基核心完成**（菜单栏 app + Carbon 热键 + 权限 + Capture/SQLite/双 FTS5 + 诊断面板，SwiftPM 实现,待 Xcode 打包成正式 `.app`）。
+**状态**：Phase 1 MVP — Week 0 Spike ✅ → spec V2.1；Week 1 地基 ✅；Week 2 金线 + 浏览器桥 ✅（SwiftPM 实现 + 自动化验证,待 Xcode 打包）。
+
+> 📌 **续作从这里开始 → [PROGRESS.md](PROGRESS.md)**（进度、已验证/待验证、恢复命令、坑、下一步,唯一入口）
 
 ## 构建运行（SwiftPM,Command Line Tools 即可）
 
