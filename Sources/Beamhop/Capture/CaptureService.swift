@@ -28,7 +28,25 @@ final class CaptureService {
             return .rejected(reason: "\(front.name) 在黑名单(密码/银行类),已拒绝抓取")
         }
 
-        let read = AXHelper.read(front: front)
+        var read = AXHelper.read(front: front)
+
+        // Week 2B: if the front app is a browser and the extension bridge is connected, ask it for
+        // the active tab (more reliable url/selection + Readability body than AX for web content).
+        var extractedBody: String? = nil
+        var extVersion: String? = nil
+        if isBrowser(front.bundleID), BrowserBridgeServer.shared.isConnected,
+           let tab = BrowserBridgeServer.shared.request(type: "capture_active_tab", timeout: 3) {
+            if let u = tab["url"] as? String, !u.isEmpty { read.url = u }
+            if let s = tab["selection"] as? String, !s.isEmpty {
+                read.selectedText = s; read.method = "browser-extension"
+            }
+            if let title = tab["title"] as? String, !title.isEmpty, (read.windowTitle?.isEmpty ?? true) {
+                read.windowTitle = title
+            }
+            extractedBody = tab["body"] as? String          // Readability body (added next step)
+            extVersion = tab["ext_version"] as? String
+        }
+
         let durationMs = Int(Date().timeIntervalSince(t0) * 1000)
 
         // truncate for delivery/preview; DB keeps the full text (codex: no contradiction).
@@ -49,12 +67,13 @@ final class CaptureService {
             windowTitle: read.windowTitle,
             url: read.url,
             selectedText: body,
-            extractedBody: nil,                 // Week 2B: browser extension Readability body
+            extractedBody: extractedBody,       // Readability body from the extension (Week 2B)
             domainHint: domainHint(url: read.url),
             userNote: nil,                      // Week 3: floating window note
             pid: Int(front.pid),
             appVersion: appVersion(pid: front.pid),
             captureMethod: read.method,
+            extensionVersion: extVersion,
             isPrivate: read.isSecure,
             truncated: truncated,
             captureDurationMs: durationMs

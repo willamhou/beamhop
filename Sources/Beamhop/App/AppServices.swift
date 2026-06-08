@@ -26,6 +26,7 @@ final class AppServices {
 
     func bootstrap() {
         openDatabase()
+        BrowserBridgeServer.shared.start()   // Week 2B: listen for the browser extension's host
         registerHotkeys()
         menuBar = MenuBarController(
             onCapture: { [weak self] in self?.doCapture() },
