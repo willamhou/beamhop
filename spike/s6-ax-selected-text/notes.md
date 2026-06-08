@@ -23,7 +23,7 @@ The 4 scored fields = app_name, bundle_id, window_title, selected_text.
 | Chrome  | ✓ | ✓ | ✓ | ✅ 4911 chars | ✅ | AXWebArea | 4/4 | **PASS** (needs AXManualAccessibility opt-in) |
 | Notes   | ✓ | ✓ | ✓ | ✅ full (中文) | – | AXTextArea | 4/4 | **PASS** (native AppKit) |
 | iTerm   | ✓ | ✓ | ✓ | ✅ 83 chars | – | AXTextArea | 4/4 | **PASS** (terminal text) |
-| Slack   | ✓ | ✓ | ✓ | ✅ 191 chars (on sign-in page) | – | AXWebArea* | 4/4 | **PASS (capability)** — Chromium exposes it; tested signed-out |
+| Slack   | ✓ | ✓ | ✓ | ⚠️ 191 chars (sign-in page only) | – | AXWebArea* | 3.5/4 | **CAPABILITY-ONLY** — Chromium exposed text, but tested on the sign-in screen, NOT a real signed-in message selection. Re-test when signed in. |
 | Mail    | ✓ | ✓ | ✓ | ❌ (⌘A hit message list) | – | AXTable | 3/4 | **CONDITIONAL** — list selected, not body; a body selection is native text → should pass |
 | Safari  | ✓ | ✓ | ✓ | ❌ empty | ✅ | AXWebArea | 3/4 | **LIMITED** — web selection only via `AXSelectedTextMarkerRange`, not `kAXSelectedText` |
 | VS Code | ✓ | ✓ | ✓ | ❌ empty | – | AXTextArea | 3/4 | **LIMITED** — Electron/Monaco not via `kAXSelectedText` |
@@ -32,11 +32,26 @@ The 4 scored fields = app_name, bundle_id, window_title, selected_text.
 
 ### Aggregate
 - **app_name + bundle_id + window_title: 8/8 reliably captured** (the core provenance fields).
-- **selected_text via plain `kAXSelectedText`: 4 clean PASS** (Chrome, Notes, iTerm, Slack) +
-  Mail conditional (needs body-not-list selection) + 3 LIMITED (Safari, VS Code, Cursor).
-- vs the ≥6/8 bar: **strictly 4–5/8 out of the box → PARTIAL.** The shortfall is concentrated
-  and has known fixes: Safari needs the text-marker API; Electron editors (VS Code/Cursor)
-  need a different strategy (or clipboard fallback); Mail needs body-vs-list focus handling.
+- **selected_text via plain `kAXSelectedText`: 3 clean PASS** (Chrome, Notes, iTerm) +
+  Slack capability-only (sign-in page) + Mail conditional (body-not-list) + 3 LIMITED
+  (Safari, VS Code, Cursor).
+- vs the ≥6/8 bar: **strictly 3–4/8 confirmed out of the box → PARTIAL.** Shortfall is
+  concentrated and has known fixes (Safari text-marker API; Electron clipboard fallback;
+  Mail body focus; Slack re-test signed-in).
+
+### ⚠️ Methodology caveats (codex review 2026-06-08 — must not overstate)
+- The sweep used **synthetic ⌘A**, which is NOT equivalent to a user's manual selection:
+  Chrome's full-page ⌘A reading does not prove a small in-paragraph selection reads cleanly
+  (it very likely does, since a sub-range is simpler, but it's unproven here).
+- `results.jsonl` raw evidence was **deleted** because it contained the user's private note
+  + a full HN page dump. A proper re-run should save sanitized evidence.
+- The honest verdict rests on: Chrome (4911 chars), Notes (full, incl. 中文), iTerm (terminal
+  text), and the TextEdit native baseline. Slack/Mail are caveated above.
+- Code: `enableManualAX` writes AX attrs to ALL apps unconditionally (should target only
+  Chromium/Electron); the recursive child walk has no node cap / visited-set / AX messaging
+  timeout (`AXUIElementSetMessagingTimeout`); system-wide focused element isn't PID-checked
+  vs frontmost; URL is only read off the focused element (missed when selection comes from
+  the window-traversal fallback). All are "fix in the real implementation" items.
 
 ### Critical implementation details for Beamhop (the real value of this spike)
 1. **Query the SYSTEM-WIDE focused element** (`AXUIElementCreateSystemWide()` →
@@ -60,7 +75,8 @@ a clean PASS).
 
 ### Per-app strategy for Beamhop (the actionable output)
 - **Native AppKit (Notes, Mail body, TextEdit, most fields) + terminals (iTerm):** plain
-  `kAXSelectedText` — ship as-is.
+  `kAXSelectedText` works — primary path (still needs AX messaging timeout + length caps +
+  per-capture confidence tagging in the real impl, not literally "ship as-is").
 - **Chromium (Chrome, Slack, Arc/Brave/Edge):** set `AXManualAccessibility` first, then
   `kAXSelectedText` on the `AXWebArea` — works; also yields `AXURL`.
 - **Safari:** provenance (app/window/url) works; for selected text use the

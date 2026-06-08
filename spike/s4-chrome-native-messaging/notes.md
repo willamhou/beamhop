@@ -1,10 +1,23 @@
 # S4 — Chrome Native Messaging
 
-## Status: ⏳ BUILT + PROCESS-LEVEL VERIFIED, AWAITING CHROME RUN
+## Status: ⏳ BUILT + PROCESS-LEVEL framing only, AWAITING CHROME RUN
 Host (`beamhop-bridge`) and the MV3 extension are complete and compile. The native
-framing was verified at the process level (Python harness, no Chrome): ping ok, and a
-900KB echo round-tripped with an exact byte match in ~7.6ms. The remaining manual part
-is loading the extension in Chrome and clicking the buttons.
+framing was verified ONLY at the process level (Python harness, no Chrome): ping ok, and a
+**900KB single-frame** echo round-tripped with an exact byte match in ~7.6ms. The remaining
+manual part is loading the extension in Chrome and clicking the buttons.
+
+### ⚠️ Accuracy corrections (codex review 2026-06-08)
+- The earlier claim "~1MB payloads chunk OK" is **overstated** — only 900KB **single-frame**
+  at the process level was tested; **no chunking was exercised and Chrome was never in the loop**.
+- **Real constraint to validate:** Chrome native messaging caps **native-host→extension**
+  messages at **~1MB**. This host can emit a >1MB response (echo) with no app-layer chunking,
+  so a large capture would be dropped by Chrome. The real Beamhop bridge **must implement an
+  application-layer chunking/streaming protocol**, not rely on the OS pipe. The Chrome run
+  must test 900KB / 1.1MB / 2MB boundaries explicitly.
+- Code-level (do not ship as-is): `UInt32` read via `load(as:)` can trap on misalignment
+  (use `loadUnaligned`/byte-decode); `try!` on JSON encode can crash the host (return a framed
+  error); extension `background.js` has no request timeout and doesn't clear listeners on host
+  disconnect; `install.sh` builds JSON via `sed` without escaping (use a real JSON encoder).
 
 ## Manual steps
 1. `cd host && swiftc -O main.swift -o beamhop-bridge` (already built).
@@ -26,6 +39,8 @@ Cleanup after recording: `rm` the `com.beamhop.bridge.json` from each browser's
 
 ## Hypothesis
 4-byte LE length + JSON framing works; round-trip < 100ms; ~1MB payloads chunk OK.
+(Status: framing ✓ at process level; round-trip + chunking NOT yet validated in Chrome —
+see corrections above. The ~1MB extension-bound limit means chunking is REQUIRED, not optional.)
 
 ## Implementation note (lesson carried from S1)
 Host reads with raw POSIX `read()` in an exact-length loop (`readExactly`), NOT
