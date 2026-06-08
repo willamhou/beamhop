@@ -12,6 +12,17 @@ let stdout = FileHandle.standardOutput
 let stderr = FileHandle.standardError
 func log(_ s: String) { stderr.write(Data("[bridge] \(s)\n".utf8)) }
 
+// diagnostic: prove connectNative actually spawned us (append, since Chrome spawns one host
+// process per connectNative call).
+if let argv = CommandLine.arguments.dropFirst().first {
+    let line = "spawned \(ISO8601DateFormatter().string(from: Date())) origin=\(argv)\n"
+    if let h = try? FileHandle(forWritingTo: URL(fileURLWithPath: "/tmp/beamhop_s4_host_alive.txt")) {
+        h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+    } else {
+        try? line.data(using: .utf8)?.write(to: URL(fileURLWithPath: "/tmp/beamhop_s4_host_alive.txt"))
+    }
+}
+
 func readExactly(_ count: Int) -> Data? {
     var data = Data()
     data.reserveCapacity(count)
@@ -54,6 +65,15 @@ while true {
 
     var resp: [String: Any] = ["id": id]
     switch kind {
+    case "report":
+        // automation hook: persist the extension's test results to a file we can read.
+        if let payload = obj["data"] {
+            if let d = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]) {
+                try? d.write(to: URL(fileURLWithPath: "/tmp/beamhop_s4_result.json"))
+                log("wrote /tmp/beamhop_s4_result.json (\(d.count) bytes)")
+            }
+        }
+        resp["saved"] = true
     case "ping":
         resp["pong"] = true
         resp["host_version"] = "0.0.2"

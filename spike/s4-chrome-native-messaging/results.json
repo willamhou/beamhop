@@ -1,0 +1,50 @@
+{
+  "trigger" : "onInstalled",
+  "ts" : "2026-06-08T02:54:44.624Z",
+  "tests" : {
+    "bench_900kb" : {
+      "note" : "fresh host process per call (includes spawn overhead)",
+      "all_ms" : [
+        16,
+        16,
+        17,
+        18,
+        18,
+        19,
+        19,
+        22,
+        22,
+        28
+      ],
+      "ok" : true,
+      "median_ms" : 18.699999999999999,
+      "p95_ms" : 27.5
+    },
+    "boundary" : {
+      "1153434" : {
+        "match" : false,
+        "requested" : 1153434,
+        "got" : 0,
+        "error" : "Error when communicating with the native messaging host."
+      },
+      "2097152" : {
+        "match" : false,
+        "requested" : 2097152,
+        "got" : 0,
+        "error" : "Error when communicating with the native messaging host."
+      },
+      "921600" : {
+        "match" : true,
+        "requested" : 921600,
+        "got" : 921600,
+        "error" : null
+      }
+    },
+    "ping" : {
+      "id" : 1,
+      "host_version" : "0.0.2",
+      "pong" : true
+    }
+  },
+  "ua" : "Mozilla\/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/148.0.0.0 Safari\/537.36"
+}

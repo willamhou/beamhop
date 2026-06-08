@@ -1,10 +1,37 @@
 # S4 — Chrome Native Messaging
 
-## Status: ⏳ BUILT + PROCESS-LEVEL framing only, AWAITING CHROME RUN
-Host (`beamhop-bridge`) and the MV3 extension are complete and compile. The native
-framing was verified ONLY at the process level (Python harness, no Chrome): ping ok, and a
-**900KB single-frame** echo round-tripped with an exact byte match in ~7.6ms. The remaining
-manual part is loading the extension in Chrome and clicking the buttons.
+## Status: ✅ PASS — fully automated end-to-end in real Chrome (2026-06-08)
+Tested against real Chrome 148, **zero manual clicks** (see automation note below). Evidence:
+`results.json`.
+
+### Results
+- **Round-trip works**: `ping` → `{pong:true, host_version:"0.0.2"}`; 900KB echo exact match.
+- **Latency (900KB, 10 runs, fresh host process PER call incl. spawn overhead):**
+  **median 18.7ms, p95 27.5ms** — comfortably under the 100ms pass criterion. ✅
+- **Host→extension ~1MB limit CONFIRMED empirically:**
+  | payload | result |
+  |---|---|
+  | 900 KB (921600) | ✅ match |
+  | 1.1 MB (1153434) | ❌ `Error when communicating with the native messaging host` |
+  | 2 MB (2097152) | ❌ same |
+  Chrome's own log: `Native Messaging host tried sending a message that is 1153471 bytes long.`
+  → **application-layer chunking is REQUIRED for any capture that could exceed ~1MB.**
+
+### How it was automated (Chrome 137+ removed `--load-extension`)
+Command-line `--load-extension` (even with `--test-type`) is ignored by modern Chrome. The
+working path: launch Chrome with `--remote-debugging-pipe --enable-unsafe-extension-debugging`,
+then over the CDP **pipe** transport (the `Extensions` domain is gated to pipe, not port) call
+`Extensions.loadUnpacked` → returns the extension id → write the native-host manifest with that
+id → `Target.createTarget`/`Page.navigate` to `auto.html`, whose script auto-runs ping + bench +
+boundary probes and reports results through the host (which writes `/tmp/beamhop_s4_result.json`).
+Driver: `cdp_pipe.js` (throw-away). Isolated `--user-data-dir`, does not touch the user's Chrome.
+Note: with a custom `--user-data-dir`, the manifest had to also be written to
+`<profile>/NativeMessagingHosts/`; real users on the default profile use the standard
+`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` path.
+
+### Not yet covered
+- Arc / Brave / Edge (only Chrome tested). Per-browser manifest paths still as documented below.
+- The real product must implement the app-layer chunking protocol + test its reassembly.
 
 ### ⚠️ Accuracy corrections (codex review 2026-06-08)
 - The earlier claim "~1MB payloads chunk OK" is **overstated** — only 900KB **single-frame**
@@ -58,7 +85,10 @@ deadlock when Chrome delivers a large body in multiple chunks. Confirmed correct
 - Browsers tested: Chrome [v.?] [ ], Arc [ ], Brave [ ], Edge [ ]
 
 ## Conclusion
-[ ] PASS  [ ] FAIL  [ ] PARTIAL
+[x] **PASS** — native messaging round-trip works in Chrome at median 18.7ms (≪100ms target).
+The hypothesis's "1MB chunked OK" is **corrected**: a single host→extension message is capped
+at ~1MB by Chrome, so the product MUST chunk at the application layer (not optional). No need
+to fall back to a local HTTP port.
 
 ## Spec patch needed
 - §6.3 "Chrome MV3 native messaging 关键约束": confirm/update chunking bullet; note the
