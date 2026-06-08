@@ -12,6 +12,11 @@
 **Tech Stack:** 续 Week 1(Swift + GRDB + Carbon)。新增:独立可执行 `BeamhopMCP`(stdio JSON-RPC)、`beamhop-bridge`(native messaging host)、Chrome MV3 扩展(TypeScript + Vite + `@mozilla/readability`)。
 
 **Week 2 范围(spec §15):** AX 抓取 + Chrome 扩展/native messaging + 自家 MCP server + Claude Code 注册引导 + 剪贴板兜底(全目标共用)。
+
+**⚠️ 里程碑切分(codex review:整周偏大,切两段交付):**
+- **Week 2A — 最短金线(不含 Chrome 扩展)**:Task 0(DB/WAL/只读)→ Task 2(MCP)→ Task 1(AX 元数据/选区)→ Task 4 + 5(Claude Code 投递 + 剪贴板兜底)→ smoke。**这段独立可用**:非浏览器 app(Notes/编辑器/任意)+ 浏览器的 AX 选区都能抓投。
+- **Week 2B — 浏览器增强支路**:Task 3(bridge contract → 最小 ping → active tab url/title/selection → Readability → GitHub 抽取 → 双向分片测试)。给浏览器抓取补上"全文正文"。
+- 诊断项**随对应 Task 做最小诊断**(MCP 注册随 Task 2、bridge/manifest/扩展连通性随 Task 3),不要堆到最后(codex review)。
 **Week 2 不做:** 浮窗投递 UI(Week 3 —— 本周 `⌘⇧Space` 直接投默认目标 Claude Code + 通知,先不弹选择浮窗)、Inbox 列表 UI(Week 3)、ChatGPT/Cowork 投递(Week 4-5)、截图(Week 5)。
 
 **必须遵守的 Week 0 实测结论:**
@@ -41,10 +46,12 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
   - `beamhop-bridge`(可先用独立 `swiftc` 编译,或加 executableTarget)—— native messaging host。
   - Package.swift 注册;`swift build` 通过。
 
-- [ ] **Step 0.2: 共享 inbox.sqlite 的并发读(关键)**
-  - Beamhop app 写库;`BeamhopMCP` 进程**只读**同一个 `inbox.sqlite`。
-  - GRDB 开 **WAL 模式**(`DatabaseQueue`/`DatabasePool`),保证跨进程读不阻塞写。`BeamhopMCP` 用只读连接(`Configuration.readonly = true`)。
-  - 在 `Database` 里确认 `PRAGMA journal_mode=WAL`(GRDB 默认 WAL,验证一下)。
+- [ ] **Step 0.2: 共享 inbox.sqlite 的并发读(关键 — codex review:需拆只读接口)**
+  - ⚠️ 当前 Week 1 的 `Database` 固定走 `DatabaseQueue(path:)` + integrity check + **损坏恢复(会备份/删库)** + migration。**这套绝不能用在 MCP 只读进程**(否则 MCP 可能误删/恢复用户库)。必须拆:
+    - app 写库初始化时**显式执行并断言 `PRAGMA journal_mode=WAL`**(跨进程读不阻塞写;GRDB 默认 WAL,但要显式确认)。
+    - 新增 `Database.openReadOnly(path:)`(`Configuration.readonly = true`):**只读、不 migration、不损坏恢复、不创建目录、不碰 wal/shm**。
+    - `BeamhopMCP` 启动时若 DB 不存在/无权限 → 返回**结构化 MCP error**,绝不创建空库或触发恢复。
+  - 跨进程 smoke:app 持续写入时,MCP 只读 `capture://latest` 不阻塞、读到最新。
 
 ---
 
@@ -69,12 +76,13 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
   - 输入:`AXHelper.frontmostApp()` + 取词结果(+ 可选浏览器扩展正文,Task 3 接)。
   - 填 provenance:`pid / app_version(从目标 app bundle 读)/ os_version / beamhop_version / capture_method / capture_duration_ms / ax_tree_snapshot(可选 JSON)`。
   - **800ms 超时**(§6.6):AX 整体超时 → 退化为"仅元数据"或截图兜底(截图 Week 5,先仅元数据)。
-  - 极长正文 > 100k 截断 + `truncated=1`,Inbox 存完整(§11)。
+  - 极长正文(codex review:消除矛盾)—— **DB 存完整原文**;`truncated=1` 仅标记"投递/预览会截断到 100k",不删 DB 数据。投递层和预览层各自截断,渲染时用标记提示,不误导(§11)。
   - `domain_hint` 粗判(github.com/pr|issue 等;细的留扩展 Task 3)。
   - 产物 `insert` 进 `CaptureStore`,返回 `Capture`。
 
 - [ ] **Step 1.4: 接 `⌘⇧Space`**
   - `AppServices.placeholderCapture()` → 真 `CaptureService.captureFrontmost()`;成功后(Week 2 暂)直接进 Task 4 的默认投递。
+  - ⚠️ **失败不能只 beep(codex review)**:AX 权限缺失 / 命中黑名单 / 仅拿到元数据 / 投递降级,都要发**系统通知说明具体原因**(§7.7 无 silent failure)。
   - **手动 smoke**:在 Safari/Chrome/Notes/VS Code 选中文本按 ⌘⇧Space → `inbox.sqlite` 里多一条,字段符合 S6 实测预期(Chrome 有 selected_text+url;Safari 有 url 无 selected_text;等)。
 
 ---
@@ -90,11 +98,11 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
 - [ ] **Step 2.2: 暴露 Beamhop 数据(§7.3)**
   - resource `capture://latest`、`capture://{id}` → 返回 Capture JSON。
   - tool `fetch_capture(id?)` → id 缺省取最新;返回完整 Capture(含 provenance)渲染成给 agent 的结构化文本/JSON。
-  - 数据源:**只读**打开 `AppPaths.databaseURL`(Task 0 的 WAL 只读连接)。注意 MCP server 由 Claude Code 拉起,工作目录/环境未知 → 用绝对路径定位 DB。
+  - 数据源:**只读**打开 DB(Task 0 的 `openReadOnly`)。⚠️ **codex review:MCP 不自己猜 DB 路径**。MCP server 由 Claude Code 拉起,工作目录/环境未知,且未来若 sandbox 化 app 与 MCP 看到的 Application Support 路径可能不同 → **注册命令里把 DB 路径作为参数显式传入**:`claude mcp add beamhop -s user -- <BeamhopMCP> --db <inbox.sqlite 绝对路径>`。"非 sandbox + Application Support 路径"是产品约束,写进注释。
 
 - [ ] **Step 2.3: 注册引导(§9.4 / S1)**
-  - app 内"注册 Claude Code"动作:校验 `claude` 在 PATH → `claude mcp add beamhop -s user -- <BeamhopMCP 绝对路径>`;不在 PATH 则给可复制命令。
-  - 二进制路径要**稳定**(装到 app bundle 内或固定 support 目录;SwiftPM 阶段先用 `.build` 绝对路径,Xcode 后改 bundle)。
+  - app 内"注册 Claude Code"动作:校验 `claude` 在 PATH → `claude mcp add beamhop -s user -- <BeamhopMCP 绝对路径> --db <inbox.sqlite 绝对路径>`;不在 PATH 则给可复制命令。
+  - ⚠️ 二进制必须装到**稳定位置**(Xcode 后:app bundle 内;SwiftPM 阶段:复制到固定 `~/Library/Application Support/beamhop/bin/`)。**`.build/` 绝对路径不能作为可交付验收标准**(重编路径会变 → MCP 失效,S1 已记此坑)。
 
 - [ ] **Step 2.4: 验证(复用 S1 手法)**
   - `claude mcp add` 后 `claude mcp list` = ✓ Connected;`claude -p "用 fetch_capture 拉最新 capture 并贴出 window_title"` → 返回最近一条抓取的真实数据。
@@ -106,16 +114,23 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
 
 **Files:** `host/`(移植 `spike/s4`)、`extension/`、`Sources/Beamhop/Bridge/BrowserBridgeServer.swift`
 
-- [ ] **Step 3.1: 架构 —— app ↔ host ↔ 扩展(关键设计)**
-  - Beamhop app 起一个 **unix domain socket** server(`~/Library/Application Support/beamhop/bridge.sock`)。
-  - `beamhop-bridge`(Chrome 用 `connectNative` 拉起)在启动时连上 app 的 socket,**双向中继**:Chrome stdio 帧 ↔ socket。
-  - 扩展 background service worker **常驻一个 `connectNative` 端口**(保持 host 进程活着 + 连着 app)。
-  - 取数据是 **app 发起**:app → socket → host → 扩展 →(content script 抓取)→ 原路返回。
+- [ ] **Step 3.0: Bridge Contract(先定协议再写代码 — codex review)**
+  - **Socket 帧 + 消息**:`{ reqID, type, seq?, total?, payload }`;type ∈ {hello, capture_active_tab, result, error, ping}。统一 reqID + timeout + 错误码。
+  - **生命周期/重连**:host 启动即连 `bridge.sock`;**app 未运行/连不上 → 指数退避后退出**,让扩展的 `connectNative` 在下次需要时重新拉起 host(扩展端做重连)。MV3 service worker 被挂起 → 在途 request 超时失败 + 可重发。
+  - **路由**:app 维护 `connectionID → {browser, profile}`;每次 capture **选前台浏览器对应的连接**;多浏览器/多 profile 并存要能区分。
+  - **并发**:同一浏览器的 capture **串行化**;全局并发上限 1 或显式队列。
+  - **安全**:socket 目录 `0700`、socket 文件权限/owner 校验、stale socket 清理。
 
-- [ ] **Step 3.2: native host(移植 S4 + 加分片)**
-  - 复用 S4 的精确长度读 + `loadUnaligned` + 4 字节 LE 帧。
-  - **应用层分片(S4 实测必须)**:host→extension 单条 > ~1MB 要拆成多帧(`{id, seq, total, chunk}`),扩展端重组。Readability 正文很容易超 1MB。
-  - host 不再"自己造数据",改成**纯中继** Chrome ↔ app socket。
+- [ ] **Step 3.1: 架构落地 —— app ↔ host ↔ 扩展**
+  - Beamhop app 起 **unix domain socket** server(`~/Library/Application Support/beamhop/bridge.sock`),按 3.0 契约。
+  - `beamhop-bridge`(Chrome `connectNative` 拉起)连 app socket,**纯双向中继**:Chrome stdio 帧 ↔ socket。
+  - 扩展 background SW **常驻 `connectNative` 端口** + 重连。
+  - 取数据 **app 发起**:app → socket → host → 扩展 →(content script 抓取)→ 原路返回。
+
+- [ ] **Step 3.2: native host + 双向分片(移植 S4)— ⚠️ 方向已修正(codex review)**
+  - 复用 S4 的精确长度读 + `loadUnaligned` + 4 字节 LE 帧;host 改为**纯中继**,不自己造数据。
+  - **分片是双向的,且大正文走 `extension→host→app` 方向**(Week 2 的浏览器抓取流是扩展把 Readability 正文返回给 app,**不是** host 发给扩展 —— 原计划方向写反了)。S4 只证明了 `native-host→extension` 的 ~1MB 上限。
+  - 定义 **双向 request/chunk/reassemble** 协议(`{reqID, seq, total, chunk}`),host 和扩展两端都能拆/合。
 
 - [ ] **Step 3.3: Chrome MV3 扩展(移植 S4 + 抓取能力,§6.3)**
   - background SW:常驻 `connectNative` 端口 + 重连;响应 app 的 `capture_active_tab` 请求。
@@ -130,7 +145,9 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
 
 - [ ] **Step 3.5: 端到端验证(可借 Week 0 的 CDP 自动化思路)**
   - 在 Chrome 选中网页文本按 ⌘⇧Space → Inbox 里该条有 url + selected_text + Readability 正文 + (GitHub 页)结构化字段。
-  - 大正文(> 1MB)分片重组正确(对照 S4 的 1MB 边界结论)。
+  - **两条分片路径分别测(codex review)**:
+    - `app/host → extension` 1.1MB 请求 → 必须分片成功(对应 S4 实测的 native-host→extension ~1MB 上限);
+    - `extension → host → app` 2MB Readability 正文 → 必须真实返回成功(这才是大正文的实际方向)。
 
 ---
 
@@ -138,9 +155,11 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
 
 **Files:** `Sources/Beamhop/Delivery/{ClipboardService,TerminalLocator,ClaudeCodeDelivery,PromptRenderer}.swift`
 
-- [ ] **Step 4.1: ClipboardService —— §12.3 安全协议**
-  - 步骤严格按 §12.3:① 读当前 `NSPasteboard` **所有 type** 缓存 → ② 写待粘贴 → ③ AX 触发 ⌘V → ④ 等 ~50ms → ⑤ 还原全部 type → ⑥ **第①步读失败(无法序列化的特殊 type)→ 直接拒绝粘贴**并提示用户手动。
-  - 提供可取消 + 失败回滚;绝不污染用户剪贴板(Codex 在 spec 里强调过)。
+- [ ] **Step 4.1: ClipboardService —— §12.3 安全协议(codex review:细化还原语义)**
+  - 备份按 **`pasteboardItems` 逐 item、逐 type 保存 raw `Data`**(不是只存 string);**任一 type 读不到 data → 拒绝安全粘贴**并提示用户手动(owner/lazy pasteboard、文件 promise、多 item 这些拿不到 data 的情况都走拒绝)。
+  - 步骤(§12.3):① 逐 item/type 缓存 raw Data → ② 写待粘贴 → ③ AX ⌘V → ④ 等 ~50ms → ⑤ **clearContents 后逐 item 重建**全部 type → ⑥ 第①步失败即拒绝(不污染)。
+  - **测试矩阵**:plain text、HTML+RTF 多 type、多文件 URL、PNG 图片、空剪贴板 —— 还原后逐项比对一致。
+  - ⚠️ 注意:**只有 ClaudeCodeDelivery 的安全粘贴需要还原**;Task 5 的 ClipboardHandoff 是"主动把内容留在剪贴板给用户粘",**不承诺也不应该还原**。
 
 - [ ] **Step 4.2: PromptRenderer(§7.6)**
   - `protocol PromptRenderer { func render(_ capture: Capture, userNote: String?) -> String }`。
@@ -148,7 +167,7 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
 
 - [ ] **Step 4.3: TerminalLocator(§7.3 ③④)**
   - 找前台终端(bundle ∈ {com.apple.Terminal, com.googlecode.iterm2, dev.warp.Warp, com.mitchellh.ghostty})。
-  - 判断里面是否有 `claude` 在跑(`pgrep claude` / 扫窗口标题);否 → 提示"Claude Code 未运行,开新会话?"(`osascript` 开新 iTerm 跑 `claude "..."`)。
+  - ⚠️ **判断 claude 会话(codex review:`pgrep claude` 太粗会误判别项目/后台进程)**:优先按**前台终端窗口的 tty / 进程树**判定该窗口里是否在跑 claude;判不准 → **提示用户确认,不直接自动回车**。否 → "Claude Code 未运行,开新会话?"(`osascript` 开新 iTerm 跑 `claude "..."`)。
 
 - [ ] **Step 4.4: ClaudeCodeDelivery(组装金线,§7.3)**
   - 前置:capture 已入库(Task 1)+ MCP 已注册(Task 2,诊断里可见)。
@@ -182,9 +201,10 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
   - `⌘⇧Space` → CaptureService 抓取(AX + 浏览器扩展)→ 入库 → `DeliveryService.deliver(capture, .claudeCode)` → 失败降级剪贴板 → 系统通知结果。
   - 默认目标 = Claude Code(§9.1 默认规则;浮窗选择器 Week 3 再加)。
 
-- [ ] **Step 6.2: 诊断面板补真(Week 1 的 🚧 项现在能做了)**
-  - Chrome native messaging host:真检测 manifest + host 二进制 + 扩展连通性 → ✅/❌ + "一键写入 manifest"。
-  - Claude Code MCP:从"复制命令"升级为**真·一键 `claude mcp add … -s user`**(host 二进制现在有了)。
+- [ ] **Step 6.2: 诊断面板补真(codex review:这些应随对应 Task 增量做,本步只做最终汇总验收)**
+  - Claude Code MCP(随 Task 2):从"复制命令"升级为**真·一键 `claude mcp add … -s user -- <bin> --db <path>`**。
+  - Chrome native messaging host(随 Task 3):真检测 manifest + host 二进制 + 扩展连通性 → ✅/❌ + "一键写入 manifest"。
+  - 本步只确认各行最终状态一致、无回归。
 
 - [ ] **Step 6.3: 端到端 smoke 矩阵(手动 + 半自动)**
   - Chrome 网页 → Claude Code:✓ 抓取(url+正文)+ MCP 投递成功。
@@ -216,4 +236,8 @@ extension/                  (Chrome MV3,移植自 spike/s4 + Readability/GitHub 
 3. **跨进程共享 inbox.sqlite**(Task 0.2)—— WAL + 只读连接,注意 MCP server 由 Claude 拉起时的绝对路径与权限。
 4. **Clipboard-Safe 还原**(Task 4.1)—— 多 type/图片/文件的完整备份还原,失败必须拒绝而非污染。
 
-**建议执行顺序:** Task 0 → Task 2(MCP,低耦合,可独立验)→ Task 1(AX 抓取)→ Task 4+5(投递+兜底,先用 AX 抓取的 capture 跑通金线)→ Task 3(浏览器扩展,最重,放后面)→ Task 6 串联。即**先把"AX 抓取 → Claude Code"这条最短金线打通,再加浏览器扩展这条增强支路**。
+**建议执行顺序(= 里程碑切分,codex review):**
+- **Week 2A**:Task 0 → Task 2(MCP)→ Task 1(AX 抓取)→ Task 4 + 5(投递 + 兜底)→ Task 6.1/6.3 的 2A 部分 smoke。**先把"AX 抓取 → Claude Code"最短金线打通并可交付。**
+- **Week 2B**:Task 3(bridge contract → 最小 ping → active tab → Readability → GitHub → 双向分片测试)→ Task 6 余下串联 + tag。**再加浏览器扩展增强支路。**
+
+> 集成周最高风险集中在 Week 2B 的三段桥 + 双向分片;2A 先交付能让金线尽早可用、降低整周风险。
