@@ -31,4 +31,8 @@ guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleI
     fputs("ChatGPT Desktop not running (bundle id com.openai.chat)\n", stderr); exit(1)
 }
 let el = AXUIElementCreateApplication(app.processIdentifier)
+// Try the same opt-in that revealed Chromium/Electron content in S6.
+AXUIElementSetAttributeValue(el, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+AXUIElementSetAttributeValue(el, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+usleep(400_000)
 describe(el)

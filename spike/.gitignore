@@ -18,3 +18,5 @@ s6-ax-selected-text/axprobe
 s6-ax-selected-text/results.jsonl
 s6-ax-selected-text/axprobe_once
 s6-ax-selected-text/recovered_note*
+s3-chatgpt-ax/ax_tree_current.txt
+s3-chatgpt-ax/ax_tree_optin.txt

@@ -27,7 +27,21 @@ app.activate(options: [])
 Thread.sleep(forTimeInterval: 0.3)
 
 let appEl = AXUIElementCreateApplication(app.processIdentifier)
+// ChatGPT Desktop exposes its AX tree (incl. the input AXTextArea) only after this opt-in.
+AXUIElementSetAttributeValue(appEl, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+AXUIElementSetAttributeValue(appEl, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+Thread.sleep(forTimeInterval: 0.4)
 guard let input = findInput(appEl) else { fputs("input (AXTextArea) not found\n", stderr); exit(2) }
+
+// SAFEST path first: set the AXTextArea value directly via AX (no clipboard, no keystrokes).
+let axSetResult = AXUIElementSetAttributeValue(input, kAXValueAttribute as CFString, "SPIKE_S3_AXSET_TEST" as CFString)
+Thread.sleep(forTimeInterval: 0.15)
+let axSetReadback = axAttr(input, kAXValueAttribute as String) as? String ?? "<nil>"
+print("AX set-value result: \(axSetResult == .success ? "success" : "\(axSetResult.rawValue)")")
+print("AX set-value readback contains marker: \(axSetReadback.contains("SPIKE_S3_AXSET_TEST"))")
+// clear it before the paste test
+AXUIElementSetAttributeValue(input, kAXValueAttribute as CFString, "" as CFString)
+Thread.sleep(forTimeInterval: 0.1)
 AXUIElementSetAttributeValue(input, kAXFocusedAttribute as CFString, kCFBooleanTrue)
 Thread.sleep(forTimeInterval: 0.1)
 
