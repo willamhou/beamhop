@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-08",
+  "platform": { "os": "macOS 26.5", "arch": "arm64" },
+  "claude_code": {
+    "cli_version": "2.1.168",
+    "mcp_add_command": "claude mcp add beamhop -s user -- <abs-bin>",
+    "scope": "user (REQUIRED; default 'local' is git-root-scoped and breaks cross-project use)",
+    "config_path": "~/.claude.json (top-level mcpServers for -s user)",
+    "stdio_framing": "newline-delimited JSON (NOT Content-Length); host must use non-blocking read",
+    "status": "PASS"
+  },
+  "claude_cowork": {
+    "bundle_id": "com.anthropic.claudefordesktop",
+    "version_tested": "1.11187.4",
+    "connector_mechanisms": [".mcpb desktop extension", "claude_desktop_config.json (legacy local stdio)", "managedMcpServers (admin)"],
+    "config_dir": "~/Library/Application Support/Claude/",
+    "status": "MECHANISM_CONFIRMED (end-to-end registration = fast-follow)"
+  },
+  "chatgpt_desktop": {
+    "bundle_id": "com.openai.chat",
+    "versions_tested": ["1.2026.119"],
+    "ax_requires_optin": "AXManualAccessibility + AXEnhancedUserInterface on the app element",
+    "ax_input_role": "AXTextArea",
+    "ax_send_button_id": "MessageInputPrimaryButtonContainerPart.PrimaryButton",
+    "inject_method": "kAXValueAttribute set-value (preferred); Cmd+V paste (fallback, needs focus wait)",
+    "auto_submit": false,
+    "status": "PARTIAL_PASS (single version; multi-version stability deferred)"
+  },
+  "browser_extension": {
+    "native_messaging_roundtrip_ms": { "median": 18.7, "p95": 27.5, "payload": "900KB", "note": "fresh host process per call" },
+    "host_to_extension_size_limit_bytes": 1048576,
+    "chunking_required": true,
+    "chrome": { "version": "148", "status": "PASS" },
+    "arc": "untested",
+    "brave": "untested",
+    "edge": "untested",
+    "manifest_paths": {
+      "chrome": "~/Library/Application Support/Google/Chrome/NativeMessagingHosts/",
+      "arc": "~/Library/Application Support/Arc/User Data/NativeMessagingHosts/",
+      "brave": "~/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/",
+      "edge": "~/Library/Application Support/Microsoft Edge/NativeMessagingHosts/"
+    }
+  },
+  "floating_window": {
+    "config": "level=.floating, collectionBehavior=[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]",
+    "scenarios": {
+      "normal_desktop": "PASS",
+      "fullscreen_safari": "PASS",
+      "fullscreen_vscode": "PASS",
+      "stage_manager": "PASS",
+      "dual_display": "UNTESTED (no external monitor)"
+    },
+    "notes": "close button must hide not destroy (isReleasedWhenClosed=false)",
+    "status": "PASS"
+  },
+  "ax_apps": {
+    "_fields_always_ok": ["app_name", "bundle_id", "window_title"],
+    "_strategy": "native kAXSelectedText | chromium AXManualAccessibility opt-in | safari AXSelectedTextMarkerRange | electron-editor clipboard fallback",
+    "com.google.Chrome": { "selected_text": "full", "via": "AXManualAccessibility + AXWebArea", "url": true, "status": "PASS" },
+    "com.apple.Notes": { "selected_text": "full", "via": "native AXTextArea", "status": "PASS" },
+    "com.googlecode.iterm2": { "selected_text": "full", "via": "native AXTextArea", "status": "PASS" },
+    "com.tinyspeck.slackmacgap": { "selected_text": "capability-only", "via": "Chromium AXWebArea", "note": "tested on sign-in page; re-test signed in", "status": "LIKELY_PASS" },
+    "com.apple.mail": { "selected_text": "conditional", "note": "list select gives AXTable; message-body selection is native text", "status": "CONDITIONAL" },
+    "com.apple.Safari": { "selected_text": "limited", "url": true, "note": "needs AXSelectedTextMarkerRange API; kAXSelectedText empty", "status": "LIMITED" },
+    "com.microsoft.VSCode": { "selected_text": "limited", "note": "Electron/Monaco not via kAXSelectedText -> clipboard fallback", "status": "LIMITED" },
+    "com.todesktop.230313mzl4w4u92": { "selected_text": "limited", "note": "Cursor, Electron/Monaco like VS Code", "status": "LIMITED" }
+  }
+}

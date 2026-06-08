@@ -21,7 +21,7 @@
 
 | Phase | 时间窗 | 状态 | Spec | 完成日期 |
 |---|---|---|---|---|
-| Phase 1 — MVP | 0–6 周 | 🚧 进行中（spec 已对齐 2026-06-03） | [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) | — |
+| Phase 1 — MVP | 0–6 周 | 🚧 进行中（**Week 0 Spike 6/6 完成 2026-06-08；spec → V2.1**） | [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) | — |
 | Phase 1.5 — 短期补丁 | MVP + 2–4 周 | 📋 规划中 | — | — |
 | Phase 2.1 — 跨设备 Inbox | Month 3–4 | 📋 规划中 | — | — |
 | Phase 2.2 — Memory 与语义搜索 | Month 4–6 | 📋 规划中 | — | — |
@@ -50,12 +50,13 @@
 - Clipboard-Safe Paste 协议
 - Failure Recovery UI
 
-**🟡 条件交付（视 Week 0 Spike 结果）**：
-- ChatGPT Desktop AX 粘贴
-- Claude Cowork connector 集成
-- 浮窗在全屏 app / Stage Manager / 多显示器上的覆盖
+**🟡 条件交付（Week 0 Spike 结果已定，2026-06-08）**：
+- ChatGPT Desktop AX 粘贴 → **🟢 纳入(条件)**：AX 注入可行(需 opt-in);单版本,跨版本待复测
+- Claude Cowork connector 集成 → **🟢 机制确认,fast-follow**：本地 `.mcpb`/config 路径存在;e2e 注册待验证
+- 浮窗在全屏 app / Stage Manager / 多显示器上的覆盖 → **✅ 纳入**：全屏+Stage Manager 实测通过;双屏待补测
 
-**Week 0 Spike 必须先跑通 6 个假设**（详见 spec §14）：S1 Claude Code MCP / S2 Cowork connector / S3 ChatGPT AX 稳定性 / S4 Chrome native messaging / S5 浮窗 collection behaviors / S6 跨 app AX 选中文本
+**✅ Week 0 Spike 完成（2026-06-08）— 6/6 假设有结论**（详见 spec §14.4 + `spike/results.md`）：
+S1 Claude Code MCP **✅PASS** / S2 Cowork **🟢机制确认** / S3 ChatGPT AX **🟢PARTIAL/PASS** / S4 Chrome native messaging **✅PASS** / S5 浮窗 **✅PASS** / S6 跨 app AX 取词 **🟡PARTIAL**。Compatibility Matrix v0 → `spike/compatibility-matrix-v0.json`。
 
 **退出条件**：
 - 自己 daily `⌘⇧Space` 次数 ≥ 10 次/天
@@ -74,9 +75,15 @@
 
 **已确认推迟的项（来自 V2 Spec 重排）**：
 - **Safari 扩展**（containing app + JS + native extension 三 sandbox，独立 mac app 工程量）
-- **Claude Cowork 集成**（如 Week 0 Spike 失败 → 这里补上）
+- **Claude Cowork 集成端到端验证 + `.mcpb` 打包**（Week 0 已确认机制存在,只差登录态下注册 + tool call 验证）
 - **ChatGPT Desktop 投递后自动按回车**
 - 多浏览器扩展打包（Arc/Brave/Edge 独立 manifest 路径）
+
+**Week 0 Spike 转结的 fast-follow（验证已做一半,GA 前补齐）**：
+- S3 ChatGPT AX 路径跨版本稳定性复测（当前仅单版本 1.2026.119）
+- S5 浮窗双屏行为实测（Week 0 测试机无外接屏）
+- S4 native messaging 应用层分片协议实现 + 重组测试（~1MB 上限已实测坐实）
+- S6 Safari 取词走 `AXSelectedTextMarkerRange` 的 PoC；Slack 登录态复测
 
 **其他预期交付物**：
 - 投递通道稳定性补强（基于 dogfood 期 Compatibility Matrix 反馈）

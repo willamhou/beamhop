@@ -1,9 +1,9 @@
 # Beamhop MVP 设计稿
 
 > 项目名：**Beamhop**（品牌呈现）/ `beamhop`（技术标识：bundle id、目录、CLI）
-> 日期：2026-06-03（V2 修订：2026-06-03）
-> 状态：V2 — 经 Codex 独立 review 修订；Week 0 Spike 必须先跑通才能开 Week 1
-> 修订说明：V1 假设 MCP 路径/Cowork 集成/AX 粘贴稳定性都过于乐观；V2 引入 Spike-First、范围收窄、provenance 升为一等公民。
+> 日期：2026-06-03（V2 修订：2026-06-03 · V2.1 spike 回写：2026-06-08）
+> 状态：V2.1 — Week 0 Spike 6/6 完成；范围已按实测结果定型，可开 Week 1
+> 修订说明：V1 假设 MCP 路径/Cowork 集成/AX 粘贴稳定性都过于乐观；V2 引入 Spike-First、范围收窄、provenance 升为一等公民；V2.1 把 6 个 spike 的实测结论回写到对应章节（详见 `spike/results.md` + `spike/compatibility-matrix-v0.json`）。
 
 ## TL;DR
 
@@ -100,11 +100,11 @@ iOS / 跨设备同步、OCR、Web chatbox 自动注入、长期 memory / 语义�
 
 ### 4.2 🟡 条件交付 — 视 Week 0 Spike 结果纳入
 
-| 能力 | 依赖 spike 验证 | 纳入条件 |
-|---|---|---|
-| ChatGPT Desktop AX 粘贴 | ChatGPT Desktop 当前版本 AX tree 中输入框 identifier 稳定 + 跨 ≥ 2 个最近版本一致 | Spike 通过 → 加入金线；失败 → 仅做剪贴板 handoff |
-| Claude Cowork 集成 | Cowork 的 connector/plugin 实际机制摸清 + 注册流程可一键完成 | Spike 通过且工作量 < 1 周 → 纳入；否则推迟 Phase 1.5 |
-| 浮窗覆盖全屏 app | `canJoinAllSpaces` + `fullScreenAuxiliary` 在真实全屏 / Stage Manager / 多显示器场景验证 | Spike 通过 → 纳入；失败 → 文档化"在全屏 app 中按热键会退出全屏" |
+| 能力 | 依赖 spike 验证 | 纳入条件 | **V2.1 实测结果** |
+|---|---|---|---|
+| ChatGPT Desktop AX 粘贴 | ChatGPT Desktop 当前版本 AX tree 中输入框 identifier 稳定 + 跨 ≥ 2 个最近版本一致 | Spike 通过 → 加入金线；失败 → 仅做剪贴板 handoff | **🟢 纳入(条件)** — AX 注入可行(需 `AXManualAccessibility` 开关 + `kAXValueAttribute` 写值);仅测了单版本,跨版本稳定性待确认;不自动回车。详见 §7.5 / S3 |
+| Claude Cowork 集成 | Cowork 的 connector/plugin 实际机制摸清 + 注册流程可一键完成 | Spike 通过且工作量 < 1 周 → 纳入；否则推迟 Phase 1.5 | **🟢 机制确认,fast-follow** — `.mcpb` + `claude_desktop_config.json` 本地路径存在;端到端注册待验证(需登录)。不挡金线。详见 §7.4 / S2 |
+| 浮窗覆盖全屏 app | `canJoinAllSpaces` + `fullScreenAuxiliary` 在真实全屏 / Stage Manager / 多显示器场景验证 | Spike 通过 → 纳入；失败 → 文档化"在全屏 app 中按热键会退出全屏" | **✅ 纳入** — 全屏 Safari/VS Code + Stage Manager 全过(显示+键盘焦点+开关);双屏未测(无外接屏)。详见 §9.1 / S5 |
 
 ### 4.3 🔴 明确推迟到 Phase 1.5 或更晚
 
@@ -175,17 +175,29 @@ iOS / 跨设备同步、OCR、Web chatbox 自动注入、长期 memory / 语义�
 
 ### 6.2 Accessibility API 能拿到什么（mac 现实清单）
 
-| 数据 | 可取得性 | 备注 |
-|---|---|---|
-| 活跃 app bundle id + 名字 | ✅ 100% | `NSWorkspace.shared.frontmostApplication` |
-| 当前窗口标题 | ✅ 99% | `AXTitle` |
-| 浏览器 URL | ✅ Safari/Chrome/Arc/Brave 都有 | AX 有 `AXDocument` 或 `AXURL`，需逐家适配 |
-| 选中文本 | ✅ 80%+ | `AXSelectedText`，Electron app 部分支持差 |
-| 焦点输入框内文本 | ✅ 80%+ | 同上 |
-| 滚动可视区域全文 | ⚠️ 50% | 文档类给，IDE/聊天 app 给不全 |
-| 整个文档全文 | ❌ 极少 | 几乎拿不到，靠扩展或截图 OCR |
+| 数据 | 可取得性 | 备注 | **S6 实测(2026-06-08)** |
+|---|---|---|---|
+| 活跃 app bundle id + 名字 | ✅ 100% | `NSWorkspace.shared.frontmostApplication` | ✅ 8/8 app 全拿到 |
+| 当前窗口标题 | ✅ 99% | `AXTitle` | ✅ 8/8 全拿到 |
+| 浏览器 URL | ✅ Safari/Chrome/Arc/Brave 都有 | AX 有 `AXDocument` 或 `AXURL` | ✅ Chrome/Safari 实测 `AXURL` 有 |
+| 选中文本 | ⚠️ 因 app 而异(原表写 80%+ 偏乐观) | `AXSelectedText` | **见下方策略表** |
+| 焦点输入框内文本 | ✅ 原生文本框可 | `kAXValue` | ✅ 原生 NSTextView/TextField 可;Electron 不可 |
+| 滚动可视区域全文 | ⚠️ 50% | 文档类给，IDE/聊天 app 给不全 | (未深测) |
+| 整个文档全文 | ❌ 极少 | 几乎拿不到，靠扩展或截图 OCR | (同上) |
 
-**设计决定**：AX 只拿"轻量元数据"（app 名、窗口标题、URL、选中文本），不试图通过 AX 拿全文。全文走浏览器扩展或截图 OCR（OCR Phase 2）。
+**S6 选中文本 — 必须按 app 分策略(实测,详见 `spike/compatibility-matrix-v0.json`)：**
+
+| app 类型 | 取词方式 | 实测结果 |
+|---|---|---|
+| 原生 AppKit(Notes/Mail 正文/TextEdit/输入框) | `kAXSelectedText` 直接读 | ✅ PASS(含中文) |
+| 终端(iTerm/Terminal) | `kAXSelectedText` | ✅ PASS |
+| Chromium(Chrome/Slack/Arc/Brave/Edge) | **先设 `AXManualAccessibility` + `AXEnhancedUserInterface`**,再读 `AXWebArea` 的 `kAXSelectedText`;附带能拿 `AXURL` | ✅ Chrome PASS;Slack 登录页验证到能力 |
+| Safari | app/window/url 可拿;选中文本须走 **`AXSelectedTextMarkerRange`** text-marker API(`kAXSelectedText` 为空) | ⚠️ LIMITED |
+| Electron 编辑器(VS Code/Cursor) | Monaco 选区不经 `kAXSelectedText` 暴露 → **退剪贴板兜底** | ⚠️ LIMITED |
+
+**关键实现要点**：(1) 查 focused element 要用**系统级** `AXUIElementCreateSystemWide()`,查 app 级大多返回 nil;(2) 给每条 capture 标注 strategy/confidence;(3) 正式实现要设 `AXUIElementSetMessagingTimeout` + 遍历节点上限,防卡死。
+
+**设计决定**：AX 只拿"轻量元数据"（app 名、窗口标题、URL、选中文本），不试图通过 AX 拿全文。全文走浏览器扩展或截图 OCR（OCR Phase 2）。**provenance 三件套(app/window/url)8/8 稳,是 inspectability wedge 的可靠地基。**
 
 ### 6.3 浏览器扩展（V2 修订：只做 Chrome；Safari 推迟）
 
@@ -220,12 +232,14 @@ beamhop.app (Swift) ←─ stdio JSON ─→ com.beamhop.bridge (native messagin
                                   浏览器扩展 (TS)
 ```
 
-**Chrome MV3 native messaging 关键约束（V2 新增，依据 Codex review）**：
-- Host manifest 路径：`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.beamhop.bridge.json`（每个 Chromium 系浏览器路径不同，Arc/Brave/Edge 各有自己的路径，安装时需逐一写入）
+**Chrome MV3 native messaging 关键约束（V2 新增，✅ S4 实测确认 2026-06-08，Chrome 148）**：
+- Host manifest 路径：`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.beamhop.bridge.json`（每个 Chromium 系浏览器路径不同，Arc/Brave/Edge 各有自己的路径，安装时需逐一写入 —— 见 `compatibility-matrix-v0.json` 的 `manifest_paths`）
 - Manifest 必须包含 `allowed_origins`（扩展 id），`path`（host 二进制绝对路径），`type: "stdio"`
-- stdout 帧格式：4 字节 little-endian length + JSON payload
-- 单条消息上限 **1 MB**（host→browser 方向；browser→host 是 64KB），大正文必须分片
+- stdout 帧格式：4 字节 little-endian length + JSON payload（host 端用 `loadUnaligned` 避免对齐 trap；按精确长度循环读)
+- **单条消息上限 ~1 MB(host→extension 方向)—— 实测坐实**：900KB 成功,1.1MB/2MB 被 Chrome 直接丢弃并报 `Native Messaging host tried sending a message that is N bytes long`。→ **大正文必须做应用层分片(强制,非可选)**
+- **往返延迟实测**：900KB 中位数 18.7ms / p95 27.5ms(每次还新起一个 host 进程),远低于 100ms 目标 → **无需退回本地 HTTP 端口方案**
 - 不用 WebSocket 的原因仍然成立：无需开本地端口，无防火墙弹窗
+- **(测试备忘)** Chrome 137+ 已封命令行 `--load-extension`;自动化加载未打包扩展须走 CDP pipe(`--remote-debugging-pipe --enable-unsafe-extension-debugging` + `Extensions.loadUnpacked`)。仅影响测试/CI,不影响产品。
 
 ### 6.4 截图策略
 
@@ -272,8 +286,8 @@ struct Capture {
 | 目标 | 状态 | 主通道 | 触发方式 | 关键约束 |
 |---|---|---|---|---|
 | Claude Code CLI | 🟢 金线 | 自家 MCP server（数据）+ AX 粘贴（触发） | 在活跃 Terminal/iTerm/Warp 窗口粘 prompt | Claude Code 必须在前台终端运行 |
-| ChatGPT Desktop | 🟡 条件 | AX 粘贴 或 剪贴板兜底 | 在输入框粘整段 markdown | App 已打开；AX 路径需 Spike 验证 |
-| Claude Cowork | 🟡 条件 | Cowork connector/plugin（待 Spike 验证）+ AX 粘贴 | 见 §7.4 | Cowork 实际机制可能与 Claude Desktop legacy 不同 |
+| ChatGPT Desktop | 🟡 条件 | AX 注入（`kAXValue` 写值，需 `AXManualAccessibility` opt-in）或剪贴板兜底 | 在输入框注入整段 markdown | App 已打开；✅ S3 实测 AX 可行（单版本） |
+| Claude Cowork | 🟡 条件 | 本地 stdio MCP（`.mcpb` / `claude_desktop_config.json`）+ AX 粘贴 | 见 §7.4 | ✅ S2 实测机制确认；e2e 注册=fast-follow |
 | 所有目标 | 🟢 金线 | 剪贴板 + 系统通知（"内容已复制，请粘贴"） | — | 无任何外部依赖，永远可用 |
 
 **剪贴板 handoff 升为金线**：任何 AX/MCP 投递失败时自动降级到剪贴板，给用户明确的失败原因 + 已复制的事实。Codex review 指出 silent failure 是这类工具用户体验杀手。
@@ -350,13 +364,26 @@ Beamhop 首次启动时优先尝试调用 `claude mcp add … -- <bin>`（最稳
 | Spike 验证连接需要 Anthropic 后台账号 / OAuth / 用户手动操作 | 推迟到 Phase 1.5，MVP 仅做剪贴板兜底（点 "Cowork" → 复制 + 通知"请在 Cowork 中粘贴"） |
 | Spike 验证完全无可行通道 | 从 MVP 投递目标列表移除，Phase 2 重新评估 |
 
-**AX 部分的辅助仍然成立**（找输入框 + 粘贴 + 回车），但触发数据通道必须先 Spike。Cowork 的 bundle id 假设为 `com.anthropic.claudefordesktop`，**待 Spike 用 Accessibility Inspector 确认**。
+**AX 部分的辅助仍然成立**（找输入框 + 粘贴 + 回车）。Cowork 的 bundle id **已确认** = `com.anthropic.claudefordesktop`（见下方 S2 回写）。
+
+**✅ V2.1 S2 实测回写（2026-06-08，Claude for Desktop 1.11187.4）：机制确认,纠正 V2 的判断。**
+- bundle id 确认 = `com.anthropic.claudefordesktop`(Electron;含 Cowork,跑在 VM sandbox)。
+- **V2 说"Cowork 不读 `claude_desktop_config.json`"的判断已过时**:当前桌面 app 的 `app.asar` 同时引用了 `.mcpb`/`DesktopExtension`(44×)、`claude_desktop_config.json`(4×)、`managedMcpServers`(12×)、`NativeMessagingHosts`(14×)。即 **存在本地、非 OAuth、可自动化的 MCP 注册路径**。
+- **结论**:Cowork 投递 = 本地 stdio MCP,通过 `.mcpb` 桌面扩展 或 直接写 `claude_desktop_config.json`(最简,跟 S1 的 stdio server 同构)。**不再是"DEFER/无通道",降级为 fast-follow**(端到端注册 + tool call 验证需登录态,留作小尾巴)。S1 的 `HelloServer` 二进制应可直接复用。
+- 详见 `spike/s2-cowork-connector/{notes,research}.md`。
 
 ### 7.5 ChatGPT Desktop 投递（V2：条件交付）
 
 **V2 状态**：纳入 MVP 的条件是 Week 0 Spike 验证 ChatGPT Desktop 输入框 AX 路径在 ≥ 2 个最近版本中保持稳定。失败则降级为剪贴板 handoff。
 
-ChatGPT Desktop 不支持 MCP，所以必须把 Capture 渲染成完整 prompt 后整段粘进去。
+**✅ V2.1 S3 实测回写（2026-06-08，ChatGPT 1.2026.119, com.openai.chat）：AX 注入可行,纳入 MVP（条件）。**
+- **⚠️ 必须先开 AX 开关**：默认状态下 ChatGPT 窗口只暴露一个 `AXHostingView` + 3 个无名按钮,**看不到输入框**。对 app element 设 `AXManualAccessibility` + `AXEnhancedUserInterface` = true 后,完整 AX 树才出现(跟 Chromium/S6 同款机制)。
+- 输入框 = `AXTextArea`;发送按钮有稳定 id `MessageInputPrimaryButtonContainerPart.PrimaryButton`(用它定位输入区,而非"第一个 AXTextArea")。
+- **注入方式优先级**:① `kAXValueAttribute` **直接写值(最稳,无剪贴板无按键)** ② ⌘V 粘贴(需先等 frontmost+focus,冷启动会失败)。剪贴板还原已验证。
+- **只测了单版本** → 跨版本稳定性(S3 假设的核心)待下次更新后复测;当前 confidence = medium。
+- 不自动提交(见 §10);发送按钮 id 已知,留给用户确认后点击。
+
+ChatGPT Desktop 不支持 MCP，所以必须把 Capture 渲染成完整 prompt 后整段粘进去（或用上面的 AX 写值注入）。
 
 ```
 ① Inbox 写入 Capture
@@ -534,6 +561,13 @@ NSApp.setActivationPolicy(.accessory)  // 菜单栏 app，不在 Dock 占位
 - 多显示器（不同 Space）
 - 锁屏后唤醒第一次按热键
 
+**✅ V2.1 S5 实测回写（2026-06-08）：上述 window-level 组合验证通过。**
+- 全屏 Safari ✅、全屏 VS Code(Electron)✅、Stage Manager ✅ —— 均"显示 + 键盘焦点 + ⌘⇧Space 开关"三项全过,浮窗能盖在全屏 Space 之上。**无需"先退出全屏"的降级方案。**
+- 双屏未测(测试机仅内置屏)→ GA 前需在多显示器上补测(标到 §11)。
+- ⚠️ **实现坑(必须遵守)**:浮窗关闭按钮要"隐藏"而非"销毁" —— NSWindow 默认 `isReleasedWhenClosed = true`,点红叉会释放窗口导致热键再也调不出;须设 `isReleasedWhenClosed = false`(或拦截 close → orderOut,或干脆不要 `.closable`)。
+- ⚠️ 其它(正式实现):检查 `RegisterEventHotKey` 返回值以提示热键冲突;实现 Esc 关闭;避免 `NSApp.activate(ignoringOtherApps:)` 抢焦点 → 优先用 `NSPanel` + 窗口模式状态机。
+- 热键用 Carbon `RegisterEventHotKey`(无需 Input Monitoring 权限)。详见 `spike/s5-floating-window/notes.md`。
+
 **默认目标的选择规则：**
 
 - 第一次：Claude Code
@@ -616,7 +650,7 @@ NSApp.setActivationPolicy(.accessory)  // 菜单栏 app，不在 Dock 占位
 | 不做 | 理由 |
 |---|---|
 | **Safari 扩展** | App Extension 三 sandbox 架构是独立 mac app 工程，V1 严重低估 → Phase 1.5 |
-| **Claude Cowork 集成**（如 Week 0 Spike 失败） | Cowork 用独立 connector/plugin 模型，不读 legacy MCP 配置 → 待 Spike 决定 |
+| **Claude Cowork 集成端到端验证**（fast-follow，非 MVP 金线） | ✅ S2 实测：机制确认（`.mcpb` + `claude_desktop_config.json` 本地路径都在）；只差登录态下注册 + tool call 验证 → Phase 1.5 |
 | **ChatGPT 自动按回车** | Codex review 建议默认让用户人工确认 → Phase 1.5 |
 | iOS app / 跨设备同步 | Phase 1 后期或 Phase 2 |
 | OCR | 工程量大，Phase 2 |
@@ -649,6 +683,11 @@ NSApp.setActivationPolicy(.accessory)  // 菜单栏 app，不在 Dock 占位
 | 用户原剪贴板内容是密码 / 大图 | 投递时备份 → 还原；备份失败则拒绝粘贴（不污染） |
 | 目标 app 被 macOS 杀掉（OOM、崩溃） | AX 操作失败 → 检测进程不存在 → 自动降级剪贴板 + 提示 |
 | 目标 app 升级后 AX 路径变了 | 投递失败 → 自动降级剪贴板 + Toast "目标 app 版本兼容性可能下降，请去 Compatibility 面板上报" |
+| 浮窗关闭按钮被点（红叉） | **必须"隐藏"非"销毁"**：`isReleasedWhenClosed = false`，否则热键再也调不出（S5 实测踩到） |
+| 多显示器浮窗行为 | **未测**（Week 0 测试机仅内置屏）→ GA 前在多显示器上补测，确认浮窗跟随光标所在屏 |
+| AX 取词目标是 Safari 网页 / VS Code/Cursor | `kAXSelectedText` 取不到 → Safari 走 `AXSelectedTextMarkerRange`，Electron 编辑器退剪贴板兜底（S6 实测，见 §6.2 策略表） |
+| AX 取词目标是 Chromium / ChatGPT | 先设 `AXManualAccessibility` 才有 AX 树，否则读到空（S3/S6 实测） |
+| Native messaging 投递 / 抓取 > 1MB | host→extension 单条 ~1MB 硬上限，Chrome 直接丢弃 → **应用层分片**（S4 实测，见 §6.3） |
 
 ## 12. MVP 必须能力（V2 新增）
 
@@ -759,14 +798,14 @@ ALTER TABLE captures ADD COLUMN capture_duration_ms INTEGER;      -- 抓取耗�
 
 ### 14.1 Spike 任务清单（按优先级排）
 
-| # | 假设 | 验证方法 | 通过标准 | 失败处理 | 结果（2026-06-07） |
+| # | 假设 | 验证方法 | 通过标准 | 失败处理 | 结果（2026-06-08 · 6/6 完成） |
 |---|---|---|---|---|---|
-| S1 | Claude Code MCP 注册可一键自动化 | 实际跑 `claude mcp add beamhop -s user -- <bin>`，写一个 hello-world MCP server 返回固定 capture | server 注册成功 + Claude Code 一次会话里能调到 tool 拿到数据 | 改为提示用户手动复制命令；不影响 MVP 推进 | **✅ PASS** — 实测通过；纠正命令语法 / stdio 实现 / 必须 `-s user` 全局注册 三处假设（详见 §7.3 + `spike/s1-claude-code-mcp/`） |
-| S2 | Claude Cowork connector/plugin 机制 | 阅读 Anthropic Cowork 当前公开文档；如有 SDK 实测注册一个最小 connector | connector 注册可一键完成 + 流程稳定 | Cowork 推迟 Phase 1.5；MVP 仅做剪贴板 handoff | 🚧 文档调研完成（`.mcpb` 本地连接器），运行时待验证（Claude.app 未装）→ 初步 DEFER |
-| S3 | ChatGPT Desktop AX 粘贴稳定性 | 用 Accessibility Inspector 抓取当前版 + 上一个稳定版的输入框路径快照对比 | 路径在两个版本中完全一致或可用稳定 fallback 规则 | 仅做剪贴板 handoff；不在 MVP 自动按回车 | 🚧 probe/paste 已编译，BLOCKED（ChatGPT.app 未装） |
-| S4 | Chrome native messaging 全链路 | 写最小扩展 + native host，验证 1MB 消息分片 + 错误恢复 | 端到端往返 < 100ms + 大正文分片正确 | 改为本地 HTTP 端口（弹防火墙）；可接受 | 🟡 已构建 + 进程级验证（ping + 900KB echo 字节一致 ~7.6ms），待 Chrome 内实测 |
-| S5 | 浮窗在全屏 app / Stage Manager / 多显示器上的可见性 | 实测 4 种场景：全屏 Safari、全屏 VS Code、Stage Manager、双 4K 显示器 | 全 4 场景浮窗可见 + 键盘 focus 正确 | 退化为"全屏 app 中按热键先退出全屏" | 🟡 demo app 已构建，待手动跑场景 |
-| S6 | AX API 跨 app 选中文本抓取 | 实测在 Safari/Chrome/Notes/Mail/Slack/VS Code/Cursor/iTerm 8 个 app 中选中文本 + 按 ⌘⇧Space | ≥ 6/8 通过 | 失败的 app 标记到 Compatibility Matrix；不影响其他 | 🟡 probe 已构建，待授权 + 8-app 实测 |
+| S1 | Claude Code MCP 注册可一键自动化 | 实际跑 `claude mcp add beamhop -s user -- <bin>`，写一个 hello-world MCP server 返回固定 capture | server 注册成功 + Claude Code 一次会话里能调到 tool 拿到数据 | 改为提示用户手动复制命令；不影响 MVP 推进 | **✅ PASS** — 纠正命令语法 / stdio 实现 / 必须 `-s user` 三处假设（§7.3 + `spike/s1-*/`） |
+| S2 | Claude Cowork connector/plugin 机制 | 阅读 Anthropic Cowork 当前公开文档；如有 SDK 实测注册一个最小 connector | connector 注册可一键完成 + 流程稳定 | Cowork 推迟 Phase 1.5；MVP 仅做剪贴板 handoff | **🟢 机制确认** — `.mcpb` + `claude_desktop_config.json` 本地路径存在;e2e 注册=fast-follow（§7.4 + `spike/s2-*/`） |
+| S3 | ChatGPT Desktop AX 粘贴稳定性 | 用 Accessibility Inspector 抓取当前版 + 上一个稳定版的输入框路径快照对比 | 路径在两个版本中完全一致或可用稳定 fallback 规则 | 仅做剪贴板 handoff；不在 MVP 自动按回车 | **🟢 PARTIAL/PASS** — AX 注入可行(需 opt-in + `kAXValue` 写值);单版本(§7.5 + `spike/s3-*/`) |
+| S4 | Chrome native messaging 全链路 | 写最小扩展 + native host，验证 1MB 消息分片 + 错误恢复 | 端到端往返 < 100ms + 大正文分片正确 | 改为本地 HTTP 端口（弹防火墙）；可接受 | **✅ PASS** — Chrome 实测往返 18.7ms;~1MB 上限坐实→必须分片（§6.3 + `spike/s4-*/`） |
+| S5 | 浮窗在全屏 app / Stage Manager / 多显示器上的可见性 | 实测 4 种场景：全屏 Safari、全屏 VS Code、Stage Manager、双 4K 显示器 | 全 4 场景浮窗可见 + 键盘 focus 正确 | 退化为"全屏 app 中按热键先退出全屏" | **✅ PASS** — 全屏+Stage Manager 全过;双屏未测(无外接屏)（§9.1 + `spike/s5-*/`） |
+| S6 | AX API 跨 app 选中文本抓取 | 实测在 Safari/Chrome/Notes/Mail/Slack/VS Code/Cursor/iTerm 8 个 app 中选中文本 + 按 ⌘⇧Space | ≥ 6/8 通过 | 失败的 app 标记到 Compatibility Matrix；不影响其他 | **🟡 PARTIAL** — provenance 8/8;选中文本 3-4/8 干净通过,需按 app 分策略（§6.2 + `spike/s6-*/`） |
 
 ### 14.2 Spike 退出条件
 
@@ -780,6 +819,23 @@ ALTER TABLE captures ADD COLUMN capture_duration_ms INTEGER;      -- 抓取耗�
 - 不打磨 UI / 不写测试 / 不写 Permission Diagnostics / 不接 SQLite
 - 所有原型代码**预设抛弃**；不要因"代码可以复用"而妥协验证质量
 - 不验证截图、Readability、Prompt Renderer 这些非集成层的能力（这些风险低，Week 1+ 实现）
+
+### 14.4 Spike 完成 ✅（2026-06-08）
+
+- **执行**：willamhou + Claude Code，2026-06-07 → 06-08，macOS 26.5 / arm64。
+- **结果**：6/6 假设有结论。金线(Chrome 抓取 → Claude Code MCP)四要素 S1/S4/S5/S6-Chrome 全部 PASS。
+- **退出条件达成**：
+  - 决策矩阵 → `spike/results.md`
+  - Compatibility Matrix v0 → `spike/compatibility-matrix-v0.json`
+  - 结论已回写本 spec（§4.2 / §6.2 / §6.3 / §7.3 / §7.4 / §7.5 / §9.1 / §11 / §14），版本升 **V2.1**。
+- **未尽事项(不挡 Week 1,记入 Phase 1.5 / GA 前)**：
+  - S2 Cowork 端到端注册验证(需登录态) + `.mcpb` 打包
+  - S3 ChatGPT 跨版本 AX 稳定性复测(目前仅单版本)
+  - S5 双屏浮窗行为(无外接屏未测)
+  - S4 应用层分片协议的实现与重组测试
+  - S6 Safari text-marker 取词 PoC;Slack 登录态复测
+- **经 2 轮 codex review**：抓出并修正 `-s user` scope 漏洞、S4 "1MB chunk OK" 夸大、S6 方法学问题。
+- 详见 `spike/results.md`。原型代码在 `spike/`,**全部 throw-away**。
 
 ---
 
