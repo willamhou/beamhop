@@ -35,7 +35,7 @@ beamhop/
 └── BeamhopTests/       (StorageTests)
 ```
 
-**Week 1 不做(明确边界,留给后续 week):** 实际 AX 抓取内容、浮窗投递 UI(Week 3)、浏览器扩展/native host(Week 2)、MCP server 实现(Week 2)、Inbox 列表 UI(Week 3)、截图(Week 2+)。Diagnostics 里依赖 Week 2 产物的检查项(native messaging host、MCP server 启动)先做成"框架 + 真状态读取(能读的读,读不了的标 🚧 Week 2)"。
+**Week 1 不做(明确边界,留给后续 week):** 实际 AX 抓取内容、浮窗投递 UI(Week 3)、浏览器扩展/native host(Week 2)、MCP server 实现(Week 2)、Inbox 列表 UI(Week 3)、**截图实现(spec §15 = Week 5)**。Week 1 截图相关**只做 Screen Recording 权限状态读取 + 跳设置**(Task 3),不碰截图本身。Diagnostics 里依赖后续 week 产物的检查项(native messaging host、MCP server 启动)先做成"框架 + 真状态读取(能读的读,读不了的标 🚧)"。
 
 ---
 
@@ -57,9 +57,12 @@ beamhop/
   - `NSScreenCaptureUsageDescription`(截图功能用,Week 2 真用)。
   - (Accessibility 无 usage string,靠 `AXIsProcessTrusted`;权限提示在 Task 3。)
 
-- [ ] **Step 0.3: 入口与 entitlements**
-  - App Sandbox 对 Accessibility/全局热键不友好 → **关闭 App Sandbox**(MVP 直分发,不上 MAS;spec §13)。Hardened Runtime 开,签名用 Developer ID(后续公证)。
-  - `Beamhop.entitlements`:暂不需要特殊 entitlement(无 sandbox)。记录此决定的理由到注释。
+- [ ] **Step 0.3: 入口、签名与权限关系(codex review — 写准)**
+  - **关闭 App Sandbox**:跨 app AX 与 MAS sandbox 路线不兼容 → MVP 直分发(Developer ID),不上 MAS(spec §13)。
+  - **Hardened Runtime 开**:Hardened Runtime 本身**不禁止** AX,可正常用;Release 用 **Developer ID + Hardened Runtime + 关 Sandbox**,后续公证。
+  - **TCC 与签名/路径绑定**:Debug 用未签名或 ad-hoc 签名即可本机测 AX,但 **TCC 把授权绑定到签名身份 + app 路径** —— 重签/换路径可能要重新授权(开发期会反复弹权限,正常)。
+  - ⚠️ **不存在 "AX entitlement"** —— 别在 entitlements 里找 AX 开关;AX 靠 `AXIsProcessTrusted` + 用户在系统设置授权,与 entitlement 无关。
+  - `Beamhop.entitlements`:无 sandbox 时基本为空;把以上决定写进注释。
 
 - [ ] **Step 0.4: 加 SPM 依赖 GRDB.swift**
   - File → Add Packages → `https://github.com/groue/GRDB.swift`,加到 Beamhop target。
@@ -117,9 +120,11 @@ beamhop/
   @main
   struct BeamhopApp: App {
       @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-      var body: some Scene { Settings { EmptyView() } } // 无主窗口
+      var body: some Scene { Settings { SettingsView() } } // 最小真实设置窗(热键重绑),非 EmptyView
   }
   ```
+  - ⚠️ **codex review**:空 `Settings { EmptyView() }` 会让 `⌘,` 弹出**空白设置窗**,与"纯菜单栏无主窗口"冲突。两条路任选:(a) 做一个**最小真实 SettingsView**(放热键重绑,反正 Task 2 要用);(b) 不用 Settings scene、彻底自管窗口。本计划选 (a)。
+  - **验收加**:`⌘,` 不出现空白窗;菜单栏诊断窗可重复打开不崩。
 
 - [ ] **Step 1.2: AppDelegate 装配核心单例**
 
@@ -128,7 +133,8 @@ beamhop/
   NSApp.setActivationPolicy(.accessory)        // 不在 Dock
   AppServices.shared.bootstrap()               // DB、热键、权限、诊断
   ```
-  - `AppServices`:持有 `Database`、`HotkeyManager`、`PermissionService`、`DiagnosticsService`、`MenuBarController` 的容器(简单手写 DI,别引框架)。
+  - `AppServices`:持有 `HotkeyManager`、`PermissionService`、`MenuBarController` 的容器(简单手写 DI,别引框架)。
+  - ⚠️ **装配顺序(codex review)**:Task 1 的 `bootstrap()` **只装菜单栏 + 占位服务**;`Database`(Task 4 才存在)与 `DiagnosticsService`(Task 5)分别在对应 Task 完成后接入;**最终 wiring + smoke 放 Task 6**。别在 Task 1 引用还不存在的 DB/诊断。
 
 - [ ] **Step 1.3: 菜单栏 item + 菜单**
 
@@ -153,6 +159,7 @@ beamhop/
 - [ ] **Step 2.1: Carbon 热键封装**(无需 Input Monitoring —— Week 0 S5 已验证)
   - `Hotkey`:`{ id, keyCode, modifiers, handler }`。
   - `HotkeyManager.register(_:)` 用 `RegisterEventHotKey` + 一个 `InstallEventHandler` 分发;**检查 `RegisterEventHotKey` 的 `OSStatus` 返回值**,非 `noErr` 记为冲突(S5 codex 提醒)。
+  - **生命周期(codex review)**:保存所有 `EventHotKeyRef`;`InstallEventHandler` **只装一次**;退出时 `UnregisterEventHotKey` 全部释放;**单个热键注册失败不影响其它热键**(逐个 try)。
   - 参考 `spike/s5-floating-window/FloatingDemo/Sources/FloatingDemo/main.swift` 的热键注册写法。
 
 - [ ] **Step 2.2: 注册 MVP 三个全局键(spec §9.3)**
@@ -183,11 +190,14 @@ beamhop/
   ```swift
   import ApplicationServices
   import CoreGraphics
-  enum PermState { case granted, denied, notDetermined }
+  enum PermState { case granted, denied }   // AX/CGPreflight 无法区分 notDetermined,故只两态
   struct PermissionService {
       func accessibility() -> PermState { AXIsProcessTrusted() ? .granted : .denied }
-      func screenRecording() -> PermState { CGPreflightScreenCaptureAccess() ? .granted : .denied }
-      func promptAccessibility() {  // 弹系统提示
+      // ⚠️ preflight 只「读状态」,不弹授权框
+      func preflightScreenRecording() -> PermState { CGPreflightScreenCaptureAccess() ? .granted : .denied }
+      // 可选:真正触发屏幕录制授权框(Week 2 截图时再用;Week 1 可不调)
+      func requestScreenRecording() { CGRequestScreenCaptureAccess() }
+      func promptAccessibility() {  // 这个会弹系统提示
           let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
           _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
       }
@@ -201,6 +211,7 @@ beamhop/
       }
   }
   ```
+  - ⚠️ **codex review**:`CGPreflightScreenCaptureAccess()` **只读状态不弹框**;别把 preflight 当 prompt。授权框是 `CGRequestScreenCaptureAccess()`(Week 1 可只"跳设置",请求框留 Week 2 截图)。`PermState` 删掉 `notDetermined`(AX/CGPreflight 区分不了)。
   - settings 跳转 URL 在 Week 0 S6 里已实测可用。
 
 - [ ] **Step 3.2: AXHelper 地基(供 Week 2 抓取层复用,Week 1 只立 API + 单元自测)**
@@ -210,6 +221,7 @@ beamhop/
     - `frontmostApp()`、`selectedText(...)`、`windowTitle(...)`、`url(...)` 的签名(Week 2 填实现)
     - **必须**:`AXUIElementSetMessagingTimeout` + 遍历节点上限(S6 codex)
   - Week 1 只需 `frontmostApp()` + `accessibility()` 能跑通(读到前台 app 名/bundle),其余留 TODO。
+  - ⚠️ **测试方式(codex review)**:AXHelper 依赖真实 Accessibility 权限,**不适合进 CI 单测** → 用**手动 smoke**(或可跳过的集成测试)验证;真正的 CI 级单测是 `StorageTests`(Task 4)。
 
 - [ ] **Step 3.3: 验收 + commit**
   - 首次运行触发系统 Accessibility 提示;授权后 `accessibility()` 返回 granted;"打开设置"按钮跳对面板。
@@ -230,12 +242,15 @@ beamhop/
   - `Capture: Codable, FetchableRecord, PersistableRecord`,字段对齐 §6.5 + §12.1 的 provenance 列(`pid, appVersion, osVersion, beamhopVersion, axTreeSnapshot, captureMethod, extensionVersion, isPrivate, truncated, captureDurationMs`)。
   - `Delivery`(capture_id, target, delivered_at, status, error_message)。
 
-- [ ] **Step 4.2: ULID 生成 `cap_<6位>`**
-  - `ULID.short()` 返回 6 位 Crockford base32(时间高位 + 随机),id = `"cap_" + short()`。(spec 写 "6 位 ulid";严格 ULID 是 26 位,这里取短前缀够用且可读,注明非标准 ULID。)
+- [ ] **Step 4.2: ULID 生成(主键防碰撞 — codex review)**
+  - ⚠️ **`cap_<6位>` 作主键有碰撞硬伤**:6 位 base32 ≈ 10.7 亿空间,几万条就有不可忽略碰撞,"时间高位+随机"还可能降熵。
+  - **决定**:数据库主键 = `"cap_" + 完整 ULID(26 位)` 或至少 `cap_<10–12 位>`;**UI 只显示 6 位短前缀**(满足 spec 的可读诉求)。
+  - `insert` 时若仍命中 PK 冲突 → 捕获并重试/扩长后缀(防御性)。`StorageTests` 加碰撞重试用例。
 
 - [ ] **Step 4.3: Database + GRDB DatabaseQueue + 迁移**
 
   `Database.swift`:打开 `AppPaths.databaseURL` 的 `DatabaseQueue`,跑 `Migrations`。
+  - ⚠️ **启动自检前置(codex review)**:打开库后、跑迁移前,先验证 SQLite **支持 FTS5 且支持 `trigram` tokenizer**(建一张临时 trigram FTS 表试探)。失败 → 不炸在迁移阶段,而是记录并让 Diagnostics 标红(GRDB 自带 SQLite 一般 OK,但系统/链接配置可能变)。
   `Migrations.swift`(用 GRDB `DatabaseMigrator`),v1 迁移建表(直接 §8.1 + §12.1 合并后的最终 schema,**provenance 列一开始就 NOT NULL/默认值齐**,不要真用 ALTER):
   ```sql
   CREATE TABLE captures (
@@ -261,7 +276,11 @@ beamhop/
   - `captures_fts`(`unicode61 remove_diacritics 2`,列:window_title/url/selected_text/extracted_body/user_note)
   - `captures_fts_cjk`(`trigram`,列:window_title/selected_text/extracted_body/user_note)
   - 两张都用 external content(`content='captures', content_rowid='rowid'`)→ **必须建 insert/update/delete 触发器**把 captures 的写入同步进两张 FTS(GRDB 不自动做)。把触发器写进同一迁移。
-  - ⚠️ external-content FTS 的 delete 触发器要用 `'delete'` 命令行(`INSERT INTO fts(fts, rowid, ...) VALUES('delete', old.rowid, ...)`)。
+  - ⚠️ **三类触发器精确写法(codex review)**:
+    - `AFTER INSERT`:插入完整索引列 `INSERT INTO fts(rowid, <cols>) VALUES(new.rowid, new.<cols>)`
+    - `AFTER UPDATE`:**先**对 old row 发删 `INSERT INTO fts(fts, rowid, <cols>) VALUES('delete', old.rowid, old.<cols>)`,**再**插 new row
+    - `AFTER DELETE`:对 old row 发删(同上 `'delete'` 命令)
+  - ⚠️ **soft-delete 与 FTS 召回(codex review)**:`search()` **必须 join `captures` 并过滤 `deleted_at IS NULL`**,否则软删的条目仍会被 FTS 召回。`StorageTests` 必须含 "softDelete 后 search 不返回"。
 
 - [ ] **Step 4.5: CaptureStore CRUD + 搜索**
   - `insert(_:)`、`recent(limit:)`、`softDelete(id:)`、`purgeExpired()`(deleted_at 超 30 天物理删)。
@@ -291,7 +310,7 @@ beamhop/
     |---|---|---|
     | Accessibility | ✅ | `AXIsProcessTrusted()` |
     | Screen Recording | ✅ | `CGPreflightScreenCaptureAccess()` |
-    | Chrome native messaging host | ⚠️ 部分 | 检查 manifest 文件是否存在于各浏览器 `NativeMessagingHosts/`(host 二进制 Week 2 才有)→ 标 🚧 |
+    | Chrome native messaging host | 🚧 | **固定显示 `🚧 Week 2`**(host 二进制 Week 2 才有);只列出将检查的 manifest 路径,**不要因 manifest 文件存在就给 ✅**(否则误导用户以为浏览器桥已可用)——codex review |
     | Claude Code MCP 注册 | ✅ | 解析 `~/.claude.json` 顶层 `mcpServers["beamhop"]` 是否在(S1:`-s user` 落顶层);可选跑 `claude mcp list` |
     | Claude Cowork | 🚧 | 固定显示 "Phase 1.5"(S2:机制确认但 e2e 未做)|
     | ChatGPT Desktop AX | ⚠️ | 检测 `/Applications/ChatGPT.app` 是否在 + 版本是否在内置 Compatibility Matrix(`com.openai.chat` 1.2026.119)|
@@ -299,7 +318,7 @@ beamhop/
 
 - [ ] **Step 5.2: 修复动作(能做的真做,做不了的占位)**
   - Accessibility/Screen Recording → 调 `PermissionService` 跳设置(Task 3)。
-  - Claude Code MCP → "重新注册":`claude mcp add beamhop -s user -- <Beamhop host 绝对路径>`(host 二进制 Week 2 出;Week 1 先把命令拼好 + 校验 `claude` 在 PATH,缺则提示手动复制 —— S1 结论)。
+  - Claude Code MCP → Week 1 **只做"命令预览 + 复制" + 读取 `~/.claude.json` 判定状态**(host 二进制 Week 2 才有,**不做真·重新注册动作**——codex review)。命令文案 `claude mcp add beamhop -s user -- <host 绝对路径>` + 校验 `claude` 是否在 PATH(S1 结论)。真·一键注册留 Week 2。
   - Chrome host → "重新写入 manifest":Week 2 实现,Week 1 按钮置灰 + 标 🚧。
   - 热键冲突项(来自 Task 2)也作为一行展示 + "改键"动作。
 
