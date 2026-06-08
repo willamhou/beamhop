@@ -1,35 +1,40 @@
 # S5 — Floating window across Spaces
 
-## Status: ⏳ BUILT, AWAITING MANUAL RUN
-`FloatingDemo` compiles clean. Run it, then walk the 5 scenarios below at the keyboard.
-
-```bash
-cd spike/s5-floating-window/FloatingDemo
-./.build/release/FloatingDemo &
-# A "✦" appears in the menu bar. Toggle the overlay with Cmd+Shift+Space.
-# When done: pkill FloatingDemo
-```
-Note: macOS may prompt for **Accessibility / Input Monitoring** the first time the global
-hotkey is registered — grant it. If Cmd+Shift+Space collides with another shortcut, use the
-menu-bar "Show overlay" item to test visibility instead.
+## Status: ✅ PASS — manual scenarios run 2026-06-08 (4/5; dual-display N/A, no external monitor)
+The `.floating` + `[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]` config works as
+hypothesized: the overlay shows ABOVE full-screen apps and takes keyboard focus, including
+Stage Manager. Carbon global hotkey ⌘⇧Space (no Input Monitoring needed). No permission prompts.
 
 ## Hypothesis
 A window with `level=.floating` + `collectionBehavior=[.canJoinAllSpaces,
 .fullScreenAuxiliary, .stationary]` is visible AND keyboard-focusable in: full-screen
 apps, Stage Manager on, and multi-display.
 
-## Test matrix (fill after run)
+## Test matrix (measured)
 | Scenario | Visible | Keyboard focus | Hotkey toggles | Notes |
 |---|---|---|---|---|
-| A: normal desktop | ? | ? | ? | |
-| B: full-screen Safari | ? | ? | ? | |
-| C: full-screen VS Code | ? | ? | ? | |
-| D: Stage Manager | ? | ? | ? | |
-| E: dual display | ? | ? | ? | |
+| A: normal desktop | ✓ | ✓ | ✓ | |
+| B: full-screen Safari | ✓ | ✓ | ✓ | overlay composites above the full-screen space |
+| C: full-screen VS Code | ✓ | ✓ | ✓ | Electron full-screen behaves same as native |
+| D: Stage Manager | ✓ | ✓ | ✓ | shows across stages |
+| E: dual display | — | — | — | not tested — only the built-in display present |
 
 ## Conclusion
-[ ] PASS (all 5)  [ ] PARTIAL (specify)  [ ] FAIL
+[x] **PASS** (all 4 testable scenarios). Dual-display deferred (no external monitor).
+The chosen window level + collection behaviors are validated for full-screen + Stage Manager;
+no "exit full-screen first" degradation is needed for these cases.
+
+## ⚠️ Implementation finding (codex + manual)
+- **Close button must hide, not destroy.** The demo initially used `styleMask:[.titled,.closable]`
+  with NSWindow's default `isReleasedWhenClosed = true`: clicking the red X released the window,
+  and the hotkey could no longer re-show it. Fix = `isReleasedWhenClosed = false` (or intercept
+  close → orderOut, or drop `.closable`). The real overlay must HIDE on close, never deallocate.
+- Other codex notes for the real impl: check `RegisterEventHotKey` return (surface hotkey
+  conflicts); implement the advertised Esc-to-dismiss; avoid `NSApp.activate(ignoringOtherApps:)`
+  stealing focus — prefer an `NSPanel` (nonactivating where appropriate) + window-mode state machine.
 
 ## Spec patch
-- §9.1 浮窗 window-level 配置: confirm chosen flags; if any scenario fails, add degradation note.
-- §11 边界情况清单: append observed edge cases.
+- §9.1 浮窗 window-level 配置: confirm flags `.floating` + `[.canJoinAllSpaces,
+  .fullScreenAuxiliary, .stationary]` — validated for full-screen Safari/VS Code + Stage Manager.
+- §11 边界情况清单: add "overlay close = hide not destroy (isReleasedWhenClosed=false)";
+  "dual-display behavior unverified — test on multi-monitor before GA".

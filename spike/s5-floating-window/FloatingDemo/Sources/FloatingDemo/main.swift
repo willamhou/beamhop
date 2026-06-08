@@ -27,6 +27,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         overlay.level = .floating
         overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         overlay.isMovableByWindowBackground = true
+        // Clicking the close button must HIDE (order out), not destroy the window — otherwise
+        // re-showing via the hotkey fails. (NSWindow defaults isReleasedWhenClosed = true.)
+        overlay.isReleasedWhenClosed = false
         overlay.contentView = NSHostingView(rootView: OverlayView())
         overlay.center()
 
