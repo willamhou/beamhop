@@ -2,7 +2,16 @@
 
 > macOS 桌面 app — 在浏览器 / IDE / Notes / PDF / Figma 等任意 app 间抓取上下文，一键投递到任意外部 AI agent（Claude Code、Claude Cowork、ChatGPT Desktop 等）。
 
-**状态**：Phase 1 MVP — **Week 0 Spike 6/6 完成（2026-06-08），spec 升级 V2.1**，准备开 Week 1。
+**状态**：Phase 1 MVP — Week 0 Spike 6/6 完成 → spec V2.1；**Week 1 地基核心完成**（菜单栏 app + Carbon 热键 + 权限 + Capture/SQLite/双 FTS5 + 诊断面板，SwiftPM 实现,待 Xcode 打包成正式 `.app`）。
+
+## 构建运行（SwiftPM,Command Line Tools 即可）
+
+```bash
+swift build                 # 编译(含 GRDB)
+swift run BeamhopSelfTest    # 数据层自测(28 项,无需 Xcode/XCTest)
+swift run Beamhop            # 启动菜单栏 app(✦ 图标 + ⌘⇧Space/⌘⇧I 热键 + 诊断窗)
+```
+装完 Xcode 16 后:`Tests/BeamhopCoreTests/`(XCTest)可跑;再把 SwiftPM 包迁成 Xcode app target(Info.plist `LSUIElement` + Developer ID 签名)。
 
 ## 文档
 

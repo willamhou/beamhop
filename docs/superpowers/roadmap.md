@@ -21,7 +21,7 @@
 
 | Phase | 时间窗 | 状态 | Spec | 完成日期 |
 |---|---|---|---|---|
-| Phase 1 — MVP | 0–6 周 | 🚧 进行中（**Week 0 Spike 6/6 完成 2026-06-08；spec → V2.1**） | [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) | — |
+| Phase 1 — MVP | 0–6 周 | 🚧 进行中（**Week 0 Spike 6/6 完成 → V2.1；Week 1 地基核心完成 2026-06-08(SwiftPM,待 Xcode 打包)**） | [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) | — |
 | Phase 1.5 — 短期补丁 | MVP + 2–4 周 | 📋 规划中 | — | — |
 | Phase 2.1 — 跨设备 Inbox | Month 3–4 | 📋 规划中 | — | — |
 | Phase 2.2 — Memory 与语义搜索 | Month 4–6 | 📋 规划中 | — | — |
