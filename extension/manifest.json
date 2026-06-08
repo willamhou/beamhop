@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Beamhop Bridge",
+  "version": "0.1.0",
+  "description": "Bridges the active browser tab to the Beamhop desktop app.",
+  "permissions": ["nativeMessaging", "activeTab", "scripting", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" }
+}

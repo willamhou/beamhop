@@ -40,3 +40,6 @@ spike/**/.build/
 *.pem
 *.key
 .secrets/
+
+# Week 2B bridge build artifacts
+host/beamhop-bridge
