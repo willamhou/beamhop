@@ -16,8 +16,8 @@ if "$installer" --host "$fake_bin" --extension-id "not-a-valid-id!!" 2>/dev/null
   echo "installer accepted an invalid extension id" >&2; exit 1
 fi
 
-HOME="$test_dir" "$installer" --host "$fake_bin" \
-  --extension-id abcdefghijklmnopabcdefghijklmnop >/dev/null
+HOME="$test_dir" bash -x "$installer" --host "$fake_bin" \
+  --extension-id abcdefghijklmnopabcdefghijklmnop
 
 manifest="$test_dir/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.beamhop.bridge.json"
 [[ -f "$manifest" ]] || { echo "manifest not written: $manifest" >&2; exit 1; }
