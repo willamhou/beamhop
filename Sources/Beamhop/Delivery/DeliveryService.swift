@@ -21,9 +21,19 @@ final class DeliveryService {
             }
         case .clipboard:
             clipboardFallback(capture, userNote: userNote, reason: "用户选择剪贴板")
-        case .cowork, .chatgptDesktop:
-            // Week 4-5; for now degrade to clipboard handoff.
-            clipboardFallback(capture, userNote: userNote, reason: "\(target.rawValue) 投递 Week 4-5,先用剪贴板")
+        case .chatgptDesktop:
+            // S3 verified path: AX opt-in + kAXValueAttribute set-value, no auto-submit.
+            if let reason = ChatGPTDelivery.deliver(capture, userNote: userNote) {
+                record(capture, .chatgptDesktop, .failed, reason)
+                Notifier.error("ChatGPT Desktop 投递失败 → 已复制到剪贴板", reason)
+                clipboardFallback(capture, userNote: userNote, reason: reason)
+            } else {
+                record(capture, .chatgptDesktop, .success, nil)
+            }
+        case .cowork:
+            // S2: .mcpb mechanism confirmed (see cowork-extension/), end-to-end install still
+            // fast-follow — degrade to clipboard until then.
+            clipboardFallback(capture, userNote: userNote, reason: "Cowork 集成待 S2 端到端验收,先用剪贴板")
         }
     }
 

@@ -20,7 +20,13 @@ func argValue(_ flag: String) -> String? {
     if let i = a.firstIndex(of: flag), i + 1 < a.count { return a[i + 1] }
     return nil
 }
-let dbPath = argValue("--db").map { URL(fileURLWithPath: $0) }
+// DB path comes from `--db <path>`; when absent (e.g. the MCPB bundle launches us with no args)
+// we fall back to the standard Beamhop Inbox location so bundled installs work out of the box.
+var dbPath = argValue("--db").map { URL(fileURLWithPath: $0) }
+if dbPath == nil {
+    dbPath = AppPaths.databaseURL
+    log("no --db; defaulting to \(dbPath?.path ?? "?")")
+}
 
 // Open read-only lazily; keep server responsive even if DB is missing (return structured errors).
 var reader: CaptureReader? = {
