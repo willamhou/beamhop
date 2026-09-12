@@ -20,7 +20,7 @@ jobs:
       - name: Native messaging host compiles
         run: swiftc -O host/main.swift -o /tmp/beamhop-bridge
       - name: Native manifest installer smoke test
-        run: scripts/native-manifest-smoke.sh
+        run: bash -x scripts/native-manifest-smoke.sh
       - name: Assemble Beamhop.app (ad-hoc)
         run: ./packaging/build-app.sh
 
