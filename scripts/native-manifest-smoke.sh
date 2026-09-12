@@ -27,6 +27,11 @@ plutil -convert json -o /dev/null "$manifest"
 grep -Fq '"name": "com.beamhop.bridge"' "$manifest"
 grep -Fq '"type": "stdio"' "$manifest"
 grep -Fq '"allowed_origins": ["chrome-extension://abcdefghijklmnopabcdefghijklmnop/"]' "$manifest"
-# the manifest must pin the RESOLVED absolute host path, not a relative one
-grep -Fq "\"path\": \"$fake_bin\"" "$manifest"
+# the manifest must pin the RESOLVED absolute host path; canonicalize BOTH sides the same way
+# because $TMPDIR may end in "/" (runner) producing "//" that logical pwd may collapse.
+recorded_path="$(sed -n 's/.*"path": "\(.*\)",$/\1/p' "$manifest")"
+resolved_recorded="$(cd "$(dirname "$recorded_path")" && pwd)/$(basename "$recorded_path")"
+resolved_expected="$(cd "$(dirname "$fake_bin")" && pwd)/$(basename "$fake_bin")"
+[[ "$resolved_recorded" == "$resolved_expected" ]] || {
+  echo "manifest path mismatch: recorded=$recorded_path expected=$fake_bin" >&2; exit 1; }
 echo "native manifest smoke test passed"
