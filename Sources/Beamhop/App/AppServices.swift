@@ -23,6 +23,11 @@ final class AppServices {
         svc.hotkeyConflicts = self?.hotkeys.failed ?? []
         return svc
     }
+    private(set) lazy var inbox = InboxWindowController()
+    private(set) lazy var compatibility = CompatibilityWindowController()
+    private(set) lazy var firstRun = FirstRunWindowController(
+        permissions: permissions,
+        onOpenDiagnostics: { [weak self] in self?.diagnostics.show() })
 
     func bootstrap() {
         openDatabase()
@@ -30,8 +35,9 @@ final class AppServices {
         registerHotkeys()
         menuBar = MenuBarController(
             onCapture: { [weak self] in self?.doCapture() },
-            onInbox: { [weak self] in self?.placeholderInbox() },
-            onDiagnostics: { [weak self] in self?.diagnostics.show() }
+            onInbox: { [weak self] in self?.inbox.show() },
+            onDiagnostics: { [weak self] in self?.diagnostics.show() },
+            onCompatibility: { [weak self] in self?.compatibility.show() }
         )
         firstLaunchIfNeeded()
         purgeOldCapturesInBackground()
@@ -45,6 +51,12 @@ final class AppServices {
             self.store = store
             self.capture = CaptureService(store: store)
             self.delivery = DeliveryService(store: store)
+            inbox.model.configure(store: store) { [weak self] capture, target in
+                // delivery does AX activation + usleep — never on the main thread
+                DispatchQueue.global(qos: .userInitiated).async {
+                    self?.delivery?.deliver(capture, to: target)
+                }
+            }
             log.info("database opened at \(AppPaths.databaseURL.path, privacy: .public) recovered=\(db.recoveredFromCorruption)")
         } catch {
             log.error("database open failed: \(String(describing: error), privacy: .public)")
@@ -57,10 +69,10 @@ final class AppServices {
             [weak self] in self?.doCapture()
         })
         hotkeys.register(Hotkey(id: 2, keyCode: 34, modifiers: cmdShift, name: "⌘⇧I Inbox") {
-            [weak self] in self?.placeholderInbox()
+            [weak self] in self?.inbox.show()
         })
         hotkeys.register(Hotkey(id: 3, keyCode: 9, modifiers: cmdShift, name: "⌘⇧V 应急投递") {
-            [weak self] in self?.log.info("⌘⇧V (placeholder — Week 2/3)")
+            [weak self] in self?.emergencyClipboardPaste()
         })
         if !hotkeys.failed.isEmpty {
             log.warning("hotkey conflicts: \(self.hotkeys.failed.joined(separator: ", "), privacy: .public)")
@@ -71,11 +83,7 @@ final class AppServices {
         let key = "beamhop.didFirstLaunch"
         if !UserDefaults.standard.bool(forKey: key) {
             UserDefaults.standard.set(true, forKey: key)
-        }
-        // If AX isn't granted, surface diagnostics immediately (minimal onboarding; full wizard = Week 3).
-        if permissions.accessibility() == .denied {
-            permissions.promptAccessibility()
-            diagnostics.show()
+            firstRun.show()
         }
     }
 
@@ -102,8 +110,14 @@ final class AppServices {
             delivery.deliver(cap, to: .claudeCode)   // default target = Claude Code (§9.1)
         }
     }
-    private func placeholderInbox() {
-        log.info("⌘⇧I inbox (placeholder)")
-        NSSound.beep()
+    /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from
+    /// anywhere — the universal fallback that never depends on AX or a running target.
+    private func emergencyClipboardPaste() {
+        guard let store else { Notifier.error("数据库未就绪", "无法读取最新 Capture"); return }
+        guard let latest = (try? store.recent(limit: 1))?.first else {
+            Notifier.error("Inbox 为空", "先按 ⌘⇧Space 抓取一条")
+            return
+        }
+        delivery?.deliver(latest, to: .clipboard)
     }
 }

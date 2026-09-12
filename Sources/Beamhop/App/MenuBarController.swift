@@ -6,11 +6,16 @@ final class MenuBarController: NSObject {
     private let onCapture: () -> Void
     private let onInbox: () -> Void
     private let onDiagnostics: () -> Void
+    private let onCompatibility: () -> Void
 
-    init(onCapture: @escaping () -> Void, onInbox: @escaping () -> Void, onDiagnostics: @escaping () -> Void) {
+    init(onCapture: @escaping () -> Void,
+         onInbox: @escaping () -> Void,
+         onDiagnostics: @escaping () -> Void,
+         onCompatibility: @escaping () -> Void) {
         self.onCapture = onCapture
         self.onInbox = onInbox
         self.onDiagnostics = onDiagnostics
+        self.onCompatibility = onCompatibility
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -24,6 +29,7 @@ final class MenuBarController: NSObject {
         menu.addItem(item("Inbox  ⌘⇧I", #selector(inbox)))
         menu.addItem(.separator())
         menu.addItem(item("诊断…", #selector(diagnostics)))
+        menu.addItem(item("兼容性矩阵…", #selector(compatibility)))
         menu.addItem(.separator())
         menu.addItem(item("退出 Beamhop", #selector(quit)))
         statusItem.menu = menu
@@ -38,5 +44,6 @@ final class MenuBarController: NSObject {
     @objc private func capture() { onCapture() }
     @objc private func inbox() { onInbox() }
     @objc private func diagnostics() { onDiagnostics() }
+    @objc private func compatibility() { onCompatibility() }
     @objc private func quit() { NSApp.terminate(nil) }
 }

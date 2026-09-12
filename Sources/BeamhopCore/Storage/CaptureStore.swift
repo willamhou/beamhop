@@ -65,6 +65,17 @@ public final class CaptureStore {
         }
     }
 
+    /// Delivery history for one capture, newest first (Inbox failure-recovery UI, spec §12.4).
+    public func deliveries(captureID: String, limit: Int = 20) throws -> [Delivery] {
+        try db.queue.read { db in
+            try Delivery
+                .filter(sql: "capture_id = ?", arguments: [captureID])
+                .order(sql: "delivered_at DESC")
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
     /// Full-text search across both FTS tables, excluding soft-deleted rows.
     public func search(_ query: String, limit: Int = 50) throws -> [Capture] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -19,7 +19,8 @@ let package = Package(
         .executableTarget(
             name: "Beamhop",
             dependencies: ["BeamhopCore"],
-            path: "Sources/Beamhop"
+            path: "Sources/Beamhop",
+            resources: [.copy("Resources")]   // compatibility-matrix-v0.json (spike evidence)
         ),
         // Beamhop's own MCP server (stdio JSON-RPC). Registered with Claude Code via
         // `claude mcp add beamhop -s user -- <bin> --db <inbox.sqlite>`. Reads the DB read-only.
