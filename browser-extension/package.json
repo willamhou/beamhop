@@ -1,0 +1,12 @@
+{
+  "name": "beamhop-browser-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "cp node_modules/@mozilla/readability/Readability.js readability.js && cp node_modules/@mozilla/readability/LICENSE.md READABILITY-LICENSE.md",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "@mozilla/readability": "0.6.0"
+  }
+}

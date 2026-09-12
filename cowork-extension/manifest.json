@@ -1,0 +1,31 @@
+{
+  "manifest_version": "0.3",
+  "name": "beamhop",
+  "display_name": "Beamhop",
+  "version": "0.1.0",
+  "description": "Read captures saved locally by Beamhop from Claude Desktop and Cowork.",
+  "long_description": "Beamhop exposes the user's local Capture Inbox as read-only MCP resources and a fetch_capture tool. Capture content remains on this Mac and is returned only when Claude invokes the tool.",
+  "author": {
+    "name": "Beamhop Contributors"
+  },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/beamhop-mcp",
+    "mcp_config": {
+      "command": "${__dirname}/server/beamhop-mcp",
+      "args": [],
+      "env": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "fetch_capture",
+      "description": "Fetch a local Beamhop capture by id, or fetch the latest capture when id is omitted. Read-only."
+    }
+  ],
+  "keywords": ["capture", "context", "inbox", "productivity"],
+  "compatibility": {
+    "platforms": ["darwin"]
+  }
+}
+

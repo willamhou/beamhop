@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beamhop</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">BEAMHOP / BROWSER</p>
+        <h1>Send this tab</h1>
+      </div>
+      <button id="theme" class="icon-button" type="button" aria-label="Switch color theme">◐</button>
+    </header>
+
+    <section class="connection" aria-live="polite">
+      <span id="status-dot" class="status-dot"></span>
+      <div>
+        <strong id="status-title">Connecting</strong>
+        <p id="status-detail">Looking for the Beamhop desktop bridge.</p>
+      </div>
+      <button id="reconnect" class="text-button" type="button">Retry</button>
+    </section>
+
+    <button id="capture" class="primary" type="button">
+      <span>Capture current tab</span>
+      <kbd>⌘⇧Space</kbd>
+    </button>
+    <p id="result" class="result" role="status"></p>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
