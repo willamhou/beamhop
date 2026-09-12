@@ -1,0 +1,33 @@
+name: Phase 1 checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  swift:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all Swift products
+        run: swift build
+      - name: Swift tests
+        run: swift test
+      - name: MCP stdio smoke test
+        run: scripts/mcp-smoke.sh
+      - name: Native manifest smoke test
+        run: scripts/native-manifest-smoke.sh
+
+  browser-extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: browser-extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
