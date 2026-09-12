@@ -1,7 +1,7 @@
 # Beamhop — 进度与续作指南（PROGRESS）
 
 > 这份文档是「下次接着干」的唯一入口。记录:做到哪了、什么验证过了、卡在哪、怎么恢复、下一步做什么。
-> 最近更新:2026-06-08。
+> 最近更新:2026-09-12（integration 分支:Phase 1 外围整合）。
 
 ---
 
@@ -22,7 +22,7 @@ Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**�
 | **Week 1** 地基 | ✅ 实现 | `BeamhopSelfTest` 28 项全绿 + app 启动建库 |
 | **Week 2A** 最短金线 | ✅ 代码完成 | **MCP server 真 Claude Code 实测**;其余编译+自测 |
 | **Week 2B** 浏览器桥 + 正文抽取 | ✅ 代码完成 | **三段桥 + Readability + GitHub 全 CDP 自动化实测** |
-| **Week 3** 浮窗 UI + Inbox 列表 + Failure UI | ⬜ 未开始 | 计划未写 |
+| **integration** Phase 1 外围 | 🚧 代码完成 | ChatGPT AX 注入、Inbox/首次引导/兼容矩阵 UI、CI、打包、MCPB;**CI(macOS runner) 验证编译+自测,真机验收待做** |
 | 真机完整 `⌘⇧Space` 端到端 | ⬜ 待权限 | 需给 app 授 Accessibility |
 | Xcode 正式打包 + 签名 | ⬜ 待 Apple ID | — |
 
@@ -157,10 +157,40 @@ extension/       manifest.json, background.js(SW: 常驻端口+ping+capture_acti
 - 多浏览器/profile 路由（目前单连接"最新 host wins"）。
 
 **D. Week 3 计划（可起草）**
-- 浮窗投递 UI（§9.1,带目标选择 ⌘1/2/3/0 + 备注框）;
-- Inbox 窗口（⌘⇧I,列表/搜索/provenance 详情,§9.2）;
-- Failure Recovery UI（§12.4）;
-- 完整 onboarding 向导（§9.4）。
+- 浮窗投递 UI（§9.1,带目标选择 ⌘1/2/3/0 + 备注框）——integration 已交付 Inbox/FirstRun/兼容矩阵窗口,浮窗是剩余大头;
+- Failure Recovery UI 深化（Inbox 列表已显示失败原因 + 投递历史,§12.4 骨架已就位）;
+- 完整 onboarding 向导（FirstRun 窗口已就位,浏览器扩展/agent 注册步骤待接入）。
+
+---
+
+## 8. integration 分支（2026-09-12）— Phase 1 外围整合
+
+`integration` 以 main（Mac 版,真机证据 lineage）为骨架,把 `phase1-linux-reimpl` 分支的工程外围择优搬入,并按 S1/S3 实测修正:
+
+**新增:**
+- `Sources/Beamhop/Delivery/ChatGPTDelivery.swift` — S3 实测路径:`AXManualAccessibility` opt-in → 焦点窗口 BFS 找 `AXTextArea`(可编辑) → `kAXValueAttribute` set-value 注入全文,**不自动发送**;任何失败→剪贴板兜底。
+- `Sources/Beamhop/Inbox/InboxWindow.swift` — ⌘⇧I Inbox 窗口:列表+双 FTS5 搜索+详情(provenance 全字段)+投递历史+重投+软删。
+- `Sources/Beamhop/App/FirstRunWindow.swift` — 首启引导(Accessibility 必需/其余可选,全部可跳过)。
+- `Sources/Beamhop/Compatibility/CompatibilityMatrix.swift` + `Sources/Beamhop/Resources/` — spike 实测矩阵作为 SwiftPM 资源内置,菜单"兼容性矩阵…"窗口展示(真源仍是 `spike/compatibility-matrix-v0.json`)。
+- `⌘⇧V` 应急通道 — 最新 Capture 一键渲染到剪贴板(spec §9.3)。
+- `cowork-extension/` — MCPB 打包(入口 `BeamhopMCP`,无参运行回退默认 Inbox;S2 机制已确认,端到端待验收)。
+- `packaging/build-app.sh` + `packaging/Info.plist` — 组装 `dist/Beamhop.app`(Beamhop+BeamhopMCP+swiftc 编译的 beamhop-bridge+资源 bundle,ad-hoc 或 `BEAMHOP_CODESIGN_IDENTITY`)。
+- `host/install-manifest.sh` — 四浏览器 native messaging manifest 安装器(id 校验+plutil lint)。
+- `scripts/mcp-smoke.sh`(S1 帧格式握手+种子数据 tool/resource 读取+无 --db 回退)、`scripts/native-manifest-smoke.sh`。
+- `.github/workflows/ci.yml` — macos-15:swift build/test + SelfTest + 两个冒烟 + host 编译 + 整 app;ubuntu:extension esbuild。
+
+**修改:**
+- `BeamhopMCP/main.swift` — 无 `--db` 时回退 `AppPaths.databaseURL`(供 MCPB 无参启动;显式 `--db` 不变)。
+- `DeliveryService` — `.chatgptDesktop` 走 S3 注入路径(原直接降级剪贴板);`.cowork` 维持剪贴板待 S2 端到端。
+- `CaptureStore.deliveries(captureID:)` — Inbox 投递历史查询。
+- `AppServices`/`MenuBarController` — 接入三个新窗口 + ⌘⇧V。
+
+**integration 待真机验收清单:**
+- ⬜ ChatGPT Desktop 注入(AX opt-in 后 set-value;S3 只测过单版本,且当时是探针脚本不是本实现)
+- ⬜ Inbox 窗口真机(列表/搜索/重投/软删手感)
+- ⬜ FirstRun + 兼容矩阵窗口真机
+- ⬜ `./packaging/build-app.sh` 产物可运行(TCC 授权按签名身份绑定)
+- ⬜ MCPB `cowork-extension` 安装→Cowork 会话调 `fetch_capture`
 
 ---
 

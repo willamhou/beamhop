@@ -2,7 +2,7 @@
 
 > macOS 桌面 app — 在浏览器 / IDE / Notes / PDF / Figma 等任意 app 间抓取上下文，一键投递到任意外部 AI agent（Claude Code、Claude Cowork、ChatGPT Desktop 等）。
 
-**状态**：Phase 1 MVP — Week 0 Spike ✅ → spec V2.1；Week 1 地基 ✅；Week 2 金线 + 浏览器桥 ✅（SwiftPM 实现 + 自动化验证,待 Xcode 打包）。
+**状态**：Phase 1 MVP — Week 0 Spike ✅ → spec V2.1；Week 1 地基 ✅；Week 2 金线 + 浏览器桥 ✅；`integration` 分支补齐 Phase 1 外围（ChatGPT AX 注入、Inbox/首次引导/兼容矩阵 UI、CI、打包、MCPB）——外围部分待 macOS 真机验收，CI（macos-15）覆盖编译与存储/协议自测。
 
 > 📌 **续作从这里开始 → [PROGRESS.md](PROGRESS.md)**（进度、已验证/待验证、恢复命令、坑、下一步,唯一入口）
 
@@ -10,10 +10,23 @@
 
 ```bash
 swift build                 # 编译(含 GRDB)
+swift test                  # BeamhopCore XCTest(需完整 Xcode)
 swift run BeamhopSelfTest    # 数据层自测(28 项,无需 Xcode/XCTest)
-swift run Beamhop            # 启动菜单栏 app(✦ 图标 + ⌘⇧Space/⌘⇧I 热键 + 诊断窗)
+swift run Beamhop            # 启动菜单栏 app(✦ 图标 + ⌘⇧Space/⌘⇧I/⌘⇧V + Inbox/诊断/兼容性窗口)
+scripts/mcp-smoke.sh         # MCP stdio 冒烟(S1 帧格式 + 种子数据)
+./packaging/build-app.sh     # 组装 dist/Beamhop.app(ad-hoc 签名)
 ```
-装完 Xcode 16 后:`Tests/BeamhopCoreTests/`(XCTest)可跑;再把 SwiftPM 包迁成 Xcode app target(Info.plist `LSUIElement` + Developer ID 签名)。
+
+推送任意分支会在 GitHub Actions（macos-15 + ubuntu）上跑全部检查——没有本地 Mac 也能验证编译。
+
+## 投递目标矩阵
+
+| 目标 | 通道 | 依据 |
+|---|---|---|
+| Claude Code CLI | MCP server（数据）+ AX 安全粘贴（触发） | S1 实测 PASS,真 Claude Code 验证过 |
+| ChatGPT Desktop | `AXManualAccessibility` opt-in + `kAXValueAttribute` set-value 注入,不自动发送 | S3 实测可行(单版本);失败→剪贴板 |
+| Claude Cowork | `cowork-extension/` MCPB 包装（机制 S2 已确认,端到端待验收）;应用内暂走剪贴板 | S2 |
+| 所有目标 | 剪贴板 + 通知（金线兜底,永可用） | spec §7.1 |
 
 ## 文档
 
