@@ -31,8 +31,9 @@ chmod 755 "$contents/MacOS/Beamhop" "$contents/MacOS/BeamhopMCP"
 swiftc -O "$repo_root/host/main.swift" -o "$contents/MacOS/beamhop-bridge"
 chmod 755 "$contents/MacOS/beamhop-bridge"
 
-# SwiftPM resource bundle (compatibility matrix). Layout is Beamhop_Beamhop.bundle; match loosely.
-resource_bundle="$(find "$repo_root/.build/release" -maxdepth 1 -type d -name '*Beamhop*.bundle' -print -quit)"
+# SwiftPM resource bundle (compatibility matrix), layout Beamhop_Beamhop.bundle. .build/release
+# is a SYMLINK to the triplet dir — find needs -H to follow the starting-point symlink.
+resource_bundle="$(find -H "$repo_root/.build" -maxdepth 4 -type d -name '*Beamhop*.bundle' -print -quit)"
 if [[ -z "$resource_bundle" ]]; then
   echo "SwiftPM did not produce the Beamhop resource bundle." >&2
   exit 4
