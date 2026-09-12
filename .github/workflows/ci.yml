@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  swift:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all Swift products
+        run: swift build
+      - name: Swift tests (BeamhopCore)
+        run: swift test
+      - name: Self-test (28 storage checks, XCTest-free)
+        run: swift run BeamhopSelfTest
+      - name: MCP stdio smoke test (S1 framing + seeded content)
+        run: scripts/mcp-smoke.sh
+      - name: Native messaging host compiles
+        run: swiftc -O host/main.swift -o /tmp/beamhop-bridge
+      - name: Native manifest installer smoke test
+        run: scripts/native-manifest-smoke.sh
+      - name: Assemble Beamhop.app (ad-hoc)
+        run: ./packaging/build-app.sh
+
+  extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension/build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      - name: Bundle produced
+        run: test -s ../vendor/readability.js
