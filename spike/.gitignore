@@ -1,0 +1,13 @@
+*.xcuserstate
+DerivedData/
+*.xcworkspace/xcuserdata/
+node_modules/
+dist/
+.DS_Store
+*.log
+screenshots/
+results.jsonl
+axprobe
+probe_chatgpt
+paste_test
+
