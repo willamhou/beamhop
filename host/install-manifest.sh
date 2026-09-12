@@ -52,7 +52,8 @@ cat > "$manifest" <<EOF
 EOF
 
 if command -v plutil >/dev/null 2>&1; then
-  plutil -lint "$manifest"
+  # -lint only accepts XML/binary plists; a same-format convert round-trip validates JSON.
+  plutil -convert json -o /dev/null "$manifest"
 fi
 echo "installed $manifest"
 echo "restart $browser, then reload the extension."
