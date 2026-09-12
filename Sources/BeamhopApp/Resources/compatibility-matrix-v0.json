@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-23",
+  "evidence_environment": "unverified-linux-scaffold",
+  "claude_code": {
+    "cli_versions_tested": [],
+    "mcp_add_command": "claude mcp add --transport stdio --scope user beamhop -- <absolute-path-to-beamhop-mcp>",
+    "status": "requires_macos_spike",
+    "fallback": "copy_registration_command"
+  },
+  "claude_cowork": {
+    "bundle_id": "com.anthropic.claudefordesktop",
+    "versions_tested": [],
+    "status": "mcpb_implemented_requires_s2_spike",
+    "fallback": "clipboard"
+  },
+  "chatgpt_desktop": {
+    "bundle_id": "com.openai.chat",
+    "versions_tested": [],
+    "status": "clipboard_only_until_s3_passes",
+    "fallback": "clipboard"
+  },
+  "browser_extension": {
+    "chrome": "requires_s4_spike",
+    "arc": "out_of_scope_phase_1",
+    "brave": "out_of_scope_phase_1",
+    "edge": "out_of_scope_phase_1"
+  },
+  "floating_window": {
+    "scenarios_tested": [],
+    "status": "requires_s5_spike"
+  },
+  "ax_apps": {
+    "com.apple.Safari": { "status": "requires_s6_spike", "supports": [] },
+    "com.google.Chrome": { "status": "requires_s6_spike", "supports": [] },
+    "com.apple.Notes": { "status": "requires_s6_spike", "supports": [] },
+    "com.apple.mail": { "status": "requires_s6_spike", "supports": [] },
+    "com.tinyspeck.slackmacgap": { "status": "requires_s6_spike", "supports": [] },
+    "com.microsoft.VSCode": { "status": "requires_s6_spike", "supports": [] },
+    "com.todesktop.230313mzl4w4u92": { "status": "requires_s6_spike", "supports": [] },
+    "com.googlecode.iterm2": { "status": "requires_s6_spike", "supports": [] }
+  }
+}
