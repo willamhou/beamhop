@@ -79,8 +79,9 @@ enum ChatGPTDelivery {
                 let role = roleRef as! CFString as String
                 if role == (kAXTextAreaRole as String) {
                     // Only an editable area is the composer; read-only transcript areas are not.
+                    // ("AXEditable" — no imported constant name for this attribute.)
                     var editableRef: CFTypeRef?
-                    if AXUIElementCopyAttributeValue(el, kAXEditableAttribute as CFString, &editableRef) == .success,
+                    if AXUIElementCopyAttributeValue(el, "AXEditable" as CFString, &editableRef) == .success,
                        let editableRef, CFEqual(editableRef, kCFBooleanTrue) {
                         return el
                     }
@@ -91,8 +92,9 @@ enum ChatGPTDelivery {
             var childrenRef: CFTypeRef?
             guard AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &childrenRef) == .success,
                   let childrenRef, CFGetTypeID(childrenRef) == CFArrayGetTypeID() else { continue }
+            // kAXChildren yields AXUIElements by contract (compiler: downcast always succeeds).
             for child in (childrenRef as! CFArray as NSArray) {
-                guard let c = child as? AXUIElement else { continue }
+                let c = child as! AXUIElement
                 let key = ObjectIdentifier(c)
                 if depthOf[key] == nil {
                     depthOf[key] = depth + 1
