@@ -137,6 +137,8 @@ extension/       manifest.json, background.js(SW: 常驻端口+ping+capture_acti
 - **剪贴板安全粘贴**(§12.3):逐 item/逐 type 存 raw Data,拿不到就拒绝;只有 ClaudeCodeDelivery 还原,ClipboardHandoff(兜底)不还原。
 - **auto-Enter 仅当"定位的终端是前台 + claude 在跑"**,否则让用户确认（别回车发错窗口）。
 - ⚠️ **事故教训**:测 S6 时用脚本往用户 Notes 发模拟按键+撤销,清空过一条笔记(已恢复)。**绝不往用户真实 app 发模拟键/撤销**;抓取走只读 AX。
+- **`plutil -lint` 只认 XML/binary plist,JSON 直接 exit 1**——校验 JSON 用 `plutil -convert json -o /dev/null <file>`（CI 实测踩坑）。Swift 里 `"AXEditable"` 属性没有导入常量名,用原始字符串。
+- **`.build/release` 是指向三元组目录的符号链接**,`find` 默认不跟随起点符号链接——找 SwiftPM 产物要 `find -H`。CI 的 `TMPDIR` 带尾斜杠会产生 `//` 路径,路径断言两边要用同一种 `cd+pwd` 规范化。
 
 ---
 
@@ -186,6 +188,7 @@ extension/       manifest.json, background.js(SW: 常驻端口+ping+capture_acti
 - `AppServices`/`MenuBarController` — 接入三个新窗口 + ⌘⇧V。
 
 **integration 待真机验收清单:**
+- ✅ CI 全绿(macos-15:swift build/test + SelfTest 28 项 + MCP 冒烟 + manifest 冒烟 + **完整组装出 Beamhop.app**;ubuntu:extension esbuild)
 - ⬜ ChatGPT Desktop 注入(AX opt-in 后 set-value;S3 只测过单版本,且当时是探针脚本不是本实现)
 - ⬜ Inbox 窗口真机(列表/搜索/重投/软删手感)
 - ⬜ FirstRun + 兼容矩阵窗口真机
