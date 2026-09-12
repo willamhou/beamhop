@@ -66,6 +66,10 @@
 
 **风险**：详见 spec §15；最高风险点（Codex review 提示）是集成周（Week 4-5）而不是 UI 周，AX / native messaging / MCP 注册都是版本敏感，预留 20% buffer。
 
+**实施进度（2026-08-23）**：Phase 1 源码、协议测试、macOS 打包脚本和六项 Spike 探针已落盘；状态仍为 🚧，因为当前 Linux 环境不能完成 macOS Swift/AppKit 编译与 Week 0 真机证据。ChatGPT/Cowork/浮窗/逐 app AX 支持在证据完成前保持 unverified/剪贴板降级，不计为已交付。
+
+**剩余交付门**：macOS `swift build && swift test`、S1–S6 真机矩阵、V2.1 结果回写、签名/公证，以及 Roadmap 退出指标的 dogfood 数据。
+
 ---
 
 ## Phase 1.5 — 短期补丁（MVP + 2–4 周）

@@ -7,6 +7,7 @@ Icon
 
 # Xcode / Swift
 .build/
+.build-linux/
 DerivedData/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
@@ -35,6 +36,16 @@ __pycache__/
 spike/**/screenshots/
 spike/**/*.jsonl
 spike/**/.build/
+spike/**/axprobe
+spike/**/probe_chatgpt
+spike/**/paste_test
+
+# Generated packages and local data
+cowork-extension/server/beamhop-mcp
+screenshots/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 # Secrets
 *.pem

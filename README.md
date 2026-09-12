@@ -2,7 +2,7 @@
 
 > macOS 桌面 app — 在浏览器 / IDE / Notes / PDF / Figma 等任意 app 间抓取上下文，一键投递到任意外部 AI agent（Claude Code、Claude Cowork、ChatGPT Desktop 等）。
 
-**状态**：Phase 1 MVP 规划完成，待 Week 0 Spike 验证。
+**状态**：Phase 1 源码已实现；Week 0 的 macOS 实机 Spike 与真机验收尚未执行。未验证的 ChatGPT/Cowork/浮窗能力默认安全降级，不把 Linux 上的静态结果伪装成 PASS。
 
 ## 文档
 
@@ -45,3 +45,26 @@ claude
 
 Plan 用 subagent-driven 模式执行（每个 Task 独立 fresh subagent，Task 间 review）。
 
+## Phase 1 源码与验证
+
+仓库现在包含四个 SwiftPM product：
+
+- `Beamhop`：菜单栏 app、AX 抓取、浮窗、Inbox、诊断与投递 UI
+- `BeamhopCore`：Capture/Delivery、SQLite、双 FTS5、provenance 与 prompt renderer
+- `beamhop-mcp`：Claude Code / MCPB 共用的只读 MCP server
+- `beamhop-native-host`：Chrome Native Messaging bridge
+
+Chrome 扩展在 `browser-extension/`，Cowork 的 MCPB 包装在 `cowork-extension/`。macOS 本地构建：
+
+```bash
+npm ci --prefix browser-extension
+npm run build --prefix browser-extension
+npm test --prefix browser-extension
+swift build
+swift test
+./packaging/build-app.sh
+```
+
+产物为 `dist/Beamhop.app`。Claude Code 与 Chrome 注册命令见 [`packaging/README.md`](packaging/README.md)。
+
+Week 0 探针和未填造的实机证据位于 `spike/`。只有六项都按计划在 macOS 实机跑完，才能把 `spike/results.md` 的 `NOT RUN` 改为 PASS/FAIL 并回写 spec V2.1。

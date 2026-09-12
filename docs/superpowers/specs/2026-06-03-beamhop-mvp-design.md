@@ -312,10 +312,12 @@ MCP 协议下，agent 必须主动调 tool / 读 resource，server 没法主动�
 
 **前置条件（V2 修正）**：Claude Code 的 MCP 配置不是 `~/.config/claude-code/mcp.json`（V1 写错了）。实际机制是：
 - 用户级 / 本地：写入 `~/.claude.json`
-- 或调用 `claude mcp add beamhop --transport stdio --command <beamhop-mcp-binary>` CLI 命令
+- 或调用 `claude mcp add --transport stdio --scope user beamhop -- <beamhop-mcp-binary>` CLI 命令
 - 项目级（不适用本场景）：项目根的 `.mcp.json`
 
 Beamhop 首次启动时优先尝试调用 `claude mcp add`（最稳）；若 `claude` 二进制不在 PATH 中则降级为提示用户手动复制命令并打开终端。**这一项必须在 Week 0 Spike 中实测确认**。
+
+> 2026-08-23 实施注：以上 stdio 参数顺序与 `--` 分隔符已按当前 Claude Code 官方文档修正；这只是文档/API 对齐，不替代 S1 在本机安装版本上的注册和 tool-call 证据。
 
 **为何不直接粘 markdown 正文进终端**：终端粘大段文本会引发 bracketed paste 异常、换行污染、token 浪费，且无法附图。MCP resource 让 agent 按需取，省 token 省事。
 
@@ -333,6 +335,8 @@ Beamhop 首次启动时优先尝试调用 `claude mcp add`（最稳）；若 `cl
 | Spike 验证 connector 流程可一键自动化 | 实现 Cowork 投递（仍是 connector + AX 触发组合） |
 | Spike 验证连接需要 Anthropic 后台账号 / OAuth / 用户手动操作 | 推迟到 Phase 1.5，MVP 仅做剪贴板兜底（点 "Cowork" → 复制 + 通知"请在 Cowork 中粘贴"） |
 | Spike 验证完全无可行通道 | 从 MVP 投递目标列表移除，Phase 2 重新评估 |
+
+> 2026-08-23 实施注：Anthropic 当前已发布 MCPB Desktop Extension 路径，本仓库已提供 `cowork-extension/` 的本地 binary bundle 包装。MCPB 是一键安装候选，但 Cowork 会话实际调用 `fetch_capture` 仍属于 S2 真机验收，未验证前继续剪贴板降级。
 
 **AX 部分的辅助仍然成立**（找输入框 + 粘贴 + 回车），但触发数据通道必须先 Spike。Cowork 的 bundle id 假设为 `com.anthropic.claudefordesktop`，**待 Spike 用 Accessibility Inspector 确认**。
 
@@ -579,7 +583,7 @@ NSApp.setActivationPolicy(.accessory)  // 菜单栏 app，不在 Dock 占位
    ③ 写入 native messaging host manifest 到对应浏览器目录
    ④ "跳过，仅用 AX 抓取" 是头等选项
 4. Agent 注册（按需）：
-   ① Claude Code：检测 `claude` 是否在 PATH，若是则调 `claude mcp add beamhop ...`；
+   ① Claude Code：检测 `claude` 是否在 PATH，若是则调 `claude mcp add --transport stdio --scope user beamhop -- <beamhop-mcp>`；
       否则提示手动复制命令到终端（V2 修正：V1 写的 `~/.config/claude-code/mcp.json` 路径是错的）
    ② Claude Cowork：仅在 Week 0 Spike 通过后开放；流程视 Spike 结论
    ③ ChatGPT Desktop：检测安装即可，无需注册
@@ -745,7 +749,7 @@ ALTER TABLE captures ADD COLUMN capture_duration_ms INTEGER;      -- 抓取耗�
 
 | # | 假设 | 验证方法 | 通过标准 | 失败处理 |
 |---|---|---|---|---|
-| S1 | Claude Code MCP 注册可一键自动化 | 实际跑 `claude mcp add beamhop ...`，写一个 hello-world MCP server 返回固定 capture | server 注册成功 + Claude Code 一次会话里能调到 tool 拿到数据 | 改为提示用户手动复制命令；不影响 MVP 推进 |
+| S1 | Claude Code MCP 注册可一键自动化 | 实际跑 `claude mcp add --transport stdio --scope user beamhop -- <beamhop-mcp>`，写一个 hello-world MCP server 返回固定 capture | server 注册成功 + Claude Code 一次会话里能调到 tool 拿到数据 | 改为提示用户手动复制命令；不影响 MVP 推进 |
 | S2 | Claude Cowork connector/plugin 机制 | 阅读 Anthropic Cowork 当前公开文档；如有 SDK 实测注册一个最小 connector | connector 注册可一键完成 + 流程稳定 | Cowork 推迟 Phase 1.5；MVP 仅做剪贴板 handoff |
 | S3 | ChatGPT Desktop AX 粘贴稳定性 | 用 Accessibility Inspector 抓取当前版 + 上一个稳定版的输入框路径快照对比 | 路径在两个版本中完全一致或可用稳定 fallback 规则 | 仅做剪贴板 handoff；不在 MVP 自动按回车 |
 | S4 | Chrome native messaging 全链路 | 写最小扩展 + native host，验证 1MB 消息分片 + 错误恢复 | 端到端往返 < 100ms + 大正文分片正确 | 改为本地 HTTP 端口（弹防火墙）；可接受 |
