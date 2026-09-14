@@ -30,8 +30,12 @@ Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**�
 
 ## 2. 关键文档（按顺序读）
 
+> ⚠️ **铁律：任何机器、任何会话，开工前先 `git fetch` 对齐 origin**（2026-09 双机分叉事故的直接教训，详见工程收敛 spec §5）。
+
 - **设计 spec（真源,V2.1）**: `docs/superpowers/specs/2026-06-03-beamhop-mvp-design.md`
 - **Week 0 spike 结果 + 兼容矩阵**: `spike/results.md` + `spike/compatibility-matrix-v0.json`
+- **工程收敛 spec（2026-09）**: `docs/superpowers/specs/2026-09-14-engineering-convergence.md` — 分支模型/双机分工/验收门槛
+- **演进决策 spec（2026-09）**: `docs/superpowers/specs/2026-09-14-evolution-decisions.md` — Xcode 时机/Phase 2 memory 方向/Phase 3 触发
 - **Roadmap**: `docs/superpowers/roadmap.md`
 - **实施计划**:
   - Week 1: `docs/superpowers/plans/2026-06-08-week-1-foundation.md`（已实现）
