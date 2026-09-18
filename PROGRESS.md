@@ -1,16 +1,18 @@
 # Beamhop — 进度与续作指南（PROGRESS）
 
 > 这份文档是「下次接着干」的唯一入口。记录:做到哪了、什么验证过了、卡在哪、怎么恢复、下一步做什么。
-> 最近更新:2026-09-12（integration 分支:Phase 1 外围整合）。
+> 最近更新:2026-09-18（review P1/P2 修复合入;CI/CD 打通;**下一步 = Week 3 浮窗**,spec+plan 已就位）。
 
 ---
 
 ## 0. 一句话现状
 
-Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**已实现**;Week 2 金线（AX 抓取 → Claude Code 投递）+ 浏览器桥（含 Readability/GitHub）**已实现并自动化验证**。
-**当前形态是 SwiftPM（纯 Command Line Tools 可编译跑）**,尚未迁成 Xcode 正式 `.app`。
+Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**已实现**;Week 2 金线 + 浏览器桥**已实现并自动化验证**;integration 整合（ChatGPT 注入/Inbox/首启/兼容矩阵/打包/CI）**CI 全绿**;代码 review 的 **P1/P2 已修**（PR #2,含 FK v2 迁移）。
+**工程流程已就位:** CI 三检查 + main artifact 下载 + `v*` tag 自动 Release + 分支保护 + PR 模板。**当前形态是 SwiftPM**,尚未迁 Xcode 正式 `.app`。
 
-**唯一阻塞:** 装 Xcode 需要 Apple ID（用户说"账号找不到了"）。免费 Apple ID 即可（`appleid.apple.com` 建/找回 → `xcodes install --latest`)。
+**下一步 = Week 3 浮窗投递 UI:** spec `docs/superpowers/specs/2026-09-18-week-3-floating-window.md` + 实施计划 `docs/superpowers/plans/2026-09-18-week-3-implementation.md`。Linux 写 + CI 把关 + Mac 验收。
+
+**待办阻塞:** ① Mac 真机验收（§8 清单,含 Week 3 新增 7 项）;② 装 Xcode 需要 Apple ID（免费 ID 即可,`appleid.apple.com` 建/找回 → `xcodes install --latest`）。
 
 ---
 
@@ -23,6 +25,9 @@ Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**�
 | **Week 2A** 最短金线 | ✅ 代码完成 | **MCP server 真 Claude Code 实测**;其余编译+自测 |
 | **Week 2B** 浏览器桥 + 正文抽取 | ✅ 代码完成 | **三段桥 + Readability + GitHub 全 CDP 自动化实测** |
 | **integration** Phase 1 外围 | 🚧 代码完成 | ChatGPT AX 注入、Inbox/首次引导/兼容矩阵 UI、CI、打包、MCPB;**CI(macOS runner) 验证编译+自测,真机验收待做** |
+| **review 加固** P1/P2 | ✅ 已修 | 主线程后台化、FK v2 迁移(cascade 自测 29 项)、BFS 修复;PR #2 |
+| **CI/CD 流程** | ✅ 就位 | 三检查+分支保护+main artifact+`v*` Release;PR #1;review 报告 `docs/superpowers/reviews/` |
+| **Week 3** 浮窗投递 UI | ⬜ 计划就位 | spec+plan 于 2026-09-18 写毕;Linux 开发+CI 把关+Mac 验收 |
 | 真机完整 `⌘⇧Space` 端到端 | ⬜ 待权限 | 需给 app 授 Accessibility |
 | Xcode 正式打包 + 签名 | ⬜ 待 Apple ID | — |
 
@@ -36,6 +41,7 @@ Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**�
 - **Week 0 spike 结果 + 兼容矩阵**: `spike/results.md` + `spike/compatibility-matrix-v0.json`
 - **工程收敛 spec（2026-09）**: `docs/superpowers/specs/2026-09-14-engineering-convergence.md` — 分支模型/双机分工/验收门槛
 - **演进决策 spec（2026-09）**: `docs/superpowers/specs/2026-09-14-evolution-decisions.md` — Xcode 时机/Phase 2 memory 方向/Phase 3 触发
+- **Week 3 浮窗 spec + 实施计划（2026-09-18）**: `docs/superpowers/specs/2026-09-18-week-3-floating-window.md` + `docs/superpowers/plans/2026-09-18-week-3-implementation.md` — **当前迭代的入口文档**
 - **代码 review 报告（2026-09）**: `docs/superpowers/reviews/2026-09-14-code-review.md` — P1 主线程阻塞/P2×3/P3×若干,含处理顺序
 - **Roadmap**: `docs/superpowers/roadmap.md`
 - **实施计划**:
@@ -149,24 +155,26 @@ extension/       manifest.json, background.js(SW: 常驻端口+ping+capture_acti
 
 ## 7. 下一步（按依赖排）
 
+**0. 当前迭代 = Week 3 浮窗（spec+plan 已就位,从这里开始）**
+- 入口: `docs/superpowers/plans/2026-09-18-week-3-implementation.md`（配套 spec 同日）
+- Linux 写码 → CI 把关 → Mac 验收;完成后 Phase 1 用户可见形态即齐
+- 原 C 项的"MCP 一键注册"已并入 Week 3 Task 4.3
+
 **A. 解锁正式工程（需用户做）**
 1. `appleid.apple.com` 建/找回免费 Apple ID → `xcodes install --latest` 装 Xcode 16。
 2. 装好后:`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`。
 3. 告诉 Claude → 把 SwiftPM 包迁成 Xcode app target（Info.plist `LSUIElement`、Developer ID 签名、Hardened Runtime、关 App Sandbox）→ 跑 `swift test`（XCTest）。
 
-**B. 真机金线端到端（需 A 或手动授权）**
-- 给 Beamhop 授 Accessibility → 注册 MCP 指真库 → 前台开 Claude Code → 在 Safari/Chrome 选文字按 `⌘⇧Space` → 确认投到 Claude Code。
+**B. 真机验收会话（半小时;Week 3 完成后一并跑）**
+- §8 清单既有 7 项 + Week 3 新增 7 项（见 Week 3 spec §4）→ 全过后打 `verified-*` tag,按工程收敛 spec 删 `integration`/`phase1-linux-reimpl` 过渡分支。
 
-**C. Week 2 收尾（可继续写）**
-- MCP 真·一键注册（目前诊断面板是命令预览）。
-- AX 整体 800ms deadline（目前各 AX 调用 0.8s,但无总超时）。
+**C. Week 2 遗留（Week 3 后按需）**
+- AX 整体 800ms deadline（目前各 AX 调用 0.8s,但无总超时;Week 3 打点会先给出真实分布再决定是否优化）。
 - 防御性 app→extension >1MB 分片 + 双向分片测试。
 - 多浏览器/profile 路由（目前单连接"最新 host wins"）。
 
-**D. Week 3 计划（可起草）**
-- 浮窗投递 UI（§9.1,带目标选择 ⌘1/2/3/0 + 备注框）——integration 已交付 Inbox/FirstRun/兼容矩阵窗口,浮窗是剩余大头;
-- Failure Recovery UI 深化（Inbox 列表已显示失败原因 + 投递历史,§12.4 骨架已就位）;
-- 完整 onboarding 向导（FirstRun 窗口已就位,浏览器扩展/agent 注册步骤待接入）。
+**D. Phase 2 前置（Week 3 + 验收 + 两周 dogfood 之后）**
+- 按演进决策 spec §2.3 执行一小时评估（personal-model 复查 + dogfood 信号）→ 选定 memory 路线 → 立项。
 
 ---
 
@@ -194,11 +202,21 @@ extension/       manifest.json, background.js(SW: 常驻端口+ping+capture_acti
 
 **integration 待真机验收清单:**
 - ✅ CI 全绿(macos-15:swift build/test + SelfTest 28 项 + MCP 冒烟 + manifest 冒烟 + **完整组装出 Beamhop.app**;ubuntu:extension esbuild)
-- ⬜ ChatGPT Desktop 注入(AX opt-in 后 set-value;S3 只测过单版本,且当时是探针脚本不是本实现)
+- ⬜ ChatGPT Desktop 注入(AX opt-in 后 set-value;S3 只测过单版本,且当时是探针脚本不是本实现;**review P2-2 修复后待复验**)
 - ⬜ Inbox 窗口真机(列表/搜索/重投/软删手感)
 - ⬜ FirstRun + 兼容矩阵窗口真机
 - ⬜ `./packaging/build-app.sh` 产物可运行(TCC 授权按签名身份绑定)
 - ⬜ MCPB `cowork-extension` 安装→Cowork 会话调 `fetch_capture`
+- ⬜ **FK v2 迁移在真实旧库上跑一次**(PR #2;全新库已被 29 项自测覆盖,旧库迁移只有 CI 无真机样本)
+
+---
+
+## 7.5. 2026-09-14~18 后续事件(合入 main 的增量)
+
+- **PR #1(cicd-hardening)**: `release.yml`(tag `v*` → Beamhop.app 附到 GitHub Release,ad-hoc 未公证)、main push 上传 app artifact(30 天)、scripts job 全量 ShellCheck、PR 模板、`docs/superpowers/reviews/2026-09-14-code-review.md`。
+- **分支保护(main)**: required checks `swift`/`extension`/`scripts` + 线性历史 + 禁 force push;admin 保留直推豁免(solo 流程不被卡)。
+- **PR #2(fix/review-p1-p2)**: P1-1 抓投链路后台化;P2-1 FK 启用+v2 cascade 迁移+自测 29 项;P2-2 BFS 去重修复;P2-3 分片注释;P3-1 `AppActivator`。
+- **Week 3 文档(2026-09-18)**: 浮窗 spec + 实施计划(见 §2 链接)——**当前迭代入口**。
 
 ---
 
