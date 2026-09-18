@@ -23,6 +23,14 @@ jobs:
         run: scripts/native-manifest-smoke.sh
       - name: Assemble Beamhop.app (ad-hoc)
         run: ./packaging/build-app.sh
+      - name: Upload Beamhop.app artifact (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beamhop-app-${{ github.sha }}
+          path: dist/Beamhop.app
+          if-no-files-found: error
+          retention-days: 30
 
   extension:
     runs-on: ubuntu-latest
@@ -38,3 +46,11 @@ jobs:
       - run: npm run build
       - name: Bundle produced
         run: test -s ../vendor/readability.js
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck all shell scripts
+        run: |
+          find scripts host packaging cowork-extension -name '*.sh' -print0 | xargs -0 shellcheck
