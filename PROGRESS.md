@@ -36,6 +36,7 @@ Week 0 Spike（6 假设）全部实测完 → spec 升 **V2.1**;Week 1 地基**�
 - **Week 0 spike 结果 + 兼容矩阵**: `spike/results.md` + `spike/compatibility-matrix-v0.json`
 - **工程收敛 spec（2026-09）**: `docs/superpowers/specs/2026-09-14-engineering-convergence.md` — 分支模型/双机分工/验收门槛
 - **演进决策 spec（2026-09）**: `docs/superpowers/specs/2026-09-14-evolution-decisions.md` — Xcode 时机/Phase 2 memory 方向/Phase 3 触发
+- **代码 review 报告（2026-09）**: `docs/superpowers/reviews/2026-09-14-code-review.md` — P1 主线程阻塞/P2×3/P3×若干,含处理顺序
 - **Roadmap**: `docs/superpowers/roadmap.md`
 - **实施计划**:
   - Week 1: `docs/superpowers/plans/2026-06-08-week-1-foundation.md`（已实现）
