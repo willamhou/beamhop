@@ -6,6 +6,10 @@ import os
 /// The APP initiates requests (e.g. capture_active_tab); responses may arrive chunked and are
 /// reassembled here. Same framing as the host: 4-byte LE length + JSON body.
 ///
+/// Chunking status (code review P2-3): the extension currently NEVER chunks — extension→host
+/// has a 4GB ceiling so a big Readability body goes through as one frame. The reassembly below
+/// is a defensive path kept for the planned app→extension >1MB chunking (PROGRESS §7C).
+///
 /// Bridge contract (codex review): single active connection (the persistent port); requests are
 /// serialized; per-request timeout; stale socket cleanup; socket dir 0700.
 final class BrowserBridgeServer {

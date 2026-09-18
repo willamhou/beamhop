@@ -98,16 +98,23 @@ final class AppServices {
     /// Golden path (spec §5.2, Week 2 no-floating-window version): capture → insert → deliver to
     /// default target (Claude Code) → clipboard fallback on failure → notify. Floating-window
     /// picker is Week 3.
+    ///
+    /// Runs OFF the main thread (code review P1-1): AX reads (0.8s timeouts each) + app
+    /// activation waits + pgrep would otherwise stall the hotkey→result path; AX/NSWorkspace
+    /// calls are safe from a background thread.
     private func doCapture() {
-        guard let capture, let delivery else {
+        guard capture != nil, delivery != nil else {
             Notifier.error("数据库未就绪,无法抓取"); return
         }
-        switch capture.captureFrontmost() {
-        case .rejected(let reason):
-            Notifier.error("未抓取", reason)
-        case .captured(let cap):
-            log.info("captured \(cap.id, privacy: .public) method=\(cap.captureMethod, privacy: .public)")
-            delivery.deliver(cap, to: .claudeCode)   // default target = Claude Code (§9.1)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self, let capture = self.capture, let delivery = self.delivery else { return }
+            switch capture.captureFrontmost() {
+            case .rejected(let reason):
+                Notifier.error("未抓取", reason)
+            case .captured(let cap):
+                self.log.info("captured \(cap.id, privacy: .public) method=\(cap.captureMethod, privacy: .public)")
+                delivery.deliver(cap, to: .claudeCode)   // default target = Claude Code (§9.1)
+            }
         }
     }
     /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from

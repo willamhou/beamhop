@@ -96,6 +96,18 @@ do {
         check(purged == 1, "purges only the 40-day-old soft-deleted row")
     }
 
+    print("== purge cascades deliveries (FK v2, code review P2-1) ==")
+    do {
+        let (store, _) = try freshStore()
+        var old = sample()
+        old.deletedAt = Int64(Date().addingTimeInterval(-40 * 86400).timeIntervalSince1970 * 1000)
+        try store.insert(old)
+        try store.recordDelivery(Delivery(captureID: old.id, target: .claudeCode, status: .success))
+        _ = try store.purgeExpired(retentionDays: 30)
+        check(try store.deliveries(captureID: old.id).isEmpty,
+              "physical purge removes cascaded delivery rows (no orphans)")
+    }
+
     print("== provenance round-trip ==")
     do {
         let (store, _) = try freshStore()

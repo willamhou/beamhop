@@ -102,6 +102,31 @@ enum Migrations {
                 END;
                 """)
         }
+
+        // v2 (code review P2-1): FK enforcement is now ON, but v1 declared the FK without a
+        // cascade — a physical purge of captures would abort on referencing deliveries. Clean
+        // legacy orphans (from the FK-off era), rebuild the table with ON DELETE CASCADE, and
+        // recreate the index (it dies with the old table).
+        m.registerMigration("v2") { db in
+            try db.execute(sql: "DELETE FROM deliveries WHERE capture_id NOT IN (SELECT id FROM captures);")
+            try db.execute(sql: """
+                CREATE TABLE deliveries_v2 (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    capture_id    TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,
+                    target        TEXT NOT NULL,
+                    delivered_at  INTEGER NOT NULL,
+                    status        TEXT NOT NULL,
+                    error_message TEXT
+                );
+                """)
+            try db.execute(sql: """
+                INSERT INTO deliveries_v2 (id, capture_id, target, delivered_at, status, error_message)
+                    SELECT id, capture_id, target, delivered_at, status, error_message FROM deliveries;
+                """)
+            try db.execute(sql: "DROP TABLE deliveries;")
+            try db.execute(sql: "ALTER TABLE deliveries_v2 RENAME TO deliveries;")
+            try db.execute(sql: "CREATE INDEX idx_deliveries_capture ON deliveries(capture_id);")
+        }
         return m
     }
 }

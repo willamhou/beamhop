@@ -1,12 +1,12 @@
 // Beamhop Bridge — MV3 service worker. Keeps a persistent connectNative port to the native host
 // (com.beamhop.bridge), which relays to the Beamhop app. The APP initiates requests; we answer.
 //
-// Chunking note: Chrome caps host→extension messages at ~1MB but allows extension→host up to 4GB,
-// so the big Readability body (extension→app) needs no chunking; we only chunk our RESPONSE if it
-// somehow exceeds the safe size, and the app reassembles.
+// Chunking note: Chrome caps host→extension messages at ~1MB but allows extension→host up to
+// 4GB, so the big Readability body (extension→app) needs no chunking. We do NOT implement
+// response chunking today — replies always go out as a single frame; the app-side reassembly
+// in BrowserBridgeServer is a defensive path for future app→extension >1MB chunking.
 
 const HOST = 'com.beamhop.bridge';
-const MAX_RESP = 900 * 1024;   // stay under the 1MB host→extension limit for any host→app... (n/a here, but safe)
 let port = null;
 let connecting = false;
 let backoff = 500;

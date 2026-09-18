@@ -15,16 +15,10 @@ enum ChatGPTDelivery {
 
     /// Returns nil on success, or a user-facing failure reason (caller falls back to clipboard).
     static func deliver(_ capture: Capture, userNote: String?) -> String? {
-        guard let app = runningApp() else { return "ChatGPT Desktop 未运行(先打开它,或改用剪贴板)" }
-
-        app.activate(options: [.activateAllWindows])
-        var front = false
-        for _ in 0..<15 {
-            usleep(80_000)
-            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleID { front = true; break }
-            app.activate(options: [.activateAllWindows])
+        guard let app = AppActivator.runningApp(bundleID: bundleID) else {
+            return "ChatGPT Desktop 未运行(先打开它,或改用剪贴板)"
         }
-        guard front else { return "无法把 ChatGPT Desktop 切到前台" }
+        guard AppActivator.focus(app, bundleID: bundleID) else { return "无法把 ChatGPT Desktop 切到前台" }
 
         // S3: without this opt-in the AX tree of com.openai.chat is unusable.
         AXHelper.enableManualAX(pid: app.processIdentifier)
@@ -48,14 +42,11 @@ enum ChatGPTDelivery {
         return nil
     }
 
-    private static func runningApp() -> NSRunningApplication? {
-        NSWorkspace.shared.runningApplications.first {
-            $0.bundleIdentifier == bundleID && $0.activationPolicy == .regular
-        }
-    }
-
     /// Bounded BFS over the focused window's AX tree for the composer AXTextArea.
-    /// Depth/visit caps keep a pathological tree from stalling delivery (S6 timeout discipline).
+    /// AX trees are trees (not DAGs), so no visited-set is needed — and one keyed by
+    /// `ObjectIdentifier` would be WRONG anyway: each AX query can return a new CF instance for
+    /// the same element, so identity-based dedup silently fails on deep Electron trees
+    /// (code review P2-2). Bound the walk by depth + visit count only (S6 timeout discipline).
     private static func findComposer(pid: pid_t) -> AXUIElement? {
         let appEl = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appEl, 0.8)
@@ -64,13 +55,12 @@ enum ChatGPTDelivery {
               let winRef, CFGetTypeID(winRef) == AXUIElementGetTypeID() else { return nil }
         let window = winRef as! AXUIElement
 
-        var queue: [AXUIElement] = [window]
+        var queue: [(el: AXUIElement, depth: Int)] = [(window, 0)]
         var visited = 0
         let maxVisits = 800
         let maxDepth = 40
-        var depthOf: [ObjectIdentifier: Int] = [ObjectIdentifier(window): 0]
         while !queue.isEmpty, visited < maxVisits {
-            let el = queue.removeFirst()
+            let (el, depth) = queue.removeFirst()
             visited += 1
 
             var roleRef: CFTypeRef?
@@ -88,18 +78,13 @@ enum ChatGPTDelivery {
                 }
             }
 
-            guard let depth = depthOf[ObjectIdentifier(el)], depth < maxDepth else { continue }
+            guard depth < maxDepth else { continue }
             var childrenRef: CFTypeRef?
             guard AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &childrenRef) == .success,
                   let childrenRef, CFGetTypeID(childrenRef) == CFArrayGetTypeID() else { continue }
             // kAXChildren yields AXUIElements by contract (compiler: downcast always succeeds).
             for child in (childrenRef as! CFArray as NSArray) {
-                let c = child as! AXUIElement
-                let key = ObjectIdentifier(c)
-                if depthOf[key] == nil {
-                    depthOf[key] = depth + 1
-                    queue.append(c)
-                }
+                queue.append((child as! AXUIElement, depth + 1))
             }
         }
         return nil
