@@ -31,6 +31,7 @@ scripts/mcp-smoke.sh         # MCP stdio 冒烟(S1 帧格式 + 种子数据)
 ## 文档
 
 - [📐 MVP 设计稿 V2.1](docs/superpowers/specs/2026-06-03-beamhop-mvp-design.md) — 经 Codex review + Week 0 Spike 回写
+- [🪟 Week 3 浮窗 Spec](docs/superpowers/specs/2026-09-18-week-3-floating-window.md) + [实施计划](docs/superpowers/plans/2026-09-18-week-3-implementation.md) — **当前迭代入口**
 - [🧪 Spike 结果](spike/results.md) — Week 0 决策矩阵 + [Compatibility Matrix v0](spike/compatibility-matrix-v0.json)
 - [🛠️ 工程收敛 Spec](docs/superpowers/specs/2026-09-14-engineering-convergence.md) — 分支模型、双机分工、验收门槛（2026-09）
 - [🧭 演进决策 Spec](docs/superpowers/specs/2026-09-14-evolution-decisions.md) — Xcode 时机、Phase 2 memory 方向、Phase 3 触发条件（2026-09）
