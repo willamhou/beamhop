@@ -27,7 +27,12 @@ public final class Database {
             }
         }
 
-        self.queue = try DatabaseQueue(path: path.path)
+        // Enforce the declared FK (code review P2-1): SQLite defaults PRAGMA foreign_keys OFF,
+        // which let purgeExpired orphan deliveries rows. Migration v2 cleans legacy orphans and
+        // rebuilds deliveries with ON DELETE CASCADE to match.
+        var config = Configuration()
+        config.foreignKeysEnabled = true
+        self.queue = try DatabaseQueue(path: path.path, configuration: config)
         self.recoveredFromCorruption = recovered
 
         // Enable WAL so a separate read-only process (BeamhopMCP) can read without blocking

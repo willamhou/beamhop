@@ -3,6 +3,8 @@
 > 范围：`main` @ aa95aa6 全量 Swift/JS/shell 源码（含 integration 移植件）
 > 方法：逐文件人工通读 + 对照 spec V2.1 / PROGRESS 坑清单
 > 结论先行：**无致命 bug**;1 个 P1 主线程阻塞问题、2 个 P2 数据/正确性隐患、若干 P3 重构项。金线路径（AX 抓取 → Claude Code 投递 → 剪贴板兜底）的代码质量好——这批是经过 spike + codex review 洗过的。
+>
+> **修复状态（2026-09-18）**:P1-1、P2-1、P2-2、P2-3、P3-1 已修（含 FK v2 迁移 + cascade 自测）;P3-2~P3-7 保持待办,随 Week 3 处理。P2-2 的真机验证项仍在 PROGRESS §8。
 
 ## P1 — 应尽快修
 

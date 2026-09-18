@@ -20,15 +20,9 @@ enum ClaudeCodeDelivery {
         guard mcpRegistered() else { return "Claude Code 的 Beamhop MCP 未注册(去诊断面板一键注册)" }
         guard let target = TerminalLocator.locate() else { return "未找到运行中的终端(Terminal/iTerm/…)" }
 
-        // bring the terminal forward + give it a moment to focus
-        target.app.activate(options: [.activateAllWindows])
-        var front = false
-        for _ in 0..<15 {
-            usleep(80_000)
-            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == target.bundleID { front = true; break }
-            target.app.activate(options: [.activateAllWindows])
+        guard AppActivator.focus(target.app, bundleID: target.bundleID) else {
+            return "无法把终端切到前台"
         }
-        guard front else { return "无法把终端切到前台" }
 
         let trigger = PromptRenderer.claudeCodeTrigger(capture, userNote: userNote)
         // codex: auto-Enter ONLY when the located terminal was the frontmost one AND a claude
