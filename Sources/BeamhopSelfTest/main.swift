@@ -237,11 +237,12 @@ do {
         let long = PromptRenderer.fullMarkdown(cap, userNote: nil, maxBody: 5)
         check(long.contains("hello\n…[truncated; full content in Beamhop Inbox]"), "truncation marker")
         check(!long.contains("hello world</selected>"), "truncated body not full")
-        // claude trigger (English-first, matches the UI/docs language decision)
+        // claude trigger (Chinese base — language change deferred: collides with the in-flight
+        // plan-A write-back trigger on feat/mcp-writeback-dedup; decide after that lands)
         let trig = PromptRenderer.claudeCodeTrigger(cap, userNote: nil)
-        check(trig == "Use fetch_capture('\(cap.id)') from the Beamhop MCP server to pull the context I just captured", "trigger without note")
+        check(trig == "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文", "trigger without note")
         let trigNote = PromptRenderer.claudeCodeTrigger(cap, userNote: "重点看竞态")
-        check(trigNote == "Use fetch_capture('\(cap.id)') from the Beamhop MCP server to pull the context I just captured — 重点看竞态", "trigger with note")
+        check(trigNote == "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。重点看竞态", "trigger with note")
     }
 
     print("== Week 3: CapturePanelModel (presentation) ==")

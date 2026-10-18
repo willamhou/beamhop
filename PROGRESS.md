@@ -167,7 +167,9 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 - Re-run AX word-grab spot checks on the 8 S6 apps.
 
 **C. Product candidates (pick after a week of dogfood)**
-- ~~Prompt-injection language~~ — decided 2026-10-18: English-first trigger (`PromptRenderer`), matching the UI/docs decision; zh can return behind the language toggle when zh-Hans UI is wired back in.
+- Prompt-injection language: **deferred** — the trigger text is being extended by the in-flight
+  plan-A write-back work (`feat/mcp-writeback-dedup`, e2e-verified); unify language on top of
+  that once it lands. UI chrome stays English-first.
 - Wire `zh-Hans` UI translation back into the app bundle (translations archived at `packaging/lproj/zh-Hans.lproj/`) behind a language toggle.
 - Cowork MCPB end-to-end.
 
