@@ -5,10 +5,16 @@ import BeamhopCore
 // lessons are kept: (1) MCP stdio is NEWLINE-DELIMITED JSON (not Content-Length), (2) read with
 // raw POSIX read() — FileHandle.read(upToCount:) blocks and causes a 30s connection timeout.
 //
-// Exposes:
-//   tool      fetch_capture(id?)          -> latest (or by id) Capture as JSON
-//   resource  capture://latest, capture://{id}
-// Reads inbox.sqlite READ-ONLY. DB path comes from `--db <path>` (the server never guesses it).
+// Exposes (memory-mcp-decision spec 2026-10-18):
+//   tool  fetch_capture(id?)          -> latest (or by id) Capture as JSON (read-only)
+//   tool  search_captures(query)      -> FTS5 dual-table recall, ranked (read-only)
+//   tool  fetch_results(origin_id?)   -> agent write-backs for a capture (or latest across all)
+//   tool  save_result(origin, content, agent, session_id?)
+//                                     -> agent writes a conclusion back into the Inbox
+// Resource capture://latest, capture://{id} unchanged.
+// Captures are read through a READ-ONLY connection; results go through a lazily opened
+// read-write ResultStore that never migrates (the app owns the DB). Reads inbox.sqlite.
+// DB path comes from `--db <path>` (the server never guesses it).
 
 let stdoutHandle = FileHandle.standardOutput
 let stderrHandle = FileHandle.standardError
@@ -34,6 +40,21 @@ var reader: CaptureReader? = {
     do { return try CaptureReader.open(path: dbPath) }
     catch { log("open read-only failed: \(error)"); return nil }
 }()
+
+/// Lazily opened read-write access for result tools. Never migrates: if the app hasn't
+/// restarted since migration v3, open throws schemaOutdated → structured MCP error.
+var resultStore: ResultStore?
+func resultsStore() -> ResultStore? {
+    if let resultStore { return resultStore }
+    guard let dbPath else { return nil }
+    do {
+        resultStore = try ResultStore.open(path: dbPath)
+    } catch {
+        log("result store open failed: \(error)")
+        return nil
+    }
+    return resultStore
+}
 
 func send(_ obj: [String: Any]) {
     guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
@@ -72,24 +93,127 @@ func handle(_ msg: [String: Any]) {
         break
 
     case "tools/list":
-        send(["jsonrpc": "2.0", "id": id ?? NSNull(), "result": ["tools": [[
-            "name": "fetch_capture",
-            "description": "Fetch a Beamhop capture (the latest if no id) as JSON, including provenance.",
-            "inputSchema": [
-                "type": "object",
-                "properties": ["id": ["type": "string", "description": "capture id like cap_…; omit for latest"]]
-            ]
-        ]]]])
+        send(["jsonrpc": "2.0", "id": id ?? NSNull(), "result": ["tools": [
+            [
+                "name": "fetch_capture",
+                "description": "Fetch a Beamhop capture (the latest if no id) as JSON, including provenance.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": ["id": ["type": "string", "description": "capture id like cap_…; omit for latest"]]
+                ]
+            ],
+            [
+                "name": "search_captures",
+                "description": "Full-text search the Beamhop Inbox (English word-level + CJK substring), ranked by relevance and recency. Re-captures of the same page/content are collapsed by default: each hit is the newest capture of its group, annotated with duplicate_count / first_seen_at / last_seen_at. Use to recall captures related to a topic before answering.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "query": ["type": "string", "description": "search text (>=3 chars for CJK)"],
+                        "limit": ["type": "integer", "description": "max results, default 10"],
+                        "include_duplicates": ["type": "boolean", "description": "return the raw hit list without collapsing re-captures (default false)"]
+                    ],
+                    "required": ["query"]
+                ]
+            ],
+            [
+                "name": "fetch_results",
+                "description": "Fetch agent write-back conclusions: for one capture if origin_capture_id is given, otherwise the most recent across all captures. Pairs a capture (the question) with its agent conclusions (the answers).",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "origin_capture_id": ["type": "string", "description": "capture id like cap_…; omit for latest across all"],
+                        "limit": ["type": "integer", "description": "max results, default 20"]
+                    ]
+                ]
+            ],
+            [
+                "name": "save_result",
+                "description": "Write your conclusion about a Beamhop capture back into the Inbox so it is remembered and shared across the user's agents. Call this after you finish processing a fetched capture.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "origin_capture_id": ["type": "string", "description": "the capture id you processed (cap_…)"],
+                        "content": ["type": "string", "description": "your conclusion text, verbatim — do not distill away detail"],
+                        "agent": ["type": "string", "description": "your identifier, e.g. claude_code / codex / kimi"],
+                        "session_id": ["type": "string", "description": "your session id (optional)"]
+                    ],
+                    "required": ["origin_capture_id", "content", "agent"]
+                ]
+            ],
+        ]]])
 
     case "tools/call":
         let params = msg["params"] as? [String: Any]
         let name = params?["name"] as? String ?? ""
         let args = params?["arguments"] as? [String: Any]
-        guard name == "fetch_capture" else { rpcError(id: id, code: -32602, message: "unknown tool \(name)"); return }
-        let r = captureText(id: args?["id"] as? String)
-        var result: [String: Any] = ["content": [["type": "text", "text": r.text]]]
-        if r.isError { result["isError"] = true }
-        send(["jsonrpc": "2.0", "id": id ?? NSNull(), "result": result])
+        let limit = (args?["limit"] as? Int) ?? (args?["limit"] as? Double).map(Int.init)
+
+        func reply(_ text: String, isError: Bool = false) {
+            var result: [String: Any] = ["content": [["type": "text", "text": text]]]
+            if isError { result["isError"] = true }
+            send(["jsonrpc": "2.0", "id": id ?? NSNull(), "result": result])
+        }
+
+        switch name {
+        case "fetch_capture":
+            let r = captureText(id: args?["id"] as? String)
+            reply(r.text, isError: r.isError)
+
+        case "search_captures":
+            guard let reader else { reply("Beamhop database unavailable (missing --db or file not found)", isError: true); break }
+            guard let query = args?["query"] as? String else { reply("search_captures requires a 'query' argument", isError: true); break }
+            let includeDupes = (args?["include_duplicates"] as? Bool) ?? false
+            do {
+                if includeDupes {
+                    let caps = try reader.search(query, limit: min(limit ?? 10, 50))
+                    reply(CaptureReader.renderJSON(caps))
+                } else {
+                    let hits = try reader.searchDeduplicated(query, limit: min(limit ?? 10, 50))
+                    reply(CaptureReader.renderJSON(hits))
+                }
+            } catch { reply("search failed: \(error)", isError: true) }
+
+        case "fetch_results":
+            guard let store = resultsStore() else {
+                reply("Beamhop results unavailable (DB missing, or app not restarted since schema update)", isError: true); break
+            }
+            do {
+                let res: [CaptureResult]
+                if let origin = args?["origin_capture_id"] as? String, !origin.isEmpty {
+                    res = try store.results(captureID: origin, limit: min(limit ?? 20, 100))
+                } else {
+                    res = try store.recentResults(limit: min(limit ?? 20, 100))
+                }
+                reply(CaptureReader.renderJSON(res))
+            } catch { reply("fetch_results failed: \(error)", isError: true) }
+
+        case "save_result":
+            guard let store = resultsStore() else {
+                reply("Beamhop results unavailable (DB missing, or app not restarted since schema update)", isError: true); break
+            }
+            guard let origin = args?["origin_capture_id"] as? String, !origin.isEmpty else {
+                reply("save_result requires 'origin_capture_id'", isError: true); break
+            }
+            guard let content = args?["content"] as? String, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                reply("save_result requires non-empty 'content'", isError: true); break
+            }
+            guard let agent = args?["agent"] as? String, !agent.isEmpty else {
+                reply("save_result requires 'agent' (your identifier, e.g. claude_code / codex)", isError: true); break
+            }
+            let result = CaptureResult(originCaptureID: origin, agent: agent,
+                                       sessionID: args?["session_id"] as? String,
+                                       content: content)
+            do {
+                try store.insert(result)
+                reply(CaptureReader.renderJSON(result))
+            } catch {
+                // Most common case: FK rejection because the origin capture doesn't exist.
+                reply("save_result failed: \(error)", isError: true)
+            }
+
+        default:
+            rpcError(id: id, code: -32602, message: "unknown tool \(name)")
+        }
 
     case "resources/list":
         send(["jsonrpc": "2.0", "id": id ?? NSNull(), "result": ["resources": [

@@ -34,6 +34,15 @@ public struct Capture: Codable, FetchableRecord, PersistableRecord, Identifiable
     public var truncated: Bool
     public var captureDurationMs: Int?
 
+    /// Content identity for MCP search dedup (2026-10-18): re-captures of the same page/content
+    /// group together so `search_captures` can collapse them. Exact equality on all five fields —
+    /// the same page re-pressed minutes/hours apart is byte-identical in practice. Deliberately
+    /// NOT fuzzy: near-duplicates are Phase 2 embeddings territory, not string heuristics.
+    public var contentIdentity: String {
+        [appBundleID, windowTitle ?? "", url ?? "", selectedText ?? "", extractedBody ?? ""]
+            .joined(separator: "\u{0}")
+    }
+
     enum CodingKeys: String, CodingKey {
         case id
         case createdAt = "created_at"

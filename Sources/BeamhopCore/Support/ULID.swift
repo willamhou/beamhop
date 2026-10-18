@@ -30,6 +30,11 @@ public enum ULID {
         "cap_" + generate(date: date)
     }
 
+    /// A result id: `res_<26-char ulid>` (agent write-back, memory-mcp-decision spec).
+    public static func resultID(date: Date = Date()) -> String {
+        "res_" + generate(date: date)
+    }
+
     /// Short, human-facing prefix of a capture id (e.g. for compact UI labels).
     /// `cap_01J9Z…` -> `cap_01J9Z6` style (prefix + first 6 ulid chars).
     public static func shortPrefix(of captureID: String, length: Int = 6) -> String {

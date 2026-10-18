@@ -78,44 +78,30 @@ public final class CaptureStore {
 
     /// Full-text search across both FTS tables, excluding soft-deleted rows.
     public func search(_ query: String, limit: Int = 50) throws -> [Capture] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        // Treat the whole input as a phrase/substring to avoid FTS5 operator parsing.
-        let pattern = "\"" + trimmed.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        try db.queue.read { try CaptureSearch.run($0, query: query, limit: limit, nowMs: nowMs()) }
+    }
 
-        return try db.queue.read { db in
-            var best: [Int64: Double] = [:]   // rowid -> best (lowest) bm25
-            func collect(table: String) throws {
-                let rows = try Row.fetchAll(db, sql:
-                    "SELECT rowid AS rid, bm25(\(table)) AS rank FROM \(table) WHERE \(table) MATCH ?",
-                    arguments: [pattern])
-                for r in rows {
-                    let rid: Int64 = r["rid"]
-                    let rank: Double = r["rank"]
-                    if let cur = best[rid] { best[rid] = min(cur, rank) } else { best[rid] = rank }
-                }
-            }
-            try collect(table: "captures_fts")
-            try collect(table: "captures_fts_cjk")
-            if best.isEmpty { return [] }
+    // MARK: results (agent write-back, memory-mcp-decision spec 2026-10-18)
 
-            let rids = Array(best.keys)
-            let placeholders = databaseQuestionMarks(count: rids.count)
-            let rows = try Row.fetchAll(db, sql:
-                "SELECT *, rowid AS _rowid FROM captures WHERE rowid IN (\(placeholders)) AND deleted_at IS NULL",
-                arguments: StatementArguments(rids))
+    public func insertResult(_ result: CaptureResult) throws {
+        try db.queue.write { try result.insert($0) }
+    }
 
-            let now = Double(nowMs())
-            let scored: [(Capture, Double)] = try rows.map { row in
-                let cap = try Capture(row: row)
-                let rid: Int64 = row["_rowid"]
-                let bm = best[rid] ?? 0
-                // bm25: lower = better. Add a mild recency reward so newer wins ties.
-                let ageDays = max(0, (now - Double(cap.createdAt)) / 86_400_000)
-                let score = bm + ageDays * 0.05
-                return (cap, score)
-            }
-            return scored.sorted { $0.1 < $1.1 }.prefix(limit).map { $0.0 }
+    /// Write-back conclusions for one capture, newest first.
+    public func results(captureID: String, limit: Int = 20) throws -> [CaptureResult] {
+        try db.queue.read { db in
+            try CaptureResult
+                .filter(sql: "origin_capture_id = ?", arguments: [captureID])
+                .order(sql: "created_at DESC")
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    /// Most recent write-backs across all captures (cross-agent activity view).
+    public func recentResults(limit: Int = 50) throws -> [CaptureResult] {
+        try db.queue.read { db in
+            try CaptureResult.order(sql: "created_at DESC").limit(limit).fetchAll(db)
         }
     }
 }

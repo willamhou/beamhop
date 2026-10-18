@@ -9,7 +9,7 @@
 
 ## 0. Status in one paragraph
 
-Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 86 SelfTest checks (incl. 40+ Week 3 checks). The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); migrating to a real Xcode project is gated on accepting the Xcode license (`sudo xcodebuild -license accept`) so `swift test`/XCTest can run.
+Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 114 SelfTest checks (incl. 40+ Week 3 checks and MCP dedup checks). The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); migrating to a real Xcode project is gated on accepting the Xcode license (`sudo xcodebuild -license accept`) so `swift test`/XCTest can run.
 
 **Blockers**: ① Xcode license not accepted → no XCTest, no signed builds; ② ad-hoc signing means every repack needs the Accessibility grant re-enabled in System Settings.
 
@@ -27,6 +27,8 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 | Review hardening P1/P2 | ✅ merged | PR #2 (off-main capture, FK v2 migration, BFS fix) |
 | CI/CD | ✅ in place | 3 required checks, main artifact, `v*` releases, branch protection |
 | **Week 3 floating panel** | ✅ **done + verified** | user-verified on-device 2026-10-18 (panel, dedup, Kimi, ChatGPT v26) |
+| **MCP write-back (plan A)** | ✅ implemented | `save_result`/`fetch_results`/`search_captures` + `results` table (v3 migration, FK cascade); decision record `docs/superpowers/specs/2026-10-18-memory-mcp-decision.md`; SelfTest + mcp-smoke green; on-device e2e pending |
+| **MCP search dedup** | ✅ implemented + verified on real Inbox | `search_captures` collapses re-captures by `contentIdentity` (app+title+url+text, exact); each hit = newest of group + `duplicate_count`/`first_seen_at`/`last_seen_at`; `include_duplicates=true` for raw list. Real Inbox: "beamhop" 10 raw hits → 4 groups |
 | `swift test` (XCTest) | ⬜ blocked | needs Xcode license accepted |
 | Xcode project + signed build | ⬜ blocked | same as above |
 
@@ -112,7 +114,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ MCP server against real Claude Code (`fetch_capture` returns a real capture)
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
-- ✅ Logic: 86 SelfTest checks green (DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values)
+- ✅ Logic: 114 SelfTest checks green (DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, MCP dedup)
 
 **Pending:**
 - ⬜ `swift test` / XCTest (blocked on Xcode license)
@@ -139,6 +141,7 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 - **Clipboard safe paste (§12.3)**: store raw Data per item/per type, refuse if unreadable; only ClaudeCodeDelivery restores; the clipboard fallback handoff does not.
 - **auto-Enter only when "the located terminal is frontmost + claude is running"**, else let the user confirm (never Enter into the wrong window).
 - ⚠️ **Incident**: during S6 testing, scripted synthetic keystrokes + undo were sent into the user's real Notes and wiped one note (recovered). **Never send synthetic keys/undo into the user's real apps**; capture is read-only AX.
+- **Inbox re-capture noise is fixed on the retrieval side, NOT at capture time** (2026-10-18, Claude's report: same GitHub page captured 13×). The DuplicateGate only covers <500ms; minutes-apart re-captures are byte-identical and stay in the DB (audit trail), but `search_captures` collapses them via `Capture.contentIdentity` (exact equality on app+title+url+selected+body — deliberately not fuzzy; near-dupes are Phase 2 embeddings work). `include_duplicates=true` restores the raw list. Soft-deleted twins are excluded from `duplicate_count`. The Inbox window UI still shows the raw list — collapse there only if dogfood says it matters.
 - **`plutil -lint` only accepts XML/binary plists, exits 1 on JSON** — validate JSON with `plutil -convert json -o /dev/null <file>`. Swift has no imported constant for `"AXEditable"` — use the raw string.
 - **`.build/release` is a symlink to the triplet dir** — `find` doesn't follow a symlinked start point; use `find -H`. CI's `TMPDIR` has a trailing slash → `//` paths; normalize with the same `cd+pwd` on both sides of path assertions.
 - **`pbpaste` in a `LANG=C` shell mangles UTF-8** (looks like an encoding bug, is only terminal display) — use `LANG=en_US.UTF-8 pbpaste` before debugging "corruption".

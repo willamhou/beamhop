@@ -127,6 +127,24 @@ enum Migrations {
             try db.execute(sql: "ALTER TABLE deliveries_v2 RENAME TO deliveries;")
             try db.execute(sql: "CREATE INDEX idx_deliveries_capture ON deliveries(capture_id);")
         }
+
+        // v3 (2026-10-18 memory-mcp-decision spec §2.2): agent write-back — the return leg of
+        // the delivery loop. Separate table from captures (input vs output events); append-only
+        // (no soft delete); ON DELETE CASCADE like deliveries (v2 pattern) so a physical purge
+        // of a capture never orphans results.
+        m.registerMigration("v3") { db in
+            try db.execute(sql: """
+                CREATE TABLE results (
+                    id                TEXT PRIMARY KEY,
+                    origin_capture_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,
+                    agent             TEXT NOT NULL,
+                    session_id        TEXT,
+                    content           TEXT NOT NULL,
+                    created_at        INTEGER NOT NULL
+                );
+                """)
+            try db.execute(sql: "CREATE INDEX idx_results_origin ON results(origin_capture_id);")
+        }
         return m
     }
 }
