@@ -18,14 +18,27 @@
     "status": "MECHANISM_CONFIRMED (end-to-end registration = fast-follow)"
   },
   "chatgpt_desktop": {
-    "bundle_id": "com.openai.chat",
-    "versions_tested": ["1.2026.119"],
+    "bundle_id": "com.openai.chat (26.x also answers to com.openai.codex — match both)",
+    "versions_tested": ["1.2026.119", "26.1007.71326"],
     "ax_requires_optin": "AXManualAccessibility + AXEnhancedUserInterface on the app element",
     "ax_input_role": "AXTextArea",
+    "ax_composer_depth": "~30 in 26.x (was ~6 in 1.x) — BFS bound 40 / 4000 visits",
+    "ax_editable_attr": "NOT exposed since 26.x (kAXErrorNoValue) — two-pass candidate logic: pass 1 explicit true, pass 2 not-explicit-false",
     "ax_send_button_id": "MessageInputPrimaryButtonContainerPart.PrimaryButton",
-    "inject_method": "kAXValueAttribute set-value (preferred); Cmd+V paste (fallback, needs focus wait)",
+    "inject_method": "kAXValueAttribute set-value (preferred; still effective on 26.x); Cmd+V paste (fallback, needs focus wait)",
     "auto_submit": false,
-    "status": "PARTIAL_PASS (single version; multi-version stability deferred)"
+    "status": "PASS (26.x re-verified 2026-10-18)"
+  },
+  "kimi_work": {
+    "bundle_id": "com.moonshot.kimichat",
+    "version_tested": "3.2.17 (Electron 43)",
+    "ax_requires_optin": "AXManualAccessibility on the app element (accepted, unlike ChatGPT 26.x which needs the pair)",
+    "ax_window_resolution": "AXWindows stays EMPTY with a visible window; app-element subtree exposes only menu bars — use AXFocusedWindow/AXMainWindow and BFS from the window (AXComposerFinder.resolveWindow)",
+    "ax_input_role": "AXTextArea (exactly one; desc=placeholder '随时发消息，安排下一步'; AXEditable not exposed)",
+    "inject_method": "focus composer + clipboard paste via CGEvent Cmd+V (kAXValueAttribute set-value returns success but does NOT take effect — placeholder pollution)",
+    "auto_submit": false,
+    "new_chat_button": "sidebar button desc='新建会话' (title empty on this build); AXPress before paste, degrade to current composer if absent",
+    "status": "PASS (probed + user-verified 2026-10-18)"
   },
   "browser_extension": {
     "native_messaging_roundtrip_ms": { "median": 18.7, "p95": 27.5, "payload": "900KB", "note": "fresh host process per call" },

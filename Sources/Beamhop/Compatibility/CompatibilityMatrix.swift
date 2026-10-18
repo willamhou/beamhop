@@ -104,10 +104,10 @@ enum CompatibilityMatrixLoader {
                 let entry = browser[key] as? [String: Any]
                 let status = entry?["status"] as? String ?? browser[key] as? String
                 records.append(CompatibilityRecord(
-                    id: "browser_\(key)", title: "\(key.capitalized) 扩展",
+                    id: "browser_\(key)", title: "\(key.capitalized) extension",
                     installedVersion: nil, testedVersions: [],
                     confidence: .from(status: status),
-                    detail: key == "chrome" ? "native messaging 实测往返中位 \(median)ms;>1MB 必须分片" : (status ?? "未测试")))
+                    detail: key == "chrome" ? "native messaging round-trip median \(median)ms; >1MB must be chunked" : (status ?? "untested")))
             }
         }
 
@@ -122,7 +122,7 @@ enum CompatibilityMatrixLoader {
                     installedVersion: installedVersion(bundleID: bundleID),
                     testedVersions: [],
                     confidence: .from(status: v["status"] as? String),
-                    detail: "选中文本: \(sel)\(via.map { " · \($0)" } ?? "")\(note.map { " · \($0)" } ?? "")"))
+                    detail: "Selected text: \(sel)\(via.map { " · \($0)" } ?? "")\(note.map { " · \($0)" } ?? "")"))
             }
         }
 
@@ -146,7 +146,7 @@ final class CompatibilityWindowController {
                 contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered, defer: false)
-            w.title = "Beamhop 兼容性"
+            w.title = "Beamhop Compatibility"
             w.isReleasedWhenClosed = false
             w.center()
             window = w
@@ -166,11 +166,11 @@ struct CompatibilityView: View {
                 Text("Compatibility Matrix").font(.headline)
                 Spacer()
                 if let at = snapshot.generatedAt {
-                    Text("实测于 \(at)").font(.caption).foregroundColor(.secondary)
+                    Text("Measured on \(at)").font(.caption).foregroundColor(.secondary)
                 }
             }
             .padding([.top, .horizontal], 16)
-            Text("Week 0 真机实测数据。未验证的目标会自动降级到剪贴板,不会静默失败。")
+            Text("Week 0 on-device measurements. Unverified targets automatically degrade to clipboard — never fail silently.")
                 .font(.caption).foregroundColor(.secondary)
                 .padding(.horizontal, 16).padding(.bottom, 8)
             Divider()
@@ -183,7 +183,7 @@ struct CompatibilityView: View {
                                 HStack(spacing: 6) {
                                     Text(r.title).fontWeight(.medium)
                                     if let v = r.installedVersion {
-                                        Text("本机 \(v)").font(.caption2)
+                                        Text("This Mac: \(v)").font(.caption2)
                                             .padding(.horizontal, 5).padding(.vertical, 1)
                                             .background(Color.secondary.opacity(0.15))
                                             .clipShape(RoundedRectangle(cornerRadius: 4))

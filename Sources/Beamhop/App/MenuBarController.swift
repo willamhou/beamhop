@@ -25,13 +25,13 @@ final class MenuBarController: NSObject {
         }
 
         let menu = NSMenu()
-        menu.addItem(item("抓取当前  ⌘⇧Space", #selector(capture)))
+        menu.addItem(item("Capture frontmost  ⌘⇧Space", #selector(capture)))
         menu.addItem(item("Inbox  ⌘⇧I", #selector(inbox)))
         menu.addItem(.separator())
-        menu.addItem(item("诊断…", #selector(diagnostics)))
-        menu.addItem(item("兼容性矩阵…", #selector(compatibility)))
+        menu.addItem(item("Diagnostics…", #selector(diagnostics)))
+        menu.addItem(item("Compatibility Matrix…", #selector(compatibility)))
         menu.addItem(.separator())
-        menu.addItem(item("退出 Beamhop", #selector(quit)))
+        menu.addItem(item("Quit Beamhop", #selector(quit)))
         statusItem.menu = menu
     }
 

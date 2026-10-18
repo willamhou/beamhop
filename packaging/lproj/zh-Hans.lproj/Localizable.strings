@@ -1,0 +1,136 @@
+// Chinese translations — ARCHIVED, not shipped (repo policy 2026-10-18: English is the default).
+// To ship Chinese UI: copy this file into the app bundle as Contents/Resources/zh-Hans.lproj/Localizable.strings
+// (see PROGRESS §7.C).
+// Key caveats: (1) keys are the FULLY-INTERPOLATED runtime strings — "%@" entries below are
+// illustrative for future format-style lookup and will not match as-is; (2) AppKit programmatic
+// strings (NSMenuItem titles) are not auto-localized — wrap them in L10n.s when shipping this.
+// Generated from the pre-i18n Chinese originals during the 2026-10-18 English-first migration.
+
+// MARK: Panel
+"Captured" = "已抓取";
+"Instruction (optional), e.g. summarize this…" = "指令(可选),如:总结一下这段…";
+"Deliver to" = "投递到";
+"Esc cancel" = "Esc 取消";
+"Inbox only" = "仅入 Inbox";
+"Save to Inbox only" = "仅存入 Inbox";
+"Deliver (%@)" = "投递(%@)";
+"Cowork → clipboard" = "Cowork →剪贴板";
+"Clipboard" = "剪贴板";
+"chars" = "字";
+
+// MARK: Menu bar
+"Capture frontmost  ⌘⇧Space" = "抓取当前  ⌘⇧Space";
+"Diagnostics…" = "诊断…";
+"Compatibility Matrix…" = "兼容性矩阵…";
+"Quit Beamhop" = "退出 Beamhop";
+
+// MARK: First run
+"Welcome to Beamhop" = "欢迎使用 Beamhop";
+"Press ⌘⇧Space to capture the frontmost app's context. It is saved to the local Inbox first — you decide which agent gets it." = "按 ⌘⇧Space 抓取当前 App 的上下文,先安全保存到本地 Inbox,再由你决定投给哪个 agent。";
+"Accessibility permission" = "辅助功能(Accessibility)";
+"Required: reads the frontmost app's title and selection, and performs clipboard-safe paste." = "必需:读取前台 App 的标题与选中文本,并执行 clipboard-safe 粘贴。";
+"Enabled" = "已开启";
+"Open System Settings" = "打开系统设置";
+"Browser extension & agent registration" = "浏览器扩展与 Agent 注册";
+"Optional — finish later from the Diagnostics window. AX + local Inbox + clipboard fallback is enough to start." = "可选,可稍后在诊断面板完成。仅用 AX + 本地 Inbox + 剪贴板兜底即可开始。";
+"Open Diagnostics" = "查看诊断";
+"Once Accessibility is enabled, press ⌘⇧Space to capture your first item." = "开启辅助功能后,按 ⌘⇧Space 试试抓取第一条 Capture。";
+
+// MARK: Capture errors
+"Accessibility permission not granted — cannot capture (enable it in the Diagnostics window)" = "未授予 Accessibility 权限 —— 无法抓取(去诊断面板开启)";
+"Cannot identify the frontmost app" = "无法识别前台 app";
+"%@ is on the blacklist (passwords/banking) — capture refused" = "%@ 在黑名单(密码/银行类),已拒绝抓取";
+"Failed to write to the Inbox: %@" = "写入 Inbox 失败: %@";
+"Database not ready — cannot capture" = "数据库未就绪,无法抓取";
+"Database not ready" = "数据库未就绪";
+"Cannot read the latest capture" = "无法读取最新 Capture";
+"Capture failed" = "未抓取";
+"Saved to Inbox" = "已存入 Inbox";
+"Inbox is empty" = "Inbox 为空";
+"Press ⌘⇧Space to capture something first" = "先按 ⌘⇧Space 抓取一条";
+
+// MARK: Delivery
+"ChatGPT Desktop is not running (open it first, or use the clipboard)" = "ChatGPT Desktop 未运行(先打开它,或改用剪贴板)";
+"Could not bring ChatGPT Desktop to the front" = "无法把 ChatGPT Desktop 切到前台";
+"No ChatGPT window is open (open a chat window and try again)" = "ChatGPT 窗口未打开(点开它的聊天窗口再试)";
+"ChatGPT input box (AXTextArea) not found — the version may have changed; use the clipboard" = "未找到 ChatGPT 输入框(AXTextArea)——版本可能已变化,请用剪贴板";
+"AX set-value injection failed (the input box may be read-only or the version changed)" = "AX set-value 注入失败(输入框可能只读或版本已变化)";
+"Injected into ChatGPT Desktop" = "已注入 ChatGPT Desktop";
+"Review the content and send manually (never auto-enters)" = "请检查内容后手动发送(不自动回车)";
+"Kimi Work is not running (open it first, or use the clipboard)" = "Kimi Work 未运行(先打开它,或改用剪贴板)";
+"Could not bring Kimi Work to the front" = "无法把 Kimi Work 切到前台";
+"No Kimi Work window is open (open its window and try again)" = "Kimi Work 窗口未打开(点开它的窗口再试)";
+"Kimi input box (AXTextArea) not found — the version may have changed; use the clipboard" = "未找到 Kimi 输入框(AXTextArea)——版本可能已变化,请用剪贴板";
+"Could not focus the Kimi input box" = "无法聚焦 Kimi 输入框";
+"Clipboard could not be protected — automatic paste aborted (paste manually)" = "剪贴板无法保护,已放弃自动粘贴(请手动粘贴)";
+"Pasted into Kimi Work" = "已粘贴到 Kimi Work";
+"Beamhop MCP is not registered with Claude Code (register it from the Diagnostics window)" = "Claude Code 的 Beamhop MCP 未注册(去诊断面板一键注册)";
+"No running terminal found (Terminal/iTerm/…)" = "未找到运行中的终端(Terminal/iTerm/…)";
+"Could not bring the terminal to the front" = "无法把终端切到前台";
+"Trigger prompt pasted to the terminal" = "已粘贴触发 prompt 到终端";
+"Confirm it is the right terminal window, then press Enter to send" = "请确认是目标终端窗口后按回车发送";
+"Claude Code delivery failed → copied to clipboard" = "Claude Code 投递失败 → 已复制到剪贴板";
+"Delivered to Claude Code" = "已投递到 Claude Code";
+"User chose clipboard" = "用户选择剪贴板";
+"ChatGPT Desktop delivery failed → copied to clipboard" = "ChatGPT Desktop 投递失败 → 已复制到剪贴板";
+"Cowork integration awaits S2 end-to-end acceptance — clipboard for now" = "Cowork 集成待 S2 端到端验收,先用剪贴板";
+"Kimi Work delivery failed → copied to clipboard" = "Kimi Work 投递失败 → 已复制到剪贴板";
+"Content copied — paste it into your target" = "内容已复制,请在目标里粘贴";
+"Clipboard may not have been fully restored" = "剪贴板可能未完整恢复";
+"Please check your clipboard" = "建议检查你的剪贴板";
+
+// MARK: Inbox window
+"Press ⌘⇧Space to capture the frontmost app. Every capture is saved locally first." = "按 ⌘⇧Space 抓取当前 App。每次抓取都会先安全保存到本机。";
+"No results for \"%@\"" = "没有匹配「%@」的结果。";
+"Search title, body, notes" = "搜索标题、正文、备注";
+"Refresh" = "刷新";
+"Move to Recently Deleted" = "移到最近删除";
+"Select a capture" = "选择一条 Capture";
+"Delivered %@" = "已投 %@";
+"Delivery failed: %@" = "投递失败:%@";
+"unknown reason" = "未知原因";
+"Not delivered" = "未投递";
+"Deliver to Claude Code" = "投递 Claude Code";
+"Deliver to ChatGPT" = "投递 ChatGPT";
+"Deliver to Kimi" = "投递 Kimi";
+"Copy to clipboard" = "复制到剪贴板";
+"Source" = "来源";
+"Window title" = "窗口标题";
+"Captured at" = "抓取时间";
+"Instruction" = "指令";
+"Provenance (where it came from)" = "Provenance(它从哪来)";
+"Capture channel" = "抓取通道";
+"Duration" = "耗时";
+"Source app version" = "源 App 版本";
+"none" = "无";
+"saved" = "已保存";
+"Truncated" = "截断";
+"yes (overlong body truncated; original in this database)" = "是(超长正文已截断,原文在本库)";
+"Selected text" = "选中文本";
+"Body (first 2000 chars)" = "正文(前 2000 字)";
+"Delivery history" = "投递记录";
+
+// MARK: Diagnostics & compatibility
+"Beamhop Diagnostics" = "Beamhop 诊断";
+"80% of \"it doesn't work\" is one of the items below — fix with one click." = "80% 的「它不工作」都是下面某项失效 —— 一键修。";
+"Granted" = "已授权";
+"Not granted — capture depends on it" = "未授权 —— 抓取功能依赖它";
+"Not granted (only screenshots need it — skippable)" = "未授权(仅截图功能需要,可跳过)";
+"Week 2 implementation (host binary + manifest install)" = "Week 2 实现(host 二进制 + manifest 写入)";
+"Registered (top-level mcpServers in ~/.claude.json)" = "已注册(~/.claude.json 顶层 mcpServers)";
+"Not registered — one-click registration ships with the Week 2 host" = "未注册 —— Week 2 出 host 后一键注册";
+"No `claude` CLI detected" = "未检测到 `claude` CLI";
+"Claude Code MCP registration" = "Claude Code MCP 注册";
+"Copy registration command" = "复制注册命令";
+"Claude Cowork integration" = "Claude Cowork 集成";
+"Phase 1.5 — mechanism confirmed (.mcpb / claude_desktop_config.json), end-to-end pending" = "Phase 1.5 —— 机制已确认(.mcpb / claude_desktop_config.json),待端到端验证";
+"ChatGPT Desktop not installed" = "未安装 ChatGPT Desktop";
+"%@ (in the compatibility matrix)" = "%@(在兼容矩阵内)";
+"%@ is outside the verified matrix (v%@) — re-test likely" = "%@ 不在已验证矩阵(v%@)—— 可能需复测";
+"Global hotkeys" = "全局快捷键";
+"Registered" = "已注册";
+"Conflicts: %@ (possibly taken by Spotlight etc.)" = "冲突:%@(可能被 Spotlight 等占用)";
+"Beamhop Compatibility" = "Beamhop 兼容性";
+"Measured on %@" = "实测于 %@";
+"Week 0 on-device measurements. Unverified targets automatically degrade to clipboard — never fail silently." = "Week 0 真机实测数据。未验证的目标会自动降级到剪贴板,不会静默失败。";
+"This Mac: %@" = "本机 %@";

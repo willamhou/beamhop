@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import BeamhopCore
 
 /// Clipboard-Safe Paste protocol (spec §12.3). Backs up the user's clipboard per-item/per-type
 /// as raw Data; if ANY type can't be serialized, it REFUSES to paste rather than risk losing
@@ -63,7 +64,23 @@ enum ClipboardService {
         if pressEnter { sendReturn() }
         usleep(30_000)
         if !restore(snapshots) {             // spec §12.3 step 5
-            Notifier.error("剪贴板可能未完整恢复", "建议检查你的剪贴板")
+            Notifier.error(L10n.s("Clipboard may not have been fully restored"), L10n.s("Please check your clipboard"))
+        }
+    }
+
+    /// Paste-injection variant for apps whose composer rejects AX set-value (Kimi Work, measured
+    /// 2026-10-18): same backup/write/⌘V/restore protocol, but never sends Return — the user
+    /// reviews the pasted content and sends manually.
+    static func safePasteOnly(_ text: String) throws {
+        guard let snapshots = backup() else { throw PasteError.clipboardUnprotectable }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        usleep(30_000)
+        sendCmdV()
+        usleep(80_000)
+        if !restore(snapshots) {
+            Notifier.error(L10n.s("Clipboard may not have been fully restored"), L10n.s("Please check your clipboard"))
         }
     }
 

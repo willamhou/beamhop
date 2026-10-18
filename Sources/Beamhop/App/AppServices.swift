@@ -25,6 +25,7 @@ final class AppServices {
     }
     private(set) lazy var inbox = InboxWindowController()
     private(set) lazy var compatibility = CompatibilityWindowController()
+    private(set) lazy var panel = CapturePanelController()   // Week 3 floating window
     private(set) lazy var firstRun = FirstRunWindowController(
         permissions: permissions,
         onOpenDiagnostics: { [weak self] in self?.diagnostics.show() })
@@ -65,13 +66,13 @@ final class AppServices {
 
     private func registerHotkeys() {
         let cmdShift = UInt32(cmdKey | shiftKey)
-        hotkeys.register(Hotkey(id: 1, keyCode: 49, modifiers: cmdShift, name: "⌘⇧Space 抓取") {
+        hotkeys.register(Hotkey(id: 1, keyCode: 49, modifiers: cmdShift, name: "⌘⇧Space Capture") {
             [weak self] in self?.doCapture()
         })
         hotkeys.register(Hotkey(id: 2, keyCode: 34, modifiers: cmdShift, name: "⌘⇧I Inbox") {
             [weak self] in self?.inbox.show()
         })
-        hotkeys.register(Hotkey(id: 3, keyCode: 9, modifiers: cmdShift, name: "⌘⇧V 应急投递") {
+        hotkeys.register(Hotkey(id: 3, keyCode: 9, modifiers: cmdShift, name: "⌘⇧V Emergency deliver") {
             [weak self] in self?.emergencyClipboardPaste()
         })
         if !hotkeys.failed.isEmpty {
@@ -95,34 +96,80 @@ final class AppServices {
         }
     }
 
-    /// Golden path (spec §5.2, Week 2 no-floating-window version): capture → insert → deliver to
-    /// default target (Claude Code) → clipboard fallback on failure → notify. Floating-window
-    /// picker is Week 3.
+    /// Golden path (Week 3, spec §9.1): ⌘⇧Space → floating panel (note + ⌘1/2/3/0 target pick +
+    /// Enter delivers, Esc keeps it in the Inbox). Session memory of the last successful target
+    /// (W3-3): in-memory only, restart resets to Claude Code — predictability over cleverness.
+    ///
+    /// Timing (spec §16): capture_ms and panel_ms are logged with FIXED field names — the Mac
+    /// acceptance P95 data is grepped straight from these lines (P95 ≤ 300ms budget on panel_ms).
     ///
     /// Runs OFF the main thread (code review P1-1): AX reads (0.8s timeouts each) + app
     /// activation waits + pgrep would otherwise stall the hotkey→result path; AX/NSWorkspace
-    /// calls are safe from a background thread.
+    /// calls are safe from a background thread. The panel show itself happens on the main thread.
+    private let signposter = OSSignposter(subsystem: "com.beamhop.app", category: "perf")
+    private var targetMemory = TargetMemory()   // BeamhopCore: 默认 Claude Code，仅成功投递更新
+
     private func doCapture() {
         guard capture != nil, delivery != nil else {
-            Notifier.error("数据库未就绪,无法抓取"); return
+            Notifier.error(L10n.s("Database not ready — cannot capture")); return
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self, let capture = self.capture, let delivery = self.delivery else { return }
-            switch capture.captureFrontmost() {
+            let state = self.signposter.beginInterval("capture")
+            let t0 = Date()
+            let outcome = capture.captureFrontmost()
+            let captureMs = Int(Date().timeIntervalSince(t0) * 1000)
+            self.signposter.endInterval("capture", state, "\(captureMs)ms")
+            switch outcome {
+            case .duplicate:
+                // W3-4: a <500ms same-window re-press is expected behavior — silent, log only.
+                self.log.info("duplicate capture ignored (<500ms, same window)")
             case .rejected(let reason):
-                Notifier.error("未抓取", reason)
+                Notifier.error(L10n.s("Capture failed"), reason)
             case .captured(let cap):
-                self.log.info("captured \(cap.id, privacy: .public) method=\(cap.captureMethod, privacy: .public)")
-                delivery.deliver(cap, to: .claudeCode)   // default target = Claude Code (§9.1)
+                self.log.info("captured \(cap.id, privacy: .public) method=\(cap.captureMethod, privacy: .public) capture_ms=\(captureMs)")
+                DispatchQueue.main.async {
+                    self.showPanel(cap, delivery: delivery)
+                }
             }
         }
+    }
+
+    private func showPanel(_ cap: Capture, delivery: DeliveryService) {
+        let state = signposter.beginInterval("panel_show")
+        let pt0 = Date()
+        panel.show(
+            capture: cap,
+            defaultTarget: targetMemory.last,
+            onConfirm: { [weak self] target, note in
+                guard let self else { return }
+                guard let target else {
+                    // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost.
+                    Notifier.info(L10n.s("Saved to Inbox"), cap.id)
+                    return
+                }
+                // Delivery off-main (AX activation sleeps); failure paths inside DeliveryService
+                // degrade to clipboard and notify — never silent.
+                DispatchQueue.global(qos: .userInitiated).async {
+                    delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { [weak self] chosen, ok in
+                        if ok { self?.targetMemory.markSucceeded(chosen) }
+                    }
+                }
+            },
+            onCancel: { [weak self] in
+                _ = self
+                Notifier.info(L10n.s("Saved to Inbox"), cap.id)   // Esc / focus loss — capture is safe
+            })
+        let panelMs = Int(Date().timeIntervalSince(pt0) * 1000)
+        signposter.endInterval("panel_show", state, "\(panelMs)ms")
+        log.info("panel_ms=\(panelMs)")
     }
     /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from
     /// anywhere — the universal fallback that never depends on AX or a running target.
     private func emergencyClipboardPaste() {
-        guard let store else { Notifier.error("数据库未就绪", "无法读取最新 Capture"); return }
+        guard let store else { Notifier.error(L10n.s("Database not ready"), L10n.s("Cannot read the latest capture")); return }
         guard let latest = (try? store.recent(limit: 1))?.first else {
-            Notifier.error("Inbox 为空", "先按 ⌘⇧Space 抓取一条")
+            Notifier.error(L10n.s("Inbox is empty"), L10n.s("Press ⌘⇧Space to capture something first"))
             return
         }
         delivery?.deliver(latest, to: .clipboard)

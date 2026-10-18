@@ -5,6 +5,7 @@ import BeamhopCore
 enum CaptureOutcome {
     case captured(Capture)
     case rejected(reason: String)   // user-facing; never silent (spec §7.7)
+    case duplicate                  // <500ms same window re-press: silent by design (spec §11 / W3-4)
 }
 
 /// Turns the frontmost app + AX reads into a Capture with full provenance (spec §6.5 / §12.1),
@@ -13,22 +14,32 @@ final class CaptureService {
     private let store: CaptureStore
     private let maxBodyChars = 100_000   // spec §11
 
+    /// W3-4 duplicate-press guard: last capture key + time; same (bundleID, windowTitle) within
+    /// 500ms means the user double-tapped the hotkey — the second press must not create a row.
+    private var duplicateGate = DuplicateGate()
+
     init(store: CaptureStore) { self.store = store }
 
     func captureFrontmost() -> CaptureOutcome {
         let t0 = Date()
 
         guard AXIsProcessTrusted() else {
-            return .rejected(reason: "未授予 Accessibility 权限 —— 无法抓取(去诊断面板开启)")
+            return .rejected(reason: L10n.s("Accessibility permission not granted — cannot capture (enable it in the Diagnostics window)"))
         }
         guard let front = AXHelper.frontmostApp() else {
-            return .rejected(reason: "无法识别前台 app")
+            return .rejected(reason: L10n.s("Cannot identify the frontmost app"))
         }
         if AppBlacklist.isBlocked(front.bundleID) {
-            return .rejected(reason: "\(front.name) 在黑名单(密码/银行类),已拒绝抓取")
+            return .rejected(reason: "\(front.name) is on the blacklist (passwords/banking) — capture refused")
         }
 
         var read = AXHelper.read(front: front)
+
+        // W3-4: same window re-pressed within 500ms → duplicate, decided BEFORE any expensive
+        // extension/insert work below (the AX read above already happened; that's the cheap part).
+        if duplicateGate.isDuplicate(bundleID: front.bundleID, title: read.windowTitle) {
+            return .duplicate
+        }
 
         // Week 2B: if the front app is a browser and the extension bridge is connected, ask it for
         // the active tab (more reliable url/selection + Readability body than AX for web content).
@@ -79,7 +90,7 @@ final class CaptureService {
             try store.insert(capture)
             return .captured(capture)
         } catch {
-            return .rejected(reason: "写入 Inbox 失败: \(error)")
+            return .rejected(reason: L10n.s("Failed to write to the Inbox: \(error)"))
         }
     }
 

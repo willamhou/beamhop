@@ -15,7 +15,7 @@ final class DiagnosticsWindowController {
                 contentRect: NSRect(x: 0, y: 0, width: 520, height: 380),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered, defer: false)
-            w.title = "Beamhop 诊断"
+            w.title = "Beamhop Diagnostics"
             w.isReleasedWhenClosed = false       // S5: hide, don't destroy
             w.center()
             window = w
@@ -32,7 +32,7 @@ struct DiagnosticsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Permission Diagnostics").font(.headline).padding([.top, .horizontal], 16)
-            Text("80% 的「它不工作」都是下面某项失效 —— 一键修。")
+            Text("80% of \"it doesn't work\" is one of the items below — fix with one click.")
                 .font(.caption).foregroundColor(.secondary).padding(.horizontal, 16).padding(.bottom, 8)
             Divider()
             ScrollView {

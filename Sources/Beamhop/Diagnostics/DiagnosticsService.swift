@@ -34,19 +34,19 @@ struct DiagnosticsService {
 
     private func accessibilityRow() -> DiagRow {
         let ok = permissions.accessibility() == .granted
-        return DiagRow(name: "Accessibility 权限",
+        return DiagRow(name: "Accessibility permission",
                        state: ok ? .ok : .fail,
-                       detail: ok ? "已授权" : "未授权 —— 抓取功能依赖它",
-                       fixTitle: ok ? nil : "打开系统设置",
+                       detail: ok ? "Granted" : "Not granted — capture depends on it",
+                       fixTitle: ok ? nil : "Open System Settings",
                        fix: ok ? nil : { permissions.openAccessibilitySettings() })
     }
 
     private func screenRecordingRow() -> DiagRow {
         let ok = permissions.preflightScreenRecording() == .granted
-        return DiagRow(name: "Screen Recording 权限",
+        return DiagRow(name: "Screen Recording permission",
                        state: ok ? .ok : .warn,
-                       detail: ok ? "已授权" : "未授权(仅截图功能需要,可跳过)",
-                       fixTitle: ok ? nil : "打开系统设置",
+                       detail: ok ? "Granted" : "Not granted (only screenshots need it — skippable)",
+                       fixTitle: ok ? nil : "Open System Settings",
                        fix: ok ? nil : { permissions.openScreenRecordingSettings() })
     }
 
@@ -54,7 +54,7 @@ struct DiagnosticsService {
         // Week 1 has no host binary yet → fixed 🚧 (do NOT infer ✅ from a stray manifest). codex.
         DiagRow(name: "Chrome native messaging host",
                 state: .todo,
-                detail: "Week 2 实现(host 二进制 + manifest 写入)",
+                detail: "Week 2 implementation (host binary + manifest install)",
                 fixTitle: nil, fix: nil)
     }
 
@@ -62,25 +62,25 @@ struct DiagnosticsService {
         let registered = mcpServerRegistered(name: "beamhop")
         let claudeOnPath = which("claude") != nil
         let state: DiagState = registered ? .ok : (claudeOnPath ? .warn : .fail)
-        let detail = registered ? "已注册(~/.claude.json 顶层 mcpServers)"
-            : (claudeOnPath ? "未注册 —— Week 2 出 host 后一键注册" : "未检测到 `claude` CLI")
-        return DiagRow(name: "Claude Code MCP 注册",
+        let detail = registered ? "Registered (top-level mcpServers in ~/.claude.json)"
+            : (claudeOnPath ? "Not registered — one-click registration ships with the Week 2 host" : "No `claude` CLI detected")
+        return DiagRow(name: "Claude Code MCP registration",
                        state: state,
                        detail: detail,
                        // Week 1: command preview only (host binary is Week 2). codex.
-                       fixTitle: registered ? nil : "复制注册命令",
+                       fixTitle: registered ? nil : "Copy registration command",
                        fix: registered ? nil : {
                            // Week 2: command preview incl. --db (real one-click register is a follow-up).
-                           let cmd = "claude mcp add beamhop -s user -- <BeamhopMCP 绝对路径> --db \(AppPaths.databaseURL.path)"
+                           let cmd = "claude mcp add beamhop -s user -- <absolute path to BeamhopMCP> --db \(AppPaths.databaseURL.path)"
                            NSPasteboard.general.clearContents()
                            NSPasteboard.general.setString(cmd, forType: .string)
                        })
     }
 
     private func coworkRow() -> DiagRow {
-        DiagRow(name: "Claude Cowork 集成",
+        DiagRow(name: "Claude Cowork integration",
                 state: .todo,
-                detail: "Phase 1.5 —— 机制已确认(.mcpb / claude_desktop_config.json),待端到端验证",
+                detail: "Phase 1.5 — mechanism confirmed (.mcpb / claude_desktop_config.json), end-to-end pending",
                 fixTitle: nil, fix: nil)
     }
 
@@ -88,25 +88,25 @@ struct DiagnosticsService {
         let appPath = "/Applications/ChatGPT.app"
         guard FileManager.default.fileExists(atPath: appPath) else {
             return DiagRow(name: "ChatGPT Desktop AX",
-                           state: .warn, detail: "未安装 ChatGPT Desktop",
+                           state: .warn, detail: "ChatGPT Desktop not installed",
                            fixTitle: nil, fix: nil)
         }
         let ver = (Bundle(path: appPath)?.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
         let known = ver == knownChatGPTVersion
         return DiagRow(name: "ChatGPT Desktop AX",
                        state: known ? .ok : .warn,
-                       detail: known ? "v\(ver)(在兼容矩阵内)"
-                                     : "v\(ver) 不在已验证矩阵(v\(knownChatGPTVersion))—— 可能需复测",
+                       detail: known ? "v\(ver) (in the compatibility matrix)"
+                                     : "v\(ver) is outside the verified matrix (v\(knownChatGPTVersion)) — re-test likely",
                        fixTitle: nil, fix: nil)
     }
 
     private func hotkeyRow() -> DiagRow {
         if hotkeyConflicts.isEmpty {
-            return DiagRow(name: "全局快捷键", state: .ok, detail: "已注册", fixTitle: nil, fix: nil)
+            return DiagRow(name: "Global hotkeys", state: .ok, detail: "Registered", fixTitle: nil, fix: nil)
         }
-        return DiagRow(name: "全局快捷键",
+        return DiagRow(name: "Global hotkeys",
                        state: .warn,
-                       detail: "冲突:\(hotkeyConflicts.joined(separator: ", "))(可能被 Spotlight 等占用)",
+                       detail: "Conflicts: \(hotkeyConflicts.joined(separator: ", ")) (possibly taken by Spotlight etc.)",
                        fixTitle: nil, fix: nil)   // 改键 UI: Week 1 Settings(后续)
     }
 

@@ -89,10 +89,10 @@ struct InboxView: View {
             Group {
                 if model.captures.isEmpty {
                     ContentUnavailableView {
-                        Label("Inbox 为空", systemImage: "tray")
+                        Label("Inbox is empty", systemImage: "tray")
                     } description: {
-                        Text(model.searchQuery.isEmpty ? "按 ⌘⇧Space 抓取当前 App。每次抓取都会先安全保存到本机。"
-                                                       : "没有匹配「\(model.searchQuery)」的结果。")
+                        Text(model.searchQuery.isEmpty ? "Press ⌘⇧Space to capture the frontmost app. Every capture is saved locally first."
+                                                       : "No results for \"\(model.searchQuery)\"")
                     }
                 } else {
                     List(model.captures, selection: $model.selectedID) { capture in
@@ -103,18 +103,18 @@ struct InboxView: View {
                 }
             }
             .navigationTitle("Inbox")
-            .searchable(text: $model.searchQuery, prompt: "搜索标题、正文、备注")
+            .searchable(text: $model.searchQuery, prompt: "Search title, body, notes")
             .onSubmit(of: .search) { model.runSearch() }
             .onChange(of: model.searchQuery) { _, q in
                 if q.isEmpty { model.reload() }
             }
             .toolbar {
                 ToolbarItemGroup {
-                    Button { model.reload() } label: { Label("刷新", systemImage: "arrow.clockwise") }
+                    Button { model.reload() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     Button {
                         if let c = model.selected { model.softDelete(c) }
                     } label: {
-                        Label("移到最近删除", systemImage: "trash")
+                        Label("Move to Recently Deleted", systemImage: "trash")
                     }
                     .disabled(model.selectedID == nil)
                     .keyboardShortcut(.delete, modifiers: .command)
@@ -125,7 +125,7 @@ struct InboxView: View {
             if let capture = model.selected {
                 CaptureDetail(model: model, capture: capture)
             } else {
-                ContentUnavailableView("选择一条 Capture", systemImage: "doc.text.magnifyingglass")
+                ContentUnavailableView("Select a capture", systemImage: "doc.text.magnifyingglass")
             }
         }
         .frame(minWidth: 820, minHeight: 520)
@@ -154,13 +154,13 @@ private struct CaptureRow: View {
 
             if let latest {
                 Label(latest.status == .success
-                      ? "已投 \(latest.target.rawValue)"
-                      : "投递失败:\(latest.errorMessage ?? "未知原因")",
+                      ? "Delivered \(latest.target.rawValue)"
+                      : "Delivery failed: \(latest.errorMessage ?? "unknown reason")",
                       systemImage: latest.status == .success ? "checkmark.circle" : "exclamationmark.circle")
                     .font(.caption)
                     .foregroundStyle(latest.status == .success ? Color.green : Color.orange)
             } else {
-                Text("未投递").font(.caption).foregroundStyle(.tertiary)
+                Text("Not delivered").font(.caption).foregroundStyle(.tertiary)
             }
         }
         .padding(.vertical, 2)
@@ -176,37 +176,38 @@ private struct CaptureDetail: View {
             VStack(alignment: .leading, spacing: 14) {
                 // actions first: re-deliver from Inbox (spec §9.2 right-rail)
                 HStack {
-                    Button("投递 Claude Code") { model.deliver(capture, to: .claudeCode) }
-                    Button("投递 ChatGPT") { model.deliver(capture, to: .chatgptDesktop) }
-                    Button("复制到剪贴板") { model.deliver(capture, to: .clipboard) }
+                    Button("Deliver to Claude Code") { model.deliver(capture, to: .claudeCode) }
+                    Button("Deliver to ChatGPT") { model.deliver(capture, to: .chatgptDesktop) }
+                    Button("Deliver to Kimi") { model.deliver(capture, to: .kimiWork) }
+                    Button("Copy to clipboard") { model.deliver(capture, to: .clipboard) }
                     Spacer()
                     Text(capture.id).font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
 
-                section("来源") {
+                section("Source") {
                     kv("App", "\(capture.appName) (\(capture.appBundleID))")
-                    kv("窗口标题", capture.windowTitle)
+                    kv("Window title", capture.windowTitle)
                     kv("URL", capture.url)
-                    kv("抓取时间", Date(timeIntervalSince1970: Double(capture.createdAt) / 1000)
+                    kv("Captured at", Date(timeIntervalSince1970: Double(capture.createdAt) / 1000)
                         .formatted(.dateTime))
-                    if let note = capture.userNote, !note.isEmpty { kv("备注", note) }
+                    if let note = capture.userNote, !note.isEmpty { kv("Instruction", note) }
                 }
 
-                section("Provenance(它从哪来)") {
-                    kv("抓取通道", capture.captureMethod)
-                    kv("耗时", capture.captureDurationMs.map { "\($0) ms" })
-                    kv("源 App 版本", capture.appVersion)
+                section("Provenance (where it came from)") {
+                    kv("Capture channel", capture.captureMethod)
+                    kv("Duration", capture.captureDurationMs.map { "\($0) ms" })
+                    kv("Source app version", capture.appVersion)
                     kv("macOS", capture.osVersion)
                     kv("Beamhop", capture.beamhopVersion)
-                    kv("AX 快照", capture.axTreeSnapshot == nil ? "无" : "已保存")
-                    if capture.truncated { kv("截断", "是(超长正文已截断,原文在本库)") }
+                    kv("AX snapshot", capture.axTreeSnapshot == nil ? "none" : "saved")
+                    if capture.truncated { kv("Truncated", "yes (overlong body truncated; original in this database)") }
                 }
 
                 if let sel = capture.selectedText, !sel.isEmpty {
-                    section("选中文本") { Text(sel).font(.callout).textSelection(.enabled) }
+                    section("Selected text") { Text(sel).font(.callout).textSelection(.enabled) }
                 }
                 if let body = capture.extractedBody, !body.isEmpty {
-                    section("正文(前 2000 字)") {
+                    section("Body (first 2000 chars)") {
                         Text(String(body.prefix(2000)))
                             .font(.callout.monospaced()).textSelection(.enabled)
                     }
@@ -214,7 +215,7 @@ private struct CaptureDetail: View {
 
                 let history = model.deliveries[capture.id] ?? []
                 if !history.isEmpty {
-                    section("投递记录") {
+                    section("Delivery history") {
                         ForEach(history) { d in
                             HStack(alignment: .top) {
                                 Image(systemName: d.status == .success

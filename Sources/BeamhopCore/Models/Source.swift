@@ -23,6 +23,7 @@ public enum DeliveryTarget: String, Codable, CaseIterable, Sendable {
     case cowork = "cowork"
     case chatgptDesktop = "chatgpt_desktop"
     case clipboard = "clipboard"
+    case kimiWork = "kimi_work"      // Week 3+: AX-locate + clipboard-paste into Kimi desktop
 }
 
 /// Outcome of a delivery attempt (spec §8.1 deliveries.status).

@@ -150,6 +150,129 @@ do {
         for _ in 0..<10_000 { seen.insert(ULID.captureID()) }
         check(seen.count == 10_000, "10k ULIDs unique")
     }
+    print("== Week 3: DuplicateGate (<500ms same window) ==")
+    do {
+        var gate = DuplicateGate()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        check(gate.isDuplicate(bundleID: "com.apple.Safari", title: "Doc", at: t0) == false, "first press never duplicate")
+        check(gate.isDuplicate(bundleID: "com.apple.Safari", title: "Doc", at: t0.addingTimeInterval(0.3)) == true, "<500ms same window → duplicate")
+        check(gate.isDuplicate(bundleID: "com.apple.Safari", title: "Other", at: t0.addingTimeInterval(0.4)) == false, "different title → not duplicate")
+        check(gate.isDuplicate(bundleID: "com.google.Chrome", title: "Other", at: t0.addingTimeInterval(0.45)) == false, "different bundle → not duplicate")
+        check(gate.isDuplicate(bundleID: "com.google.Chrome", title: "Other", at: t0.addingTimeInterval(0.9)) == true, "<500ms same window (new key) → duplicate")
+        check(gate.isDuplicate(bundleID: "com.google.Chrome", title: "Other", at: t0.addingTimeInterval(2.0)) == false, ">500ms → not duplicate")
+        gate.reset()
+        check(gate.isDuplicate(bundleID: "com.google.Chrome", title: "Other", at: t0.addingTimeInterval(2.1)) == false, "reset clears memory")
+        // nil title must equal nil title (window-less apps like menu-bar utilities)
+        var g2 = DuplicateGate()
+        check(g2.isDuplicate(bundleID: "app.a", title: nil, at: t0) == false, "nil-title first press ok")
+        check(g2.isDuplicate(bundleID: "app.a", title: nil, at: t0.addingTimeInterval(0.1)) == true, "nil-title repeat → duplicate")
+        check(g2.isDuplicate(bundleID: "app.a", title: "Now has title", at: t0.addingTimeInterval(0.2)) == false, "nil vs title → not duplicate")
+    }
+
+    print("== Week 3: PanelShortcut (⌘1-4 / ⌘0) ==")
+    do {
+        check(PanelShortcut.claudeCode.target == .claudeCode, "⌘1 → Claude Code")
+        check(PanelShortcut.chatgptDesktop.target == .chatgptDesktop, "⌘2 → ChatGPT")
+        check(PanelShortcut.cowork.target == .cowork, "⌘3 → Cowork")
+        check(PanelShortcut.kimiWork.target == .kimiWork, "⌘4 → Kimi Work")
+        check(PanelShortcut.inboxOnly.target == nil, "⌘0 → Inbox only (nil target)")
+        check(PanelShortcut.allCases.count == 5, "exactly 5 shortcuts")
+        check(Set(PanelShortcut.allCases.map(\.rawValue)) == Set(["0", "1", "2", "3", "4"]), "keys are 0-4, no drift")
+        check(PanelShortcut.kimiWork.badge == "⌘4", "badge ⌘4")
+        // 每个可投递 target 都有对应 shortcut（防新增 DeliveryTarget 后漏配键位）
+        let mapped = Set(PanelShortcut.allCases.compactMap(\.target))
+        for t in DeliveryTarget.allCases where t != .clipboard {
+            check(mapped.contains(t), "target \(t.rawValue) has a panel shortcut")
+        }
+    }
+
+    print("== Week 3: TargetMemory (记住上次投递目标) ==")
+    do {
+        var m = TargetMemory()
+        check(m.last == .claudeCode, "default is Claude Code")
+        m.markSucceeded(.kimiWork)
+        check(m.last == .kimiWork, "success updates memory")
+        m.markSucceeded(.chatgptDesktop)
+        check(m.last == .chatgptDesktop, "later success overwrites")
+        m.reset()
+        check(m.last == nil, "reset clears")
+        var m2 = TargetMemory(default: nil)
+        check(m2.last == nil, "nil default supported")
+        m2.markSucceeded(.cowork)
+        check(m2.last == .cowork, "nil-default memory still records")
+    }
+
+    print("== Week 3: PromptRenderer (note + truncation) ==")
+    do {
+        let cap = Capture(source: .ax, appBundleID: "com.apple.Safari", appName: "Safari",
+                          windowTitle: "PR #42", url: "https://github.com/a/b/pull/42",
+                          selectedText: "hello world", pid: 1, captureMethod: "ax")
+        let plain = PromptRenderer.fullMarkdown(cap, userNote: nil)
+        check(plain.contains("Source: Safari · https://github.com/a/b/pull/42"), "source+url line")
+        check(plain.contains("Title: PR #42"), "title line")
+        check(plain.contains("<selected>\nhello world\n</selected>"), "selected block")
+        check(!plain.contains("<body>"), "no empty body block")
+        let noted = PromptRenderer.fullMarkdown(cap, userNote: "总结一下")
+        check(noted.hasSuffix("\n总结一下\n"), "note appended at end")
+        check(PromptRenderer.fullMarkdown(cap, userNote: "") == plain, "empty note ≡ nil note")
+        // truncation: maxBody 10 cuts selected text and flags continuation
+        let long = PromptRenderer.fullMarkdown(cap, userNote: nil, maxBody: 5)
+        check(long.contains("hello\n…[truncated; full content in Beamhop Inbox]"), "truncation marker")
+        check(!long.contains("hello world</selected>"), "truncated body not full")
+        // claude trigger
+        let trig = PromptRenderer.claudeCodeTrigger(cap, userNote: nil)
+        check(trig == "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文", "trigger without note")
+        let trigNote = PromptRenderer.claudeCodeTrigger(cap, userNote: "重点看竞态")
+        check(trigNote == "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。重点看竞态", "trigger with note")
+    }
+
+    print("== Week 3: CapturePanelModel (presentation) ==")
+    do {
+        let cap = Capture(source: .ax, appBundleID: "com.moonshot.kimichat", appName: "Kimi",
+                          windowTitle: "Kimi Work", selectedText: String(repeating: "字", count: 25),
+                          pid: 1, captureMethod: "ax")
+        var confirmed: (DeliveryTarget?, String)?
+        var cancelled = false
+        let m = CapturePanelModel(capture: cap, initialTarget: .kimiWork,
+                                  onConfirm: { t, n in confirmed = (t, n) },
+                                  onCancel: { cancelled = true })
+        check(m.summaryLine == "Kimi · Kimi Work · 20 chars", "summaryLine rounds chars down to 10s")
+        check(m.previewText == String(repeating: "字", count: 25), "preview passes short text through")
+        check(m.confirmLabel == "Deliver (Kimi Work)", "confirm label shows selected target")
+        m.note = "总结一下这段"
+        m.confirm()
+        check(confirmed?.0 == .kimiWork && confirmed?.1 == "总结一下这段", "confirm carries target + note")
+        check(!cancelled, "confirm does not cancel")
+        // ⌘0: nil target confirm
+        let m0 = CapturePanelModel(capture: cap, initialTarget: nil,
+                                   onConfirm: { t, n in confirmed = (t, n) },
+                                   onCancel: { cancelled = true })
+        check(m0.confirmLabel == "Save to Inbox only", "nil target → Save to Inbox only")
+        m0.confirm()
+        check(confirmed?.0 == nil, "⌘0 confirm delivers nil target (Inbox only)")
+        m0.cancel()
+        check(cancelled, "cancel fires")
+        // 无内容 → 无预览
+        let empty = Capture(source: .ax, appBundleID: "a", appName: "A", pid: 1, captureMethod: "ax")
+        let mE = CapturePanelModel(capture: empty, initialTarget: .cowork,
+                                   onConfirm: { _, _ in }, onCancel: {})
+        check(mE.previewText == nil, "no body → no preview")
+        check(mE.summaryLine == "A", "summaryLine without title/chars")
+        check(mE.targetLabel(.cowork) == "Cowork → clipboard", "cowork label honest about clipboard")
+        check(mE.targetLabel(.clipboard) == "Clipboard", "clipboard label")
+    }
+
+    print("== Week 3: DeliveryTarget raw values ==")
+    do {
+        check(DeliveryTarget.kimiWork.rawValue == "kimi_work", "kimi_work raw value")
+        check(DeliveryTarget(rawValue: "kimi_work") == .kimiWork, "kimi_work decodes")
+        check(DeliveryTarget.allCases.count == 5, "5 delivery targets")
+        let encoder = JSONEncoder()
+        for t in DeliveryTarget.allCases {
+            let data = try encoder.encode(t)
+            check(String(data: data, encoding: .utf8) == "\"\(t.rawValue)\"", "\(t.rawValue) JSON round-trip shape")
+        }
+    }
 } catch {
     print("EXCEPTION: \(error)")
     failures += 1

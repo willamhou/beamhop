@@ -1,80 +1,80 @@
-# Beamhop 演进决策 Spec（Phase 1 收尾 → Phase 2 方向）
+# Beamhop Evolution Decisions Spec (end of Phase 1 → Phase 2 direction)
 
-> 日期：2026-09-14
-> 状态：V1 — 锁三个演进决策点的判断依据与触发条件；具体范围在各自开工时另立实施计划
-> 定位：MVP 设计稿 V2.1 的**战略层**补充。不改 Phase 1 范围。
-> 关键外部输入：Intuition-Lab/personal-model（2026-09 分析，~1.3k stars）对 Phase 2 赛道的影响。
+> Date: 2026-09-14
+> Status: V1 — locks the rationale and triggers for three evolution decision points; concrete scope gets its own implementation plan when each starts
+> Positioning: the **strategy-layer** companion to MVP design spec V2.1. Does not change Phase 1 scope.
+> Key external input: Intuition-Lab/personal-model (2026-09 analysis, ~1.3k stars) and its impact on the Phase 2 track.
 
 ## TL;DR
 
-三个决策点：① Apple ID/Xcode 在 Phase 1 收尾时解决（Phase 2 前置）；② Phase 2 memory 不做"天真版"，在"provenance-first 任务图谱"与"集成 personal-model"两条路里于 Phase 2 开工前选定；③ Phase 3 自家 agent 的引入时机由 Phase 1 dogfood 指标触发，不由直觉触发。
+Three decision points: ① Apple ID/Xcode gets resolved at the end of Phase 1 (prerequisite for Phase 2); ② Phase 2 memory must NOT be a "naive version" — choose between "provenance-first task graph" and "integrate personal-model" before Phase 2 starts; ③ the trigger for introducing the Phase 3 first-party agent is Phase 1 dogfood metrics, not intuition.
 
-## 1. 决策点一：Xcode / Apple ID 的解决时机
+## 1. Decision point one: when to resolve Xcode / Apple ID
 
-**现状**：Apple ID 遗失（PROGRESS §0），`swift build` + CLT + CI 已覆盖日常开发验证，Xcode 只在两处成为硬阻塞：
+**Current state**: Apple ID lost (PROGRESS §0); `swift build` + CLT + CI covers daily dev verification; Xcode blocks exactly two things:
 
-| 场景 | 何时到来 | 阻塞原因 |
+| Scenario | When it arrives | Blocker |
 |---|---|---|
-| 正式签名分发（他人可用） | Phase 1 对外发布 | Developer ID 签名 + 公证；ad-hoc 签名的 TCC 授权在别人机器上不可靠 |
-| iOS 端 / 跨设备（roadmap Phase 2） | Phase 2 中后段 | Xcode 工具链 + 真机调试 |
+| Formal signed distribution (usable by others) | Phase 1 public release | Developer ID signing + notarization; ad-hoc TCC grants are unreliable on other people's machines |
+| iOS / cross-device (roadmap Phase 2) | mid-to-late Phase 2 | Xcode toolchain + on-device debugging |
 
-**决策**：在 **Phase 1 收尾（Week 3 浮窗 + 真机验收）与 Phase 2 开工之间**解决。理由：
-- 拖进 Phase 2 会与 memory 工程量叠加，双线阻塞；
-- 免费 Apple ID 即可解锁 Xcode 安装（`appleid.apple.com` 建/找回 → `xcodes install --latest`），成本一小时以内；
-- 付费 Developer Program（$99/年）可再推迟到真要分发/上 iOS 时。
+**Decision**: resolve it **between the end of Phase 1 (Week 3 panel + on-device acceptance) and the start of Phase 2**. Rationale:
+- Dragging it into Phase 2 stacks it on top of memory engineering — two blockers at once;
+- A free Apple ID unlocks Xcode installation (`appleid.apple.com` create/recover → `xcodes install --latest`), cost under an hour;
+- Paid Developer Program ($99/year) can wait until actual distribution/iOS.
 
-**注意**：Xcode 就位后 `swift test`（XCTest）成为常规步骤；SwiftPM → Xcode app target 迁移按 PROGRESS §7A 执行。
+**Note**: once Xcode is in place, `swift test` (XCTest) becomes routine; migrate SwiftPM → Xcode app target per PROGRESS §7A.
 
-## 2. 决策点二：Phase 2 memory 的方向
+## 2. Decision point two: the direction of Phase 2 memory
 
-### 2.1 赛道现实（2026-09 评估结论）
+### 2.1 Track reality (2026-09 assessment)
 
-Intuition-Lab/personal-model 已开源并先发验证了"本地个人记忆 runtime"：
-- 持续 AX 捕获 + 本地 OCR + 五分钟归约 + 分层模型（Point→Line→Face→Volume→Root）
-- 工程深度在**证据门**：每个推断必须引用会话原文；新实体需两个独立 session 的回执才晋升 Point；同日重放不重复计票；append-only 可审计可时间旅行
-- 它的空白恰是我们的主场：**投递/路由层完全没做**（无浮窗、无 AX 粘贴触发、无 agent-agnostic 目标选择）
+Intuition-Lab/personal-model is open source and has first-mover-validated the "local personal memory runtime":
+- Continuous AX capture + local OCR + five-minute reduction + layered model (Point→Line→Face→Volume→Root)
+- Engineering depth is in the **evidence gate**: every inference must quote the original session text; new entities need receipts from two independent sessions to promote to Point; same-day replays don't double-vote; append-only, auditable, time-travelable
+- Its gap is exactly our home turf: **no delivery/routing layer at all** (no panel, no AX paste trigger, no agent-agnostic target selection)
 
-**推论**：Phase 2 若只做"Inbox + embedding 语义搜索"，是用弱化版撞人家主场，且毫无防御性。**明确不做天真版。**
+**Implication**: if Phase 2 ships just "Inbox + embedding semantic search", it rams a weakened version into their home turf with no defensibility. **Explicitly not doing the naive version.**
 
-### 2.2 两条候选路线
+### 2.2 Two candidate routes
 
-| | 路线 A：provenance-first 任务上下文图谱 | 路线 B：集成 personal-model 作为记忆后端 |
+| | Route A: provenance-first task context graph | Route B: integrate personal-model as the memory backend |
 |---|---|---|
-| 做什么 | Beamhop Capture 本就带完整溯源（app/窗口/通道/时间），把 Inbox 升级为"带证据链的任务记忆"：任务↔Capture↔投递去向的图谱，检索按"我当时在干什么"组织 | Beamhop 专注投递/路由，记忆层对接 personal-model（其支持本地导入引导，架构有口子），Inbox 作为它的捕获源之一 |
-| 定位连续性 | 与"投递工具"天然连续（记忆的单位是任务上下文，不是用户画像） | 承认记忆是独立赛道，交换生态位 |
-| 工程量 | 大（自建图谱 + 检索 + UI） | 中（适配层 + 联调） |
-| 风险 | 与 personal-model 的 Face/Volume 层功能重叠部分需要差异化叙事 | 依赖外部项目节奏；其证据门设计若变动需要跟随 |
-| 防御性 | provenance/inspectability 是平台主吃不掉的 wedge（spec §1.3 原判仍成立） | 我们变薄，护城河让渡 |
+| What | Beamhop captures already carry full provenance (app/window/channel/time) — upgrade the Inbox into "task memory with an evidence chain": a graph of task↔capture↔delivery-destination, retrieval organized by "what was I doing at the time" | Beamhop focuses on delivery/routing; the memory layer integrates personal-model (it supports local import bootstrapping and the architecture has seams); the Inbox becomes one of its capture sources |
+| Positioning continuity | Naturally continuous with the "delivery tool" identity (the unit of memory is task context, not user profiling) | Admits memory is a separate track; swaps niches |
+| Engineering cost | Large (self-built graph + retrieval + UI) | Medium (adapter layer + integration) |
+| Risk | Functional overlap with personal-model's Face/Volume layers needs a differentiated narrative | Depends on an external project's cadence; its evidence-gate design changes would drag us along |
+| Defensibility | Provenance/inspectability is a wedge platform players can't eat (spec §1.3 judgment still stands) | We go thin; the moat is ceded |
 
-### 2.3 决策程序（不现在拍板）
+### 2.3 Decision procedure (deliberately NOT decided now)
 
-Phase 2 开工前一周执行一次**一小时评估**（写回本节）：
-1. personal-model 六个月演化（是否做了投递/路由？证据门是否变严/变松？商业化动向？）
-2. 我们 Phase 1 dogfood 数据：Inbox 回访率、搜索命中率、"找不回当时的上下文"痛点频率
-3. 若 personal-model 未向投递扩张且集成口子稳定 → 倾向 **B 起步**（快、承认现实），图谱能力（A）作为 Phase 3 自家 agent 的地基再做
-4. 若 dogfood 中"按任务找回上下文"是最强信号 → 倾向 **A**，且必须达到其证据门水准（引用原文 + 独立双采样 + append-only 三件套是底线，不是加分项）
+One week before Phase 2 starts, run a **one-hour evaluation** (written back into this section):
+1. personal-model's six-month evolution (did it move into delivery/routing? did the evidence gate tighten/loosen? commercialization signals?)
+2. Our Phase 1 dogfood data: Inbox revisit rate, search hit rate, frequency of the "can't find that context again" pain
+3. If personal-model hasn't expanded into delivery and its integration seams are stable → lean **B to start** (fast, accepts reality); graph capability (A) becomes the foundation of the Phase 3 first-party agent
+4. If "recover context by task" is the strongest dogfood signal → lean **A**, and it must meet the evidence-gate bar (quote-the-original + independent double-sampling + append-only is the baseline, not a bonus)
 
-## 3. 决策点三：Phase 3 自家 agent 的引入时机
+## 3. Decision point three: when to introduce the Phase 3 first-party agent
 
-**原则**（沿用 spec §3 战略）：开放为引，封闭为质；过早失去信任，过晚失去窗口。
+**Principle** (carried from spec §3 strategy): openness as the hook, enclosure as the quality; too early loses trust, too late loses the window.
 
-**决策**：时机由 **Phase 1 dogfood 指标**（MVP spec §16）触发，不由日历或直觉触发：
+**Decision**: timing is triggered by **Phase 1 dogfood metrics** (MVP spec §16), not by calendar or intuition:
 
-| 指标（MVP 上线后 2 周窗口） | 阈值 | 未达标动作 |
+| Metric (2-week window after MVP ships) | Threshold | Action if unmet |
 |---|---|---|
-| 发起者本人 ⌘⇧Space 频次 | ≥ 10 次/天 | 修 UX，不谈 Phase 3 |
-| 金线投递成功率（Claude Code + 剪贴板兜底） | ≥ 95% | 修可靠性 |
-| Inbox 累计 / 回访 | ≥ 200 条，≥ 3 次/周 | 修 Inbox 价值（这是 memory 需求的前置信号） |
-| 失败投递 100% 有可读原因 | 100% | 修 failure recovery |
+| Author's own ⌘⇧Space frequency | ≥ 10/day | fix UX; no Phase 3 talk |
+| Golden-path delivery success (Claude Code + clipboard fallback) | ≥ 95% | fix reliability |
+| Inbox total / revisits | ≥ 200 captures, ≥ 3 visits/week | fix Inbox value (the leading signal for memory demand) |
+| Failed deliveries 100% have a readable reason | 100% | fix failure recovery |
 
-全部达标 → 进入 Phase 2（memory 决策按 §2.3 执行）；Phase 2 中若"在 Beamhop 内直接处理"的自然份额出现（用户主动要求、外部投递占比下降），才立项 Phase 3。
+All met → enter Phase 2 (memory decision per §2.3); if a natural "handle it directly inside Beamhop" share emerges mid-Phase-2 (users asking for it, external delivery share dropping), only then charter Phase 3.
 
-## 4. 与既有文档的关系
+## 4. Relationship to existing documents
 
-- MVP 范围/金线：以 spec V2.1 为准，本文不改
-- 阶段时间窗：roadmap.md 为准；本文给 §2.3/§3 的触发条件补充判断依据
-- 本文档维护节奏：Phase 2 开工评估（§2.3）与 Phase 1 dogfood 数据回填（§3）时更新，更新即升版本号
+- MVP scope / golden path: spec V2.1 is authoritative; this document changes nothing
+- Phase windows: roadmap.md is authoritative; this document adds decision rationale to §2.3/§3 triggers
+- Maintenance cadence: update on the Phase 2 kickoff evaluation (§2.3) and Phase 1 dogfood data backfill (§3); every update bumps the version
 
 ---
 
-**文档结束。近期动作：完成 Week 3 浮窗 + 真机验收 → 解决 Apple ID → 执行 §2.3 评估 → Phase 2 立项。**
+**End of document. Near-term actions: finish Week 3 panel + on-device acceptance → resolve Apple ID → run the §2.3 evaluation → charter Phase 2.**

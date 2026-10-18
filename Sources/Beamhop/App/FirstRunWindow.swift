@@ -20,7 +20,7 @@ final class FirstRunWindowController {
                 contentRect: NSRect(x: 0, y: 0, width: 480, height: 420),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered, defer: false)
-            w.title = "欢迎使用 Beamhop"
+            w.title = "Welcome to Beamhop"
             w.isReleasedWhenClosed = false
             w.center()
             window = w
@@ -44,29 +44,29 @@ struct FirstRunView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Beamhop").font(.system(size: 34, weight: .bold, design: .rounded))
-                Text("按 ⌘⇧Space 抓取当前 App 的上下文,先安全保存到本地 Inbox,再由你决定投给哪个 agent。")
+                Text("Press ⌘⇧Space to capture the frontmost app's context. It is saved to the local Inbox first — you decide which agent gets it.")
                     .font(.title3).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.bottom, 22)
 
             VStack(spacing: 0) {
                 FirstRunRow(
-                    index: "1", title: "辅助功能(Accessibility)",
-                    detail: "必需:读取前台 App 的标题与选中文本,并执行 clipboard-safe 粘贴。",
+                    index: "1", title: "Accessibility permission",
+                    detail: "Required: reads the frontmost app's title and selection, and performs clipboard-safe paste.",
                     ready: axGranted,
-                    actionTitle: axGranted ? "已开启" : "打开系统设置",
+                    actionTitle: axGranted ? "Enabled" : "Open System Settings",
                     action: onOpenAX)
                 Divider().padding(.horizontal, 12)
                 FirstRunRow(
-                    index: "2", title: "浏览器扩展与 Agent 注册",
-                    detail: "可选,可稍后在诊断面板完成。仅用 AX + 本地 Inbox + 剪贴板兜底即可开始。",
-                    ready: false, actionTitle: "查看诊断", action: onOpenDiagnostics)
+                    index: "2", title: "Browser extension & agent registration",
+                    detail: "Optional — finish later from the Diagnostics window. AX + local Inbox + clipboard fallback is enough to start.",
+                    ready: false, actionTitle: "Open Diagnostics", action: onOpenDiagnostics)
             }
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.25)))
             .padding(.bottom, 22)
 
             Spacer()
-            Text("开启辅助功能后,按 ⌘⇧Space 试试抓取第一条 Capture。")
+            Text("Once Accessibility is enabled, press ⌘⇧Space to capture your first item.")
                 .font(.caption).foregroundStyle(.secondary).padding(.bottom, 10)
         }
         .padding(24)
@@ -93,7 +93,7 @@ private struct FirstRunRow: View {
                 Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            Button(actionTitle, action: action).disabled(ready && actionTitle == "已开启")
+            Button(actionTitle, action: action).disabled(ready && actionTitle == "Enabled")
         }
         .padding(12)
     }

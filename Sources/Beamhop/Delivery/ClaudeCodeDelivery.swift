@@ -17,11 +17,11 @@ enum ClaudeCodeDelivery {
 
     /// Returns nil on success, or a user-facing failure reason (caller falls back to clipboard).
     static func deliver(_ capture: Capture, userNote: String?) -> String? {
-        guard mcpRegistered() else { return "Claude Code 的 Beamhop MCP 未注册(去诊断面板一键注册)" }
-        guard let target = TerminalLocator.locate() else { return "未找到运行中的终端(Terminal/iTerm/…)" }
+        guard mcpRegistered() else { return L10n.s("Beamhop MCP is not registered with Claude Code (register it from the Diagnostics window)") }
+        guard let target = TerminalLocator.locate() else { return L10n.s("No running terminal found (Terminal/iTerm/…)") }
 
         guard AppActivator.focus(target.app, bundleID: target.bundleID) else {
-            return "无法把终端切到前台"
+            return L10n.s("Could not bring the terminal to the front")
         }
 
         let trigger = PromptRenderer.claudeCodeTrigger(capture, userNote: userNote)
@@ -32,10 +32,10 @@ enum ClaudeCodeDelivery {
         do {
             try ClipboardService.safePaste(trigger, pressEnter: autoEnter)
         } catch {
-            return "剪贴板无法保护,已放弃自动粘贴(请手动粘贴)"
+            return L10n.s("Clipboard could not be protected — automatic paste aborted (paste manually)")
         }
         if !autoEnter {
-            Notifier.info("已粘贴触发 prompt 到终端", "请确认是目标终端窗口后按回车发送")
+            Notifier.info(L10n.s("Trigger prompt pasted to the terminal"), L10n.s("Confirm it is the right terminal window, then press Enter to send"))
         }
         return nil
     }

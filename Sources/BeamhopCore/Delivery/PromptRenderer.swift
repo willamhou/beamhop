@@ -1,19 +1,18 @@
 import Foundation
-import BeamhopCore
 
 /// Renders the text injected into a target (spec §7.6). Two flavors:
 ///  - trigger: a short prompt telling an MCP-aware agent to pull the capture itself (§7.3 — saves
 ///    tokens; we DON'T paste the body).
 ///  - full: the whole capture as markdown, for clipboard handoff where there's no MCP channel.
-enum PromptRenderer {
+public enum PromptRenderer {
     /// Claude Code trigger: agent calls fetch_capture itself via the Beamhop MCP server.
-    static func claudeCodeTrigger(_ capture: Capture, userNote: String?) -> String {
+    public static func claudeCodeTrigger(_ capture: Capture, userNote: String?) -> String {
         let note = (userNote?.isEmpty == false) ? "。\(userNote!)" : ""
         return "用 Beamhop MCP 的 fetch_capture('\(capture.id)') 拿我刚抓的上下文\(note)"
     }
 
     /// Full markdown for clipboard handoff (no MCP). Body truncated for paste; DB keeps full.
-    static func fullMarkdown(_ capture: Capture, userNote: String?, maxBody: Int = 100_000) -> String {
+    public static func fullMarkdown(_ capture: Capture, userNote: String?, maxBody: Int = 100_000) -> String {
         var out = ""
         out += "Source: \(capture.appName)"
         if let url = capture.url { out += " · \(url)" }
@@ -29,7 +28,7 @@ enum PromptRenderer {
         return out
     }
 
-    private static func truncate(_ s: String, _ max: Int) -> String {
+    static func truncate(_ s: String, _ max: Int) -> String {
         s.count <= max ? s : String(s.prefix(max)) + "\n…[truncated; full content in Beamhop Inbox]"
     }
 }
