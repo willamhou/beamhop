@@ -339,6 +339,37 @@ do {
         check(table.contains("≥ 95%"), "gate table lists delivery threshold")
     }
 
+    print("== Phase 1.5: migration v5 reconcile (simulated plan-A-branch DB) ==")
+    do {
+        // Simulate the collaborator machine's real inbox.sqlite: built from the
+        // feat/mcp-writeback-dedup branch, where "v3" meant the results table — grdb_migrations
+        // has v1/v2/v3 recorded, `results` exists, but `events` and deliveries.duration_ms
+        // were never created.
+        let (db, url) = try freshDB()
+        try db.queue.write { d in
+            try d.execute(sql: "DELETE FROM grdb_migrations WHERE identifier IN ('v4', 'v5')")
+            try d.execute(sql: "DROP TABLE events")
+            // best effort: old SQLite can't drop columns — v5's addColumnIfMissing then no-ops
+            try? d.execute(sql: "ALTER TABLE deliveries DROP COLUMN duration_ms")
+        }
+
+        // Reopen with the merged migrator: v3 skipped BY NAME, v4 no-ops (IF NOT EXISTS),
+        // v5 recreates the dogfood schema. Must not throw.
+        let db2 = try Database(path: url)
+        check(true, "plan-A-branch DB reopens without migration error")
+        let events2 = EventStore(db2)
+        events2.record(name: EventStore.Name.captureCompleted, date: Date())
+        check(try events2.count() == 1, "events table recreated by v5 and writable")
+        let store2 = CaptureStore(db2)
+        let cap2 = sample()
+        try store2.insert(cap2)
+        try store2.recordDelivery(Delivery(captureID: cap2.id, target: .claudeCode, status: .success, durationMs: 55))
+        check(try store2.deliveries(captureID: cap2.id).first?.durationMs == 55,
+              "deliveries.duration_ms present after reconcile")
+        _ = try DogfoodReport.generate(db: db2, days: 7)   // must not throw on reconciled schema
+        check(true, "dogfood report runs on reconciled DB")
+    }
+
     print("== Week 3: DeliveryTarget raw values ==")
     do {
         check(DeliveryTarget.kimiWork.rawValue == "kimi_work", "kimi_work raw value")

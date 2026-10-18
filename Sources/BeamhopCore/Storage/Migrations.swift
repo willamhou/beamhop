@@ -132,9 +132,11 @@ enum Migrations {
         // evolution-decisions §3 gate metrics (press frequency, panel latency, Inbox
         // engagement), plus per-delivery durations for the ≤5s hotkey→agent budget. Events
         // carry no FK on purpose — metric rows outlive purged captures.
+        // Idempotent DDL: on DBs that ran the feat/mcp-writeback-dedup build, the name "v3"
+        // was recorded for the results table instead (see v5 reconcile).
         m.registerMigration("v3") { db in
             try db.execute(sql: """
-                CREATE TABLE events (
+                CREATE TABLE IF NOT EXISTS events (
                     id         TEXT PRIMARY KEY,
                     ts         INTEGER NOT NULL,
                     name       TEXT NOT NULL,
@@ -142,9 +144,10 @@ enum Migrations {
                     capture_id TEXT
                 );
                 """)
-            try db.execute(sql: "CREATE INDEX idx_events_ts ON events(ts);")
-            try db.execute(sql: "CREATE INDEX idx_events_name ON events(name);")
-            try db.execute(sql: "ALTER TABLE deliveries ADD COLUMN duration_ms INTEGER;")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_events_name ON events(name);")
+            try SelfMigration.addColumnIfMissing(db, table: "deliveries", column: "duration_ms",
+                                                 ddl: "ALTER TABLE deliveries ADD COLUMN duration_ms INTEGER;")
         }
 
         // v4 (2026-10-18 memory-mcp-decision spec §2.2): agent write-back — the return leg of
@@ -153,10 +156,11 @@ enum Migrations {
         // of a capture never orphans results.
         // NOTE: born as "v3" on feat/mcp-writeback-dedup; renumbered to v4 when merging onto
         // main — v3 (events) had already shipped, and GRDB skips a migration whose name is
-        // already recorded in grdb_migrations.
+        // already recorded in grdb_migrations. IF NOT EXISTS keeps it a no-op on DBs that
+        // already created results under the old "v3" name.
         m.registerMigration("v4") { db in
             try db.execute(sql: """
-                CREATE TABLE results (
+                CREATE TABLE IF NOT EXISTS results (
                     id                TEXT PRIMARY KEY,
                     origin_capture_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,
                     agent             TEXT NOT NULL,
@@ -165,8 +169,39 @@ enum Migrations {
                     created_at        INTEGER NOT NULL
                 );
                 """)
-            try db.execute(sql: "CREATE INDEX idx_results_origin ON results(origin_capture_id);")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_results_origin ON results(origin_capture_id);")
+        }
+
+        // v5 (dogfood reconcile, 2026-10-18 merge): on any DB that ran the plan-A branch build,
+        // "v3" was recorded for the results table — so the events migration above was skipped
+        // by name and this DB has neither `events` nor `deliveries.duration_ms`. Recreate both
+        // here (idempotent); fresh DBs are untouched because v3 already made it so.
+        m.registerMigration("v5") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS events (
+                    id         TEXT PRIMARY KEY,
+                    ts         INTEGER NOT NULL,
+                    name       TEXT NOT NULL,
+                    detail     TEXT,
+                    capture_id TEXT
+                );
+                """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_events_name ON events(name);")
+            try SelfMigration.addColumnIfMissing(db, table: "deliveries", column: "duration_ms",
+                                                 ddl: "ALTER TABLE deliveries ADD COLUMN duration_ms INTEGER;")
         }
         return m
+    }
+}
+
+/// Small migration helpers.
+enum SelfMigration {
+    /// SQLite's ALTER TABLE ADD COLUMN has no IF NOT EXISTS — check pragma_table_info first.
+    static func addColumnIfMissing(_ db: GRDB.Database, table: String, column: String, ddl: String) throws {
+        let names = try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info('\(table)')")
+        if !names.contains(column) {
+            try db.execute(sql: ddl)
+        }
     }
 }

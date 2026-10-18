@@ -81,4 +81,27 @@ final class DogfoodMetricsTests: XCTestCase {
         let d = try store.deliveries(captureID: cap.id).first
         XCTAssertEqual(d?.durationMs, 1234)
     }
+
+    /// Mirrors the SelfTest reconcile scenario: a DB from the plan-A branch recorded "v3" for
+    /// the results table, so the events migration (v3) is skipped by name — v4 must no-op and
+    /// v5 must recreate the dogfood schema.
+    func testV5ReconcileSimulatedPlanADB() throws {
+        let db = try Database(path: dbURL)
+        try db.queue.write { d in
+            try d.execute(sql: "DELETE FROM grdb_migrations WHERE identifier IN ('v4', 'v5')")
+            try d.execute(sql: "DROP TABLE events")
+            try? d.execute(sql: "ALTER TABLE deliveries DROP COLUMN duration_ms")
+        }
+        let db2 = try Database(path: dbURL)   // must not throw
+        let events = EventStore(db2)
+        events.record(name: EventStore.Name.captureCompleted, date: Date())
+        XCTAssertEqual(try events.count(), 1)
+        let store = CaptureStore(db2)
+        let cap = Capture(id: ULID.captureID(), source: .ax, appBundleID: "a.b", appName: "A",
+                          windowTitle: nil, selectedText: "s", pid: 1, captureMethod: "ax")
+        try store.insert(cap)
+        try store.recordDelivery(Delivery(captureID: cap.id, target: .claudeCode, status: .success, durationMs: 55))
+        XCTAssertEqual(try store.deliveries(captureID: cap.id).first?.durationMs, 55)
+        _ = try DogfoodReport.generate(db: db2, days: 7)
+    }
 }
