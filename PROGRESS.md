@@ -27,7 +27,7 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 | Review hardening P1/P2 | ✅ merged | PR #2 (off-main capture, FK v2 migration, BFS fix) |
 | CI/CD | ✅ in place | 3 required checks, main artifact, `v*` releases, branch protection |
 | **Week 3 floating panel** | ✅ **done + verified** | user-verified on-device 2026-10-18 (panel, dedup, Kimi, ChatGPT v26) |
-| **MCP write-back (plan A)** | ✅ implemented | `save_result`/`fetch_results`/`search_captures` + `results` table (v3 migration, FK cascade); decision record `docs/superpowers/specs/2026-10-18-memory-mcp-decision.md`; SelfTest + mcp-smoke green; on-device e2e pending |
+| **MCP write-back (plan A)** | ✅ implemented | `save_result`/`fetch_results`/`search_captures` + `results` table (v3 migration, FK cascade); decision record `docs/superpowers/specs/2026-10-18-memory-mcp-decision.md`; SelfTest + mcp-smoke green; protocol e2e on the real Inbox green 2026-10-18 (fetch → deduped search → kimi save_result → fetch_results read-back); Claude Desktop agent-loop test pending app restart |
 | **MCP search dedup** | ✅ implemented + verified on real Inbox | `search_captures` collapses re-captures by `contentIdentity` (app+title+url+text, exact); each hit = newest of group + `duplicate_count`/`first_seen_at`/`last_seen_at`; `include_duplicates=true` for raw list. Real Inbox: "beamhop" 10 raw hits → 4 groups |
 | `swift test` (XCTest) | ⬜ blocked | needs Xcode license accepted |
 | Xcode project + signed build | ⬜ blocked | same as above |
@@ -129,7 +129,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 ## 6. Pitfalls & decisions (do NOT re-learn these)
 
 From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all encoded in code:
-- **MCP stdio = newline-delimited JSON + non-blocking POSIX reads** (`FileHandle.read(upToCount:)` times out at 30s). Register with `claude mcp add <name> -s user -- <abs-bin>` (no `--command`, `-s user` is mandatory, path must be stable — not `.build`).
+- **MCP stdio = newline-delimited JSON + non-blocking POSIX reads** (`FileHandle.read(upToCount:)` times out at 30s). Register with `claude mcp add <name> -s user -- <abs-bin>` (no `--command`, `-s user` is mandatory). Installed release binary lives at `~/Library/Application Support/beamhop/bin/BeamhopMCP` (stable path — NEVER point config at `.build/`); Claude Desktop config: `~/Library/Application Support/Claude/claude_desktop_config.json`, takes effect on app restart. Reinstall after each release build: `swift build -c release && cp "$(swift build -c release --show-bin-path)/BeamhopMCP" ~/Library/Application\ Support/beamhop/bin/`.
 - **Native messaging: host→extension ~1MB hard cap**; browser→host→app is allowed up to 4GB, so capture itself needs no chunking. app→extension >1MB chunking is a defensive TODO.
 - **Custom `--user-data-dir`: native host manifest must also go into `<profile>/NativeMessagingHosts/`**. Chrome 137+ blocks `--load-extension` → automate via CDP pipe + `Extensions.loadUnpacked`.
 - **WAL must be set with `writeOutsideTransaction`** (errors inside a transaction); WAL data lives in `-wal` — corruption simulation must delete `-wal/-shm` too. MCP uses `Database.openReadOnly` (no migration/recovery/creation).
