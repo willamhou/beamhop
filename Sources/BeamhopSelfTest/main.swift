@@ -237,12 +237,18 @@ do {
         let long = PromptRenderer.fullMarkdown(cap, userNote: nil, maxBody: 5)
         check(long.contains("hello\n…[truncated; full content in Beamhop Inbox]"), "truncation marker")
         check(!long.contains("hello world</selected>"), "truncated body not full")
-        // claude trigger (Chinese base — language change deferred: collides with the in-flight
-        // plan-A write-back trigger on feat/mcp-writeback-dedup; decide after that lands)
+        // claude trigger: fetch + save_result write-back convention (方案A 数据链路)
         let trig = PromptRenderer.claudeCodeTrigger(cap, userNote: nil)
-        check(trig == "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文", "trigger without note")
+        check(trig.hasPrefix("用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文"), "fetch prefix without note")
+        check(trig.contains("save_result(origin_capture_id='\(cap.id)', content=你的结论, agent='claude_code')"),
+              "write-back convention with origin + agent")
         let trigNote = PromptRenderer.claudeCodeTrigger(cap, userNote: "重点看竞态")
-        check(trigNote == "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。重点看竞态", "trigger with note")
+        check(trigNote.hasPrefix("用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。重点看竞态"),
+              "note sits between fetch and write-back")
+        check(trigNote.contains("save_result"), "note variant still carries write-back")
+        // generic agent variant
+        let trigCodex = PromptRenderer.mcpTrigger(cap, userNote: nil, agent: "codex")
+        check(trigCodex.contains("agent='codex'"), "generic trigger parameterizes agent")
     }
 
     print("== Week 3: CapturePanelModel (presentation) ==")
@@ -342,6 +348,118 @@ do {
         for t in DeliveryTarget.allCases {
             let data = try encoder.encode(t)
             check(String(data: data, encoding: .utf8) == "\"\(t.rawValue)\"", "\(t.rawValue) JSON round-trip shape")
+        }
+    }
+
+    print("== MCP dedup: contentIdentity ==")
+    do {
+        let a = sample()
+        let b = sample()   // identical content, different id/time
+        check(a.contentIdentity == b.contentIdentity, "identical re-capture → same identity")
+        var c = sample(); c.selectedText = "different text"
+        check(a.contentIdentity != c.contentIdentity, "different text → different identity")
+        var d = sample(); d.appBundleID = "com.google.Chrome"
+        check(a.contentIdentity != d.contentIdentity, "different app → different identity")
+        var e = sample(); e.url = nil
+        check(a.contentIdentity != e.contentIdentity, "missing url → different identity")
+    }
+
+    print("== MCP dedup: searchDeduplicated collapses re-captures ==")
+    do {
+        let (store, url) = try freshStore()
+        let base = Int64(Date().timeIntervalSince1970 * 1000)
+        // 3 byte-identical re-captures of the same GitHub page (minutes apart — beyond the
+        // <500ms DuplicateGate) + 1 distinct capture that also matches the query.
+        for i in 0..<3 {
+            var c = sample(id: "cap_dup\(i)", appName: "Google Chrome",
+                           windowTitle: "AuSmith-hub/beamhop",
+                           selectedText: "cross-app context hub for agents")
+            c.appBundleID = "com.google.Chrome"
+            c.url = "https://github.com/AuSmith-hub/beamhop"
+            c.createdAt = base + Int64(i) * 60_000
+            try store.insert(c)
+        }
+        var other = sample(selectedText: "cross-app delivery notes")
+        other.createdAt = base + 4 * 60_000
+        try store.insert(other)
+
+        let reader = try CaptureReader.open(path: url)
+        check(try reader.search("cross-app", limit: 20).count == 4, "raw search returns all 4 hits")
+        let hits = try reader.searchDeduplicated("cross-app", limit: 10)
+        check(hits.count == 2, "deduped search returns 2 groups")
+        let dupGroup = hits.first { $0.duplicateCount == 3 }
+        check(dupGroup != nil, "group of 3 re-captures reported")
+        check(dupGroup?.capture.id == "cap_dup2", "representative is the newest of its group")
+        check(dupGroup?.firstSeenAt == base, "first_seen_at = oldest capture")
+        check(dupGroup?.lastSeenAt == base + 2 * 60_000, "last_seen_at = newest capture")
+        let solo = hits.first { $0.duplicateCount == 1 }
+        check(solo?.capture.id == other.id, "distinct capture is its own group")
+        // soft-deleted twins must not inflate the count
+        try store.softDelete(id: "cap_dup0")
+        let hits2 = try CaptureReader.open(path: url).searchDeduplicated("cross-app", limit: 10)
+        check(hits2.first { $0.capture.id == "cap_dup2" }?.duplicateCount == 2,
+              "soft-deleted twin excluded from duplicate_count")
+    }
+
+    print("== 方案A: result write-back round-trip ==")
+    do {
+        let (store, _) = try freshStore()
+        let c = sample()
+        try store.insert(c)
+        try store.insertResult(CaptureResult(originCaptureID: c.id, agent: "codex",
+                                             sessionID: "sess-1", content: "结论:竞态根因是锁顺序"))
+        let rs = try store.results(captureID: c.id)
+        check(rs.count == 1, "one result for origin")
+        check(rs.first?.agent == "codex", "agent round-trips")
+        check(rs.first?.sessionID == "sess-1", "session_id round-trips")
+        check(rs.first?.content == "结论:竞态根因是锁顺序", "content round-trips (CJK verbatim)")
+        check(rs.first?.id.hasPrefix("res_") == true, "res_ id prefix")
+        check(try store.recentResults().count == 1, "recentResults sees it")
+        // 多 agent 共享：同一 origin 可以有多个写回（显式错开 1ms，避免同毫秒并列）
+        try store.insertResult(CaptureResult(originCaptureID: c.id, agent: "claude_code",
+                                             content: "补充:最小复现是两条并发 enqueue",
+                                             createdAt: Int64(Date().timeIntervalSince1970 * 1000) + 1))
+        check(try store.results(captureID: c.id).count == 2, "two agents can write back to one origin")
+        check(try store.recentResults(limit: 1).first?.agent == "claude_code", "newest first")
+    }
+
+    print("== 方案A: result FK rejects unknown origin + cascades on purge ==")
+    do {
+        let (store, _) = try freshStore()
+        var rejected = false
+        do {
+            try store.insertResult(CaptureResult(originCaptureID: "cap_doesnotexist",
+                                                 agent: "codex", content: "orphan"))
+        } catch { rejected = true }
+        check(rejected, "unknown origin rejected (FK)")
+        var old = sample()
+        old.deletedAt = Int64(Date().addingTimeInterval(-40 * 86400).timeIntervalSince1970 * 1000)
+        try store.insert(old)
+        try store.insertResult(CaptureResult(originCaptureID: old.id, agent: "codex", content: "stale"))
+        _ = try store.purgeExpired(retentionDays: 30)
+        check(try store.results(captureID: old.id).isEmpty, "physical purge cascades results (no orphans)")
+    }
+
+    print("== 方案A: ResultStore.open guards (MCP 进程视角) ==")
+    do {
+        let (_, url) = try freshStore()
+        check((try? ResultStore.open(path: url)) != nil, "opens on v3-migrated DB")
+        // 模拟 v3 之前的旧库:drop results 表
+        let db2 = try Database(path: url)
+        try db2.queue.write { try $0.execute(sql: "DROP TABLE results") }
+        do {
+            _ = try ResultStore.open(path: url)
+            check(false, "should throw schemaOutdated")
+        } catch DatabaseError.schemaOutdated {
+            check(true, "schemaOutdated when results table missing")
+        }
+        let missing = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("beamhop-nope-\(UUID().uuidString).sqlite")
+        do {
+            _ = try ResultStore.open(path: missing)
+            check(false, "should throw fileNotFound")
+        } catch DatabaseError.fileNotFound {
+            check(true, "fileNotFound when DB absent")
         }
     }
 } catch {

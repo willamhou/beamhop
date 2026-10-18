@@ -9,9 +9,9 @@
 
 ## 0. Status in one paragraph
 
-Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 102 SelfTest checks. **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); migrating to a real Xcode project is gated on installing Xcode (this machine has CLT only) and accepting the license (`sudo xcodebuild -license accept`) so `swift test`/XCTest can run.
+Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 130 SelfTest checks. **MCP write-back (plan A) + search dedup merged 2026-10-18** (stage table below). **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); `swift test`/XCTest work on machines with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`, CI runs them on macos-15); the original dev Mac still has CLT only.
 
-**Blockers**: ① Xcode license not accepted → no XCTest, no signed builds; ② ad-hoc signing means every repack needs the Accessibility grant re-enabled in System Settings.
+**Blockers**: ① signed distribution needs a machine with Xcode + Developer ID signing; ② ad-hoc signing means every repack needs the Accessibility grant re-enabled in System Settings.
 
 ---
 
@@ -27,7 +27,9 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 | Review hardening P1/P2 | ✅ merged | PR #2 (off-main capture, FK v2 migration, BFS fix) |
 | CI/CD | ✅ in place | 3 required checks, main artifact, `v*` releases, branch protection |
 | **Week 3 floating panel** | ✅ **done + verified** | user-verified on-device 2026-10-18 (panel, dedup, Kimi, ChatGPT v26) |
-| `swift test` (XCTest) | ⬜ blocked | needs Xcode license accepted |
+| **MCP write-back (plan A)** | ✅ **done + on-device verified** | `save_result`/`fetch_results`/`search_captures` + `results` table (v4 migration, FK cascade — renumbered from v3 at merge, see Migrations.swift note); decision record `docs/superpowers/specs/2026-10-18-memory-mcp-decision.md`; SelfTest + mcp-smoke green; real Claude Desktop session e2e 2026-10-18: fetch_capture → search_captures(deduped) → save_result → conclusion in Inbox, agent=claude_desktop |
+| **MCP search dedup** | ✅ implemented + verified on real Inbox | `search_captures` collapses re-captures by `contentIdentity` (app+title+url+text, exact); each hit = newest of group + `duplicate_count`/`first_seen_at`/`last_seen_at`; `include_duplicates=true` for raw list. Real Inbox: "beamhop" 10 raw hits → 4 groups |
+| `swift test` (XCTest) | ✅ unblocked (2026-10-18) | works locally with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`) — the "license" blocker was stale; mirror kept in sync with SelfTest from now on |
 | Xcode project + signed build | ⬜ blocked | same as above |
 
 ---
@@ -35,6 +37,8 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 ## 2. Key docs (read in order)
 
 > ⚠️ **Iron rule: `git fetch` and align with origin before starting work on any machine** (lesson of the 2026-09 two-machine divergence; see the engineering-convergence spec §5).
+>
+> **Remote layout (2026-10-18)**: development moved to the main repo — `origin` = `willamhou/beamhop` (push target, main is protected: PR + 3 required checks), `fork` = `AuSmith-hub/beamhop` (legacy, read-only archive). `upstream/main` history was squash-merged (PR #5); local pre-squash commits were rebased away on 2026-10-18 — if you see "ahead/behind" drift vs `fork`, that is expected.
 
 - **MVP design spec (source of truth, V2.1)**: [docs/zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md](docs/zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) — Chinese original, translation pending
 - **Week 3 floating-window spec + plan**: [docs/superpowers/specs/2026-09-18-week-3-floating-window.md](docs/superpowers/specs/2026-09-18-week-3-floating-window.md) + [docs/superpowers/plans/2026-09-18-week-3-implementation.md](docs/superpowers/plans/2026-09-18-week-3-implementation.md)
@@ -120,7 +124,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ MCP server against real Claude Code (`fetch_capture` returns a real capture)
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
-- ✅ Logic: 102 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport**)
+- ✅ Logic: 130 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport**, MCP dedup + plan-A write-back)
 - ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
@@ -134,7 +138,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 ## 6. Pitfalls & decisions (do NOT re-learn these)
 
 From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all encoded in code:
-- **MCP stdio = newline-delimited JSON + non-blocking POSIX reads** (`FileHandle.read(upToCount:)` times out at 30s). Register with `claude mcp add <name> -s user -- <abs-bin>` (no `--command`, `-s user` is mandatory, path must be stable — not `.build`).
+- **MCP stdio = newline-delimited JSON + non-blocking POSIX reads** (`FileHandle.read(upToCount:)` times out at 30s). Register with `claude mcp add <name> -s user -- <abs-bin>` (no `--command`, `-s user` is mandatory). Installed release binary lives at `~/Library/Application Support/beamhop/bin/BeamhopMCP` (stable path — NEVER point config at `.build/`); Claude Desktop config: `~/Library/Application Support/Claude/claude_desktop_config.json`, takes effect on app restart. Reinstall after each release build: `swift build -c release && cp "$(swift build -c release --show-bin-path)/BeamhopMCP" ~/Library/Application\ Support/beamhop/bin/`.
 - **Native messaging: host→extension ~1MB hard cap**; browser→host→app is allowed up to 4GB, so capture itself needs no chunking. app→extension >1MB chunking is a defensive TODO.
 - **Custom `--user-data-dir`: native host manifest must also go into `<profile>/NativeMessagingHosts/`**. Chrome 137+ blocks `--load-extension` → automate via CDP pipe + `Extensions.loadUnpacked`.
 - **WAL must be set with `writeOutsideTransaction`** (errors inside a transaction); WAL data lives in `-wal` — corruption simulation must delete `-wal/-shm` too. MCP uses `Database.openReadOnly` (no migration/recovery/creation).
@@ -148,8 +152,13 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 - **Clipboard safe paste (§12.3)**: store raw Data per item/per type, refuse if unreadable; only ClaudeCodeDelivery restores; the clipboard fallback handoff does not.
 - **auto-Enter only when "the located terminal is frontmost + claude is running"**, else let the user confirm (never Enter into the wrong window).
 - ⚠️ **Incident**: during S6 testing, scripted synthetic keystrokes + undo were sent into the user's real Notes and wiped one note (recovered). **Never send synthetic keys/undo into the user's real apps**; capture is read-only AX.
+- **Inbox re-capture noise is fixed on the retrieval side, NOT at capture time** (2026-10-18, Claude's report: same GitHub page captured 13×). The DuplicateGate only covers <500ms; minutes-apart re-captures are byte-identical and stay in the DB (audit trail), but `search_captures` collapses them via `Capture.contentIdentity` (exact equality on app+title+url+selected+body — deliberately not fuzzy; near-dupes are Phase 2 embeddings work). `include_duplicates=true` restores the raw list. Soft-deleted twins are excluded from `duplicate_count`. The Inbox window UI still shows the raw list — collapse there only if dogfood says it matters.
+- **SelfTest and the XCTest mirror MUST be updated together** — 2026-10-18 CI failure: plan A changed `claudeCodeTrigger` (added the save_result write-back sentence); SelfTest was updated but `Week3FeatureTests` wasn't, so every push mailed "Run failed: CI" until the mirror caught up. CI runs BOTH (`swift test` gates `swift run BeamhopSelfTest` behind it in the same job — one fails, the other never runs).
 - **`plutil -lint` only accepts XML/binary plists, exits 1 on JSON** — validate JSON with `plutil -convert json -o /dev/null <file>`. Swift has no imported constant for `"AXEditable"` — use the raw string.
 - **`.build/release` is a symlink to the triplet dir** — `find` doesn't follow a symlinked start point; use `find -H`. CI's `TMPDIR` has a trailing slash → `//` paths; normalize with the same `cd+pwd` on both sides of path assertions.
+- **This machine's Claude is the 3p deployment (Cowork/Gateway)** — its MCP config is `~/Library/Application Support/Claude-3p/claude_desktop_config.json`, NOT `~/Library/Application Support/Claude/` (edits there are silently ignored; the app spawns whatever the 3p file says). Tool permissions are per-tool: each of fetch/search/save needed its own "Allow for this task" click even after allowing siblings.
+- **Info-level os_log is NOT persisted on this Mac** (only errors show in `log show`; `log stream` yields nothing either) — any Beamhop metric logged at info/signpost level is invisible. Read timings from DB columns (`capture_duration_ms`) or measure on screen; don't burn time on the §3 grep method here.
+- **macOS 26 renamed the TCC panes**: Accessibility is 设置 → 隐私与安全性 → **设备控制和数据访问** (no standalone "辅助功能"); Screen Recording is **录屏与系统录音**. Synthetic ⌘⇧Space via CGEventPost works and triggers Carbon hotkeys, but the OS occasionally drops a synthetic press (18/20 landed in the acceptance session) — sample counts should tolerate misses.
 - **`pbpaste` in a `LANG=C` shell mangles UTF-8** (looks like an encoding bug, is only terminal display) — use `LANG=en_US.UTF-8 pbpaste` before debugging "corruption".
 - **"Hotkey sometimes works" symptom checklist**: check the log for which PID logged the failure (old process vs current), and whether presses landed in a restart gap (`log show --predicate 'processID == <pid>'`).
 
@@ -162,14 +171,12 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 2. Then: Developer ID signing for `dist/Beamhop.app` (kills the repack-regrant cycle).
 
 **B. Perf & acceptance closure (Week 3 leftovers)**
-- 20-press P95 measurement for `capture_ms`/`panel_ms` (method in §3) → record in this file.
-  Ongoing tracking is automated: run `scripts/dogfood-metrics.sh` weekly during the dogfood window.
+- ✅ 20-press P95 done 2026-10-18 (211ms, results in §8) — method deviation: info-level os_log is not persisted on this Mac; used screen-diff + DB columns instead of the §3 grep.
+- Ongoing tracking is automated: run `scripts/dogfood-metrics.sh` weekly during the dogfood window (panel_ms now also durable in `events`).
 - Re-run AX word-grab spot checks on the 8 S6 apps.
 
 **C. Product candidates (pick after a week of dogfood)**
-- Prompt-injection language: **deferred** — the trigger text is being extended by the in-flight
-  plan-A write-back work (`feat/mcp-writeback-dedup`, e2e-verified); unify language on top of
-  that once it lands. UI chrome stays English-first.
+- Prompt-injection language: plan-A write-back trigger has now landed (merged 2026-10-18, Chinese base) — unify EN/zh on top of it when the language toggle ships; UI chrome stays English-first.
 - Wire `zh-Hans` UI translation back into the app bundle (translations archived at `packaging/lproj/zh-Hans.lproj/`) behind a language toggle.
 - Cowork MCPB end-to-end.
 
@@ -189,6 +196,9 @@ User-verified this session:
 6. Failure fallback → clipboard + notification (Kimi/ChatGPT window closed case) ✅
 7. Duplicate <500ms same-window press swallowed silently ✅
 
-Perf P95: ⬜ pending a 20-press session (method in §3).
+Perf P95: ✅ **2026-10-18, 20-press automated session (synthetic ⌘⇧Space via CGEventPost; panel visibility detected by screencapture crop-diff; capture_ms read from the DB `capture_duration_ms` column)**. Method deviation: this Mac does NOT persist info-level os_log messages (`log show` only ever shows errors from Beamhop, and `log stream` captures nothing) — the spec §3 grep method is unusable here, so panel latency was measured as press→panel-visible-on-screen.
+- press→panel-visible: 18/20 valid samples (2 synthetic presses were dropped by the OS), min 179 / median 195 / **P95 211 / max 211 ms** — end-to-end is already under the 300ms panel_ms budget, and in-app panel_ms is only a fraction of this number. ✅
+- capture_ms (session): P95 = 6ms, but 17/20 presses captured Beamhop itself (0ms AX — see focus-stealing finding below), so this is the optimistic floor. Real-app reference from today's organic captures: Chrome 122–155ms, Kimi 3–55ms. Worst realistic end-to-end ≈ 155 + ~150 ≈ 300ms — right at budget; fine for now, re-measure with Chrome frontmost if it ever feels slow.
+- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.
 
 Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_desktop versions_tested += 26.1007.71326 (dual bundle id, AXEditable gone, composer depth ~30, set-value OK); kimi_work added (paste-injection mechanism, new-chat button desc).

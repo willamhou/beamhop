@@ -98,10 +98,15 @@ final class Week3FeatureTests: XCTestCase {
 
     func testClaudeCodeTrigger() {
         let cap = sampleCapture()
+        // 方案A write-back convention: the trigger carries fetch + save_result (plan A 2026-10-18).
+        let writeBack = "处理完后调用 save_result(origin_capture_id='\(cap.id)', content=你的结论, agent='claude_code') 把结论写回 Beamhop，形成可追溯的共享记忆"
         XCTAssertEqual(PromptRenderer.claudeCodeTrigger(cap, userNote: nil),
-                       "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文")
+                       "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。\(writeBack)")
         XCTAssertEqual(PromptRenderer.claudeCodeTrigger(cap, userNote: "重点看竞态"),
-                       "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。重点看竞态")
+                       "用 Beamhop MCP 的 fetch_capture('\(cap.id)') 拿我刚抓的上下文。重点看竞态。\(writeBack)")
+        // generic variant parameterizes the agent identifier
+        XCTAssertTrue(PromptRenderer.mcpTrigger(cap, userNote: nil, agent: "codex")
+            .contains("agent='codex'"))
     }
 
     // MARK: CapturePanelModel presentation + confirm/cancel wiring

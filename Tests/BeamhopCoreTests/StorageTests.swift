@@ -131,4 +131,51 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(id.count, 4 + 26)
         XCTAssertEqual(ULID.shortPrefix(of: id).count, 4 + 6)
     }
+
+    // MARK: MCP dedup (2026-10-18) — mirror of the SelfTest checks
+
+    func testContentIdentity() throws {
+        let a = sample()
+        let b = sample()   // identical content, different id/time
+        XCTAssertEqual(a.contentIdentity, b.contentIdentity)
+        var c = sample(); c.selectedText = "different text"
+        XCTAssertNotEqual(a.contentIdentity, c.contentIdentity)
+        var d = sample(); d.appBundleID = "com.google.Chrome"
+        XCTAssertNotEqual(a.contentIdentity, d.contentIdentity)
+        var e = sample(); e.url = nil
+        XCTAssertNotEqual(a.contentIdentity, e.contentIdentity)
+    }
+
+    func testSearchDeduplicatedCollapsesReCaptures() throws {
+        let store = try makeStore()
+        let base = Int64(Date().timeIntervalSince1970 * 1000)
+        // 3 byte-identical re-captures of the same GitHub page (minutes apart — beyond the
+        // <500ms DuplicateGate) + 1 distinct capture that also matches the query.
+        for i in 0..<3 {
+            var c = sample(id: "cap_dup\(i)", appName: "Google Chrome",
+                           windowTitle: "AuSmith-hub/beamhop",
+                           selectedText: "cross-app context hub for agents")
+            c.appBundleID = "com.google.Chrome"
+            c.url = "https://github.com/AuSmith-hub/beamhop"
+            c.createdAt = base + Int64(i) * 60_000
+            try store.insert(c)
+        }
+        var other = sample(selectedText: "cross-app delivery notes")
+        other.createdAt = base + 4 * 60_000
+        try store.insert(other)
+
+        let reader = try CaptureReader.open(path: dbURL)
+        XCTAssertEqual(try reader.search("cross-app", limit: 20).count, 4)
+        let hits = try reader.searchDeduplicated("cross-app", limit: 10)
+        XCTAssertEqual(hits.count, 2)
+        let dupGroup = try XCTUnwrap(hits.first { $0.duplicateCount == 3 })
+        XCTAssertEqual(dupGroup.capture.id, "cap_dup2")          // newest of the group
+        XCTAssertEqual(dupGroup.firstSeenAt, base)
+        XCTAssertEqual(dupGroup.lastSeenAt, base + 2 * 60_000)
+        XCTAssertEqual(hits.first { $0.duplicateCount == 1 }?.capture.id, other.id)
+        // soft-deleted twins must not inflate the count
+        try store.softDelete(id: "cap_dup0")
+        let hits2 = try CaptureReader.open(path: dbURL).searchDeduplicated("cross-app", limit: 10)
+        XCTAssertEqual(hits2.first { $0.capture.id == "cap_dup2" }?.duplicateCount, 2)
+    }
 }

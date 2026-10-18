@@ -5,6 +5,8 @@ public enum DatabaseError: Error, Equatable {
     case fts5Unavailable
     case trigramUnavailable
     case fileNotFound
+    /// MCP write path: the DB predates the v3 results migration (app not restarted yet).
+    case schemaOutdated
 }
 
 /// Owns the GRDB connection. On open it (1) self-checks FTS5 + trigram support, (2) runs an
