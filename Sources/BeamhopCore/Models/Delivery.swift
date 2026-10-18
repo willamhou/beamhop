@@ -11,6 +11,8 @@ public struct Delivery: Codable, FetchableRecord, MutablePersistableRecord, Iden
     public var deliveredAt: Int64        // unix ms
     public var status: DeliveryStatus
     public var errorMessage: String?
+    /// Wall time from delivery start to this row being recorded (dogfood ≤5s budget).
+    public var durationMs: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -19,6 +21,7 @@ public struct Delivery: Codable, FetchableRecord, MutablePersistableRecord, Iden
         case deliveredAt = "delivered_at"
         case status
         case errorMessage = "error_message"
+        case durationMs = "duration_ms"
     }
 
     public init(
@@ -27,7 +30,8 @@ public struct Delivery: Codable, FetchableRecord, MutablePersistableRecord, Iden
         target: DeliveryTarget,
         deliveredAt: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
         status: DeliveryStatus,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        durationMs: Int? = nil
     ) {
         self.id = id
         self.captureID = captureID
@@ -35,6 +39,7 @@ public struct Delivery: Codable, FetchableRecord, MutablePersistableRecord, Iden
         self.deliveredAt = deliveredAt
         self.status = status
         self.errorMessage = errorMessage
+        self.durationMs = durationMs
     }
 
     public mutating func didInsert(_ inserted: InsertionSuccess) {

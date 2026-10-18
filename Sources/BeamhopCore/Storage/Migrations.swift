@@ -127,6 +127,25 @@ enum Migrations {
             try db.execute(sql: "ALTER TABLE deliveries_v2 RENAME TO deliveries;")
             try db.execute(sql: "CREATE INDEX idx_deliveries_capture ON deliveries(capture_id);")
         }
+
+        // v3 (Phase 1.5 dogfood instrumentation): append-only local event log feeding the
+        // evolution-decisions §3 gate metrics (press frequency, panel latency, Inbox
+        // engagement), plus per-delivery durations for the ≤5s hotkey→agent budget. Events
+        // carry no FK on purpose — metric rows outlive purged captures.
+        m.registerMigration("v3") { db in
+            try db.execute(sql: """
+                CREATE TABLE events (
+                    id         TEXT PRIMARY KEY,
+                    ts         INTEGER NOT NULL,
+                    name       TEXT NOT NULL,
+                    detail     TEXT,
+                    capture_id TEXT
+                );
+                """)
+            try db.execute(sql: "CREATE INDEX idx_events_ts ON events(ts);")
+            try db.execute(sql: "CREATE INDEX idx_events_name ON events(name);")
+            try db.execute(sql: "ALTER TABLE deliveries ADD COLUMN duration_ms INTEGER;")
+        }
         return m
     }
 }

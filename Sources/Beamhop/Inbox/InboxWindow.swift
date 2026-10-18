@@ -10,17 +10,31 @@ import BeamhopCore
 final class InboxModel: ObservableObject {
     @Published var captures: [Capture] = []
     @Published var deliveries: [String: [Delivery]] = [:]
-    @Published var selectedID: String?
+    @Published var selectedID: String? {
+        didSet {
+            // dogfood engagement signal: a detail view of a (different) capture
+            if let id = selectedID, id != oldValue {
+                events?.record(name: EventStore.Name.captureViewed, captureID: id)
+            }
+        }
+    }
     @Published var searchQuery = ""
 
     var selected: Capture? { captures.first { $0.id == selectedID } }
 
     private var store: CaptureStore?
+    private var events: EventStore?
     private var onDeliver: ((Capture, DeliveryTarget) -> Void)?
 
-    func configure(store: CaptureStore, onDeliver: @escaping (Capture, DeliveryTarget) -> Void) {
+    func configure(store: CaptureStore, events: EventStore?, onDeliver: @escaping (Capture, DeliveryTarget) -> Void) {
         self.store = store
+        self.events = events
         self.onDeliver = onDeliver
+    }
+
+    /// Window shown (hotkey, menu, or first-run) — the §3 "Inbox revisits" numerator.
+    func logOpened() {
+        events?.record(name: EventStore.Name.inboxOpened)
     }
 
     func reload() {
@@ -28,6 +42,9 @@ final class InboxModel: ObservableObject {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         let result = query.isEmpty ? try? store.recent(limit: 200) : try? store.search(query)
         captures = result ?? []
+        if !query.isEmpty {
+            events?.record(name: EventStore.Name.inboxSearch, detail: "hits=\(captures.count)")
+        }
         if selectedID != nil, !captures.contains(where: { $0.id == selectedID }) { selectedID = nil }
         loadDeliveries()
     }
@@ -35,6 +52,8 @@ final class InboxModel: ObservableObject {
     func runSearch() { reload() }
 
     func deliver(_ capture: Capture, to target: DeliveryTarget) {
+        events?.record(name: EventStore.Name.inboxRedeliver,
+                       detail: "target=\(target.rawValue)", captureID: capture.id)
         onDeliver?(capture, target)
         // delivery runs off-main (AX activation sleeps); pick up the recorded row shortly after.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.reload() }
@@ -43,6 +62,7 @@ final class InboxModel: ObservableObject {
     func softDelete(_ capture: Capture) {
         guard let store else { return }
         try? store.softDelete(id: capture.id)
+        events?.record(name: EventStore.Name.captureSoftDeleted, captureID: capture.id)
         if selectedID == capture.id { selectedID = nil }
         reload()
     }
@@ -74,6 +94,7 @@ final class InboxWindowController {
             w.center()
             window = w
         }
+        model.logOpened()
         model.reload()
         window?.contentView = NSHostingView(rootView: InboxView(model: model))
         window?.makeKeyAndOrderFront(nil)

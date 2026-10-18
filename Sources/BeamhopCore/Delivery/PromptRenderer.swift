@@ -6,9 +6,11 @@ import Foundation
 ///  - full: the whole capture as markdown, for clipboard handoff where there's no MCP channel.
 public enum PromptRenderer {
     /// Claude Code trigger: agent calls fetch_capture itself via the Beamhop MCP server.
+    /// English-first (matches the UI/docs language decision; agents parse either, zh can
+    /// return behind the language toggle when zh-Hans UI is wired back in).
     public static func claudeCodeTrigger(_ capture: Capture, userNote: String?) -> String {
-        let note = (userNote?.isEmpty == false) ? "。\(userNote!)" : ""
-        return "用 Beamhop MCP 的 fetch_capture('\(capture.id)') 拿我刚抓的上下文\(note)"
+        let note = (userNote?.isEmpty == false) ? " — \(userNote!)" : ""
+        return "Use fetch_capture('\(capture.id)') from the Beamhop MCP server to pull the context I just captured\(note)"
     }
 
     /// Full markdown for clipboard handoff (no MCP). Body truncated for paste; DB keeps full.

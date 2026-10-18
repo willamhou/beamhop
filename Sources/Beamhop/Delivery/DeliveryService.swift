@@ -11,46 +11,47 @@ final class DeliveryService {
     /// `completion` reports whether the CHOSEN target succeeded (clipboard fallback ≠ success).
     func deliver(_ capture: Capture, to target: DeliveryTarget, userNote: String? = nil,
                  completion: ((DeliveryTarget, Bool) -> Void)? = nil) {
+        let t0 = Date()   // per-attempt duration → deliveries.duration_ms (dogfood ≤5s budget)
         switch target {
         case .claudeCode:
             if let reason = ClaudeCodeDelivery.deliver(capture, userNote: userNote) {
-                record(capture, .claudeCode, .failed, reason)
+                record(capture, .claudeCode, .failed, reason, t0: t0)
                 Notifier.error(L10n.s("Claude Code delivery failed → copied to clipboard"), reason)
-                clipboardFallback(capture, userNote: userNote, reason: reason)
+                clipboardFallback(capture, userNote: userNote, reason: reason, t0: t0)
                 completion?(.claudeCode, false)
             } else {
-                record(capture, .claudeCode, .success, nil)
+                record(capture, .claudeCode, .success, nil, t0: t0)
                 Notifier.success(L10n.s("Delivered to Claude Code"), capture.appName)
                 completion?(.claudeCode, true)
             }
         case .clipboard:
-            clipboardFallback(capture, userNote: userNote, reason: L10n.s("User chose clipboard"))
+            clipboardFallback(capture, userNote: userNote, reason: L10n.s("User chose clipboard"), t0: t0)
             completion?(.clipboard, true)
         case .chatgptDesktop:
             // S3 verified path: AX opt-in + kAXValueAttribute set-value, no auto-submit.
             if let reason = ChatGPTDelivery.deliver(capture, userNote: userNote) {
-                record(capture, .chatgptDesktop, .failed, reason)
+                record(capture, .chatgptDesktop, .failed, reason, t0: t0)
                 Notifier.error(L10n.s("ChatGPT Desktop delivery failed → copied to clipboard"), reason)
-                clipboardFallback(capture, userNote: userNote, reason: reason)
+                clipboardFallback(capture, userNote: userNote, reason: reason, t0: t0)
                 completion?(.chatgptDesktop, false)
             } else {
-                record(capture, .chatgptDesktop, .success, nil)
+                record(capture, .chatgptDesktop, .success, nil, t0: t0)
                 completion?(.chatgptDesktop, true)
             }
         case .cowork:
             // S2: .mcpb mechanism confirmed (see cowork-extension/), end-to-end install still
             // fast-follow — degrade to clipboard until then.
-            clipboardFallback(capture, userNote: userNote, reason: L10n.s("Cowork integration awaits S2 end-to-end acceptance — clipboard for now"))
+            clipboardFallback(capture, userNote: userNote, reason: L10n.s("Cowork integration awaits S2 end-to-end acceptance — clipboard for now"), t0: t0)
             completion?(.cowork, true)
         case .kimiWork:
             // Verified 2026-10-18: AX-locate the composer, focus it, clipboard-paste (no auto-send).
             if let reason = KimiDelivery.deliver(capture, userNote: userNote) {
-                record(capture, .kimiWork, .failed, reason)
+                record(capture, .kimiWork, .failed, reason, t0: t0)
                 Notifier.error(L10n.s("Kimi Work delivery failed → copied to clipboard"), reason)
-                clipboardFallback(capture, userNote: userNote, reason: reason)
+                clipboardFallback(capture, userNote: userNote, reason: reason, t0: t0)
                 completion?(.kimiWork, false)
             } else {
-                record(capture, .kimiWork, .success, nil)
+                record(capture, .kimiWork, .success, nil, t0: t0)
                 completion?(.kimiWork, true)
             }
         }
@@ -59,16 +60,18 @@ final class DeliveryService {
     /// Universal fallback (golden line, spec §4.1/§7.1). Writes the full rendered prompt to the
     /// clipboard + notifies. NOTE: this proactively OWNS the clipboard — it does NOT restore
     /// (only ClaudeCodeDelivery's safe-paste restores). codex review.
-    private func clipboardFallback(_ capture: Capture, userNote: String?, reason: String) {
+    private func clipboardFallback(_ capture: Capture, userNote: String?, reason: String, t0: Date) {
         let md = PromptRenderer.fullMarkdown(capture, userNote: userNote)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(md, forType: .string)
-        record(capture, .clipboard, .success, reason)
+        record(capture, .clipboard, .success, reason, t0: t0)
         Notifier.info(L10n.s("Content copied — paste it into your target"), reason)
     }
 
-    private func record(_ capture: Capture, _ target: DeliveryTarget, _ status: DeliveryStatus, _ err: String?) {
-        let d = Delivery(captureID: capture.id, target: target, status: status, errorMessage: err)
+    private func record(_ capture: Capture, _ target: DeliveryTarget, _ status: DeliveryStatus,
+                        _ err: String?, t0: Date) {
+        let d = Delivery(captureID: capture.id, target: target, status: status, errorMessage: err,
+                         durationMs: Int(Date().timeIntervalSince(t0) * 1000))
         try? store.recordDelivery(d)
     }
 }

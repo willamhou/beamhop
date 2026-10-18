@@ -15,6 +15,7 @@ final class AppServices {
     let hotkeys = HotkeyManager()
     private(set) var database: Database?
     private(set) var store: CaptureStore?
+    private(set) var events: EventStore?
     private(set) var capture: CaptureService?
     private(set) var delivery: DeliveryService?
     private(set) var menuBar: MenuBarController?
@@ -50,9 +51,11 @@ final class AppServices {
             self.database = db
             let store = CaptureStore(db)
             self.store = store
+            let events = EventStore(db)
+            self.events = events
             self.capture = CaptureService(store: store)
             self.delivery = DeliveryService(store: store)
-            inbox.model.configure(store: store) { [weak self] capture, target in
+            inbox.model.configure(store: store, events: events) { [weak self] capture, target in
                 // delivery does AX activation + usleep — never on the main thread
                 DispatchQueue.global(qos: .userInitiated).async {
                     self?.delivery?.deliver(capture, to: target)
@@ -93,6 +96,8 @@ final class AppServices {
         DispatchQueue.global(qos: .utility).async {
             let n = (try? store.purgeExpired()) ?? 0
             if n > 0 { self.log.info("purged \(n) expired captures") }
+            // dogfood events: generous 180-day retention, pruned alongside captures
+            _ = try? self.events?.prune()
         }
     }
 
@@ -124,10 +129,15 @@ final class AppServices {
             case .duplicate:
                 // W3-4: a <500ms same-window re-press is expected behavior — silent, log only.
                 self.log.info("duplicate capture ignored (<500ms, same window)")
+                self.events?.record(name: EventStore.Name.captureDuplicate)
             case .rejected(let reason):
                 Notifier.error(L10n.s("Capture failed"), reason)
+                self.events?.record(name: EventStore.Name.captureRejected, detail: "reason=\(reason)")
             case .captured(let cap):
                 self.log.info("captured \(cap.id, privacy: .public) method=\(cap.captureMethod, privacy: .public) capture_ms=\(captureMs)")
+                self.events?.record(name: EventStore.Name.captureCompleted,
+                                    detail: "method=\(cap.captureMethod) ms=\(captureMs)",
+                                    captureID: cap.id)
                 DispatchQueue.main.async {
                     self.showPanel(cap, delivery: delivery)
                 }
@@ -143,6 +153,8 @@ final class AppServices {
             defaultTarget: targetMemory.last,
             onConfirm: { [weak self] target, note in
                 guard let self else { return }
+                self.events?.record(name: EventStore.Name.panelConfirm,
+                                    detail: "target=\(target?.rawValue ?? "inbox_only")")
                 guard let target else {
                     // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost.
                     Notifier.info(L10n.s("Saved to Inbox"), cap.id)
@@ -157,12 +169,14 @@ final class AppServices {
                 }
             },
             onCancel: { [weak self] in
-                _ = self
-                Notifier.info(L10n.s("Saved to Inbox"), cap.id)   // Esc / focus loss — capture is safe
+                // Esc / focus loss — capture is safe in the Inbox
+                self?.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
+                Notifier.info(L10n.s("Saved to Inbox"), cap.id)
             })
         let panelMs = Int(Date().timeIntervalSince(pt0) * 1000)
         signposter.endInterval("panel_show", state, "\(panelMs)ms")
         log.info("panel_ms=\(panelMs)")
+        events?.record(name: EventStore.Name.panelShown, detail: "ms=\(panelMs)", captureID: cap.id)
     }
     /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from
     /// anywhere — the universal fallback that never depends on AX or a running target.

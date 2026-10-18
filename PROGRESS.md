@@ -1,7 +1,7 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
-> Last updated: 2026-10-18 — **Week 3 floating panel + Kimi Work delivery implemented AND user-verified on-device**.
+> Last updated: 2026-10-18 — Week 3 verified; **Phase 1.5 dogfood instrumentation landed** (events + delivery durations + `scripts/dogfood-metrics.sh`).
 
 > 🗂 Full pre-2026-10 history (Chinese) is archived at [docs/zh/PROGRESS.zh.md](docs/zh/PROGRESS.zh.md).
 
@@ -9,7 +9,7 @@
 
 ## 0. Status in one paragraph
 
-Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 86 SelfTest checks (incl. 40+ Week 3 checks). The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); migrating to a real Xcode project is gated on accepting the Xcode license (`sudo xcodebuild -license accept`) so `swift test`/XCTest can run.
+Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 102 SelfTest checks. **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); migrating to a real Xcode project is gated on installing Xcode (this machine has CLT only) and accepting the license (`sudo xcodebuild -license accept`) so `swift test`/XCTest can run.
 
 **Blockers**: ① Xcode license not accepted → no XCTest, no signed builds; ② ad-hoc signing means every repack needs the Accessibility grant re-enabled in System Settings.
 
@@ -40,6 +40,7 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 - **Week 3 floating-window spec + plan**: [docs/superpowers/specs/2026-09-18-week-3-floating-window.md](docs/superpowers/specs/2026-09-18-week-3-floating-window.md) + [docs/superpowers/plans/2026-09-18-week-3-implementation.md](docs/superpowers/plans/2026-09-18-week-3-implementation.md)
 - **Engineering convergence (2026-09)**: [docs/superpowers/specs/2026-09-14-engineering-convergence.md](docs/superpowers/specs/2026-09-14-engineering-convergence.md) — branch model / two-machine split / acceptance gates
 - **Evolution decisions (2026-09)**: [docs/superpowers/specs/2026-09-14-evolution-decisions.md](docs/superpowers/specs/2026-09-14-evolution-decisions.md) — Xcode timing / Phase 2 memory / Phase 3 triggers
+- **Product positioning (2026-08-24)**: [docs/product-positioning.md](docs/product-positioning.md) — external-agent-native local context router; the "why not X" anchor
 - **Roadmap**: [docs/superpowers/roadmap.md](docs/superpowers/roadmap.md)
 - **Spike results + compatibility matrix**: [spike/results.md](spike/results.md) + [spike/compatibility-matrix-v0.json](spike/compatibility-matrix-v0.json)
 
@@ -51,10 +52,17 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 cd /Users/leo/Documents/Kimi/Workspaces/beamhop
 export DEVELOPER_DIR=/Library/Developer/CommandLineTools   # needed while Xcode license is unaccepted
 swift build                 # build all targets (incl. GRDB)
-swift run BeamhopSelfTest   # 86 checks, expect ALL PASS ✅
+swift run BeamhopSelfTest   # 102 checks, expect ALL PASS ✅
 ./packaging/build-app.sh    # assemble dist/Beamhop.app
 open dist/Beamhop.app       # grant Accessibility again after every repack (ad-hoc signature)
 ```
+
+**Dogfood gate report (evolution-decisions §3) — run this weekly during the dogfood window:**
+```bash
+scripts/dogfood-metrics.sh                 # default: 14-day window on the real inbox.sqlite
+scripts/dogfood-metrics.sh --days 7        # shorter window
+```
+Backed by migration v3: append-only `events` (capture outcomes, panel ms, Inbox engagement) + `deliveries.duration_ms`. All local; no telemetry.
 
 **MCP server smoke (real protocol):**
 ```bash
@@ -112,13 +120,14 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ MCP server against real Claude Code (`fetch_capture` returns a real capture)
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
-- ✅ Logic: 86 SelfTest checks green (DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values)
+- ✅ Logic: 102 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport**)
+- ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
-- ⬜ `swift test` / XCTest (blocked on Xcode license)
+- ⬜ `swift test` / XCTest on a dev machine (needs Xcode; CI runs it on macos-15)
 - ⬜ Cowork MCPB end-to-end (S2 mechanism confirmed only)
 - ⬜ AX word-grab re-test across 8 apps (per-app policy from S6)
-- ⬜ Week 3 perf P95 measurement session (20 presses, method in §3)
+- ⬜ Week 3 perf P95 measurement session (20 presses, method in §3) — ongoing tracking now automated via `scripts/dogfood-metrics.sh`
 
 ---
 
@@ -154,10 +163,11 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 
 **B. Perf & acceptance closure (Week 3 leftovers)**
 - 20-press P95 measurement for `capture_ms`/`panel_ms` (method in §3) → record in this file.
+  Ongoing tracking is automated: run `scripts/dogfood-metrics.sh` weekly during the dogfood window.
 - Re-run AX word-grab spot checks on the 8 S6 apps.
 
 **C. Product candidates (pick after a week of dogfood)**
-- Prompt-injection language: panel chrome is now English; the injected prompt text (`PromptRenderer`) is still Chinese — decide per target/agent.
+- ~~Prompt-injection language~~ — decided 2026-10-18: English-first trigger (`PromptRenderer`), matching the UI/docs decision; zh can return behind the language toggle when zh-Hans UI is wired back in.
 - Wire `zh-Hans` UI translation back into the app bundle (translations archived at `packaging/lproj/zh-Hans.lproj/`) behind a language toggle.
 - Cowork MCPB end-to-end.
 
