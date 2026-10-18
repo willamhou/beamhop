@@ -148,6 +148,8 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 - **`plutil -lint` only accepts XML/binary plists, exits 1 on JSON** — validate JSON with `plutil -convert json -o /dev/null <file>`. Swift has no imported constant for `"AXEditable"` — use the raw string.
 - **`.build/release` is a symlink to the triplet dir** — `find` doesn't follow a symlinked start point; use `find -H`. CI's `TMPDIR` has a trailing slash → `//` paths; normalize with the same `cd+pwd` on both sides of path assertions.
 - **This machine's Claude is the 3p deployment (Cowork/Gateway)** — its MCP config is `~/Library/Application Support/Claude-3p/claude_desktop_config.json`, NOT `~/Library/Application Support/Claude/` (edits there are silently ignored; the app spawns whatever the 3p file says). Tool permissions are per-tool: each of fetch/search/save needed its own "Allow for this task" click even after allowing siblings.
+- **Info-level os_log is NOT persisted on this Mac** (only errors show in `log show`; `log stream` yields nothing either) — any Beamhop metric logged at info/signpost level is invisible. Read timings from DB columns (`capture_duration_ms`) or measure on screen; don't burn time on the §3 grep method here.
+- **macOS 26 renamed the TCC panes**: Accessibility is 设置 → 隐私与安全性 → **设备控制和数据访问** (no standalone "辅助功能"); Screen Recording is **录屏与系统录音**. Synthetic ⌘⇧Space via CGEventPost works and triggers Carbon hotkeys, but the OS occasionally drops a synthetic press (18/20 landed in the acceptance session) — sample counts should tolerate misses.
 - **`pbpaste` in a `LANG=C` shell mangles UTF-8** (looks like an encoding bug, is only terminal display) — use `LANG=en_US.UTF-8 pbpaste` before debugging "corruption".
 - **"Hotkey sometimes works" symptom checklist**: check the log for which PID logged the failure (old process vs current), and whether presses landed in a restart gap (`log show --predicate 'processID == <pid>'`).
 
@@ -160,7 +162,7 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 2. Then: Developer ID signing for `dist/Beamhop.app` (kills the repack-regrant cycle).
 
 **B. Perf & acceptance closure (Week 3 leftovers)**
-- 20-press P95 measurement for `capture_ms`/`panel_ms` (method in §3) → record in this file.
+- ✅ 20-press P95 done 2026-10-18 (results in §8) — method deviation: info-level os_log is not persisted on this Mac; used screen-diff + DB columns instead of the §3 grep.
 - Re-run AX word-grab spot checks on the 8 S6 apps.
 
 **C. Product candidates (pick after a week of dogfood)**
@@ -184,6 +186,9 @@ User-verified this session:
 6. Failure fallback → clipboard + notification (Kimi/ChatGPT window closed case) ✅
 7. Duplicate <500ms same-window press swallowed silently ✅
 
-Perf P95: ⬜ pending a 20-press session (method in §3).
+Perf P95: ✅ **2026-10-18, 20-press automated session (synthetic ⌘⇧Space via CGEventPost; panel visibility detected by screencapture crop-diff; capture_ms read from the DB `capture_duration_ms` column)**. Method deviation: this Mac does NOT persist info-level os_log messages (`log show` only ever shows errors from Beamhop, and `log stream` captures nothing) — the spec §3 grep method is unusable here, so panel latency was measured as press→panel-visible-on-screen.
+- press→panel-visible: 18/20 valid samples (2 synthetic presses were dropped by the OS), min 179 / median 195 / **P95 211 / max 211 ms** — end-to-end is already under the 300ms panel_ms budget, and in-app panel_ms is only a fraction of this number. ✅
+- capture_ms (session): P95 = 6ms, but 17/20 presses captured Beamhop itself (0ms AX — see focus-stealing finding below), so this is the optimistic floor. Real-app reference from today's organic captures: Chrome 122–155ms, Kimi 3–55ms. Worst realistic end-to-end ≈ 155 + ~150 ≈ 300ms — right at budget; fine for now, re-measure with Chrome frontmost if it ever feels slow.
+- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.
 
 Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_desktop versions_tested += 26.1007.71326 (dual bundle id, AXEditable gone, composer depth ~30, set-value OK); kimi_work added (paste-injection mechanism, new-chat button desc).
