@@ -1,25 +1,21 @@
-# 让信息过去，人留在这里
+# Beamhop 产品随笔与讨论
 
-Beamhop 的可交互产品随笔。讨论如何认出已有的 agent 会话、在来源应用中直接路由摘抄，以及在还没确定去处时临时保存材料。
+两篇可以动手读的文章，以及本次产品讨论的整理。探索如何把当前应用里的材料顺手交给已有的 agent 工作，同时保住人的阅读位置和思路。
 
-**页面地址：** https://willamhou.github.io/beamhop/
+- [随笔 01 · 让信息过去，人留在这里](./index.html)：第一次找去处、原地发送，以及需要时才出现的剪板。
+- [随笔 02 · 事情可以分岔，思路不必散掉](./work-in-hand.html)：工作与接收会话、同一材料的不同用途、推荐与确认，以及中断后的恢复。
+- [产品讨论 · 先把那一下做对](./product-notes.html)：启发、产品边界、设计建议和待验证的假设。也可以直接阅读 [Markdown 原稿](./product-notes.md)。
 
-本分支是独立的 `gh-pages` 静态发布分支，不包含 Beamhop 主应用的代码。主应用位于 [`main`](https://github.com/willamhou/beamhop/tree/main)。
+本分支是独立的 `gh-pages` 静态发布分支，不包含 Beamhop 主应用代码。主应用位于 [`main`](https://github.com/willamhou/beamhop/tree/main)。
 
-## 本地阅读与维护
+## 阅读与维护
 
-直接用浏览器打开 `index.html` 即可。页面不需要安装依赖或构建，也不加载远程脚本、字体或分析服务。手动复制功能需要浏览器允许剪贴板访问；通过本地服务器或 GitHub Pages 阅读可以获得更完整的体验。
+用浏览器打开 HTML 文件即可阅读，无需安装依赖或构建。页面不加载远程脚本、字体或分析服务。通过本地静态服务器阅读，可以获得更完整的浏览器剪贴板体验。
 
-正文、样式和交互均在 `index.html` 内。修改并推送到本分支后，GitHub Pages 会重新发布。
+两篇随笔的正文、样式和交互各自在对应 HTML 文件内。修改讨论稿 `product-notes.md` 后，运行 `python scripts/render-notes.py`，即可更新 `product-notes.html`。此脚本只使用 Python 标准库，并沿用第一篇随笔的样式；生成的 HTML 已提交，阅读时不需要运行脚本。
 
-所有会话、材料、连接状态和回执均为演示数据。页面不会连接真实 agent，也不会向外部工具发送材料。交互状态仅保留在当前页面内，刷新后重置。
+所有会话、材料、模型建议、连接状态和回执均为演示数据。页面不会连接真实 agent，也不会向外部工具发送材料。交互状态只保留在当前页面，刷新后重置。
 
-## GitHub Pages 配置
+## 发布状态
 
-仓库 **Settings → Pages → Build and deployment**：
-
-- Source：**Deploy from a branch**
-- Branch：**gh-pages**
-- Folder：**/ (root)**
-
-保存后等待 Pages 部署完成，即可通过上方地址访问。`.nojekyll` 让 GitHub 直接发布本分支的静态文件。
+本次仅将静态文件提交至 `gh-pages`。GitHub Pages 的启用由仓库管理者另行安排，未验证公开站点已经上线。未来如使用 GitHub Pages，可将发布来源设为本分支的根目录；`.nojekyll` 用于直接发布静态文件。
