@@ -17,14 +17,20 @@ final class CapturePanelController {
     private var resignObserver: NSObjectProtocol?
 
     /// Show (or replace) the panel for a capture. `onConfirm` receives the chosen target
-    /// (nil = 仅入 Inbox) and the note; `onCancel` = Esc / focus-loss path.
+    /// (nil = 仅入 Inbox) and the note; `onCancel` = Esc / focus-loss path; `onHold` = 「先留着」
+    /// (essay 01) — park in the pocket instead of delivering.
     func show(capture: Capture,
               defaultTarget: DeliveryTarget?,
+              boundWork: Work? = nil,
+              workName: String = "",
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
-              onCancel: @escaping () -> Void) {
+              onCancel: @escaping () -> Void,
+              onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
         let model = CapturePanelModel(
             capture: capture,
             initialTarget: defaultTarget,
+            boundWork: boundWork,
+            workName: workName,
             onConfirm: { [weak self] target, note in
                 guard let self else { return }
                 self.finished = true
@@ -37,12 +43,21 @@ final class CapturePanelController {
                 self.finished = true
                 self.hide()
                 onCancel()
+            },
+            onHold: onHold.map { handler in
+                { [weak self] target, note in
+                    guard let self else { return }
+                    self.finished = true
+                    self.hide()
+                    handler(target, note)
+                }
             }
         )
 
         if panel == nil { panel = makePanel() }
         finished = false
         isDelivering = false   // a new showing supersedes any in-flight delivery race guard
+        currentModel = model
         panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model))
         panel?.standardWindowButton(.closeButton)?.isHidden = true
         panel?.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -73,6 +88,11 @@ final class CapturePanelController {
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
+
+    /// The model of the currently shown panel (nil between showings). AppServices reads
+    /// `model.workName` at confirm time — the model is recreated per showing, so the
+    /// controller is the only stable owner.
+    private(set) var currentModel: CapturePanelModel?
 
     private func makePanel() -> NSPanel {
         let p = NSPanel(

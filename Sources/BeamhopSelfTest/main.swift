@@ -187,16 +187,19 @@ do {
         check(g2.isDuplicate(bundleID: "app.a", title: "Now has title", at: t0.addingTimeInterval(0.2)) == false, "nil vs title → not duplicate")
     }
 
-    print("== Week 3: PanelShortcut (⌘1-4 / ⌘0) ==")
+    print("== Week 3: PanelShortcut (⌘1-4 / ⌘0 / ⌘5 先留着) ==")
     do {
         check(PanelShortcut.claudeCode.target == .claudeCode, "⌘1 → Claude Code")
         check(PanelShortcut.chatgptDesktop.target == .chatgptDesktop, "⌘2 → ChatGPT")
         check(PanelShortcut.cowork.target == .cowork, "⌘3 → Cowork")
         check(PanelShortcut.kimiWork.target == .kimiWork, "⌘4 → Kimi Work")
         check(PanelShortcut.inboxOnly.target == nil, "⌘0 → Inbox only (nil target)")
-        check(PanelShortcut.allCases.count == 5, "exactly 5 shortcuts")
-        check(Set(PanelShortcut.allCases.map(\.rawValue)) == Set(["0", "1", "2", "3", "4"]), "keys are 0-4, no drift")
+        check(PanelShortcut.hold.isHold && PanelShortcut.hold.target == nil, "⌘5 → 先留着 (hold, nil target)")
+        check(PanelShortcut.allCases.count == 6, "exactly 6 shortcuts")
+        check(Set(PanelShortcut.allCases.map(\.rawValue)) == Set(["0", "1", "2", "3", "4", "5"]),
+              "keys are 0-5, no drift")
         check(PanelShortcut.kimiWork.badge == "⌘4", "badge ⌘4")
+        check(PanelShortcut.hold.badge == "⌘5", "badge ⌘5")
         // 每个可投递 target 都有对应 shortcut（防新增 DeliveryTarget 后漏配键位）
         let mapped = Set(PanelShortcut.allCases.compactMap(\.target))
         for t in DeliveryTarget.allCases where t != .clipboard {
@@ -554,6 +557,134 @@ do {
         check(e[3] == .result(r2), "tie keeps the result after")
         check(e[0].stableID != e[1].stableID, "stableIDs unique across kinds")
         check(TimelineBuilder.entries(deliveries: [], results: []).isEmpty, "empty in, empty out")
+    }
+
+    print("== 先留着: PocketStore hold stack (essay 01) ==")
+    do {
+        let (db, _) = try freshDB()
+        let captures = CaptureStore(db)
+        let pocket = PocketStore(db)
+        let c1 = sample(selectedText: "第一段材料")
+        let c2 = sample(selectedText: "第二段材料")
+        let c3 = sample(selectedText: "第三段材料")
+        try captures.insert(c1); try captures.insert(c2); try captures.insert(c3)
+
+        let i1 = try pocket.hold(captureID: c1.id, note: "交代一", intendedTarget: .claudeCode)
+        let i2 = try pocket.hold(captureID: c2.id, note: nil, intendedTarget: nil)
+        let i3 = try pocket.hold(captureID: c3.id, note: "", intendedTarget: .kimiWork)
+        check(try pocket.count() == 3, "holds 3 items")
+        check(i1.position == 1 && i2.position == 2 && i3.position == 3, "positions append in order")
+        check(i2.intendedTarget == nil, "undecided target round-trips nil")
+        check(i3.note == nil, "empty note normalizes to nil")
+
+        let stack = try pocket.liveStack()
+        check(stack.map { $0.1.id } == [c1.id, c2.id, c3.id], "stack preserves hold order")
+        check(stack[0].1.selectedText == "第一段材料", "joins the capture back")
+
+        try pocket.remove(id: i1.id)
+        let after = try pocket.stack()
+        check(after.count == 2 && after[0].position == 1 && after[1].position == 2,
+              "remove re-normalizes positions densely")
+
+        // soft-deleted capture leaves the live view but the row stays until purge cascade
+        try captures.softDelete(id: c2.id)
+        check(try pocket.liveStack().count == 1, "liveStack excludes soft-deleted captures")
+        check(try pocket.count() == 2, "physical row remains until purge")
+    }
+
+    print("== 两层去处: WorkStore named destinations (essay 02) ==")
+    do {
+        let (db, _) = try freshDB()
+        let works = WorkStore(db)
+
+        let w = try works.register(name: "让发送不打断阅读", boundTo: .claudeCode)
+        check(!w.needsConfirmation, "registration IS the first confirmation")
+        check(w.confirmedTarget == .claudeCode, "confirmedTarget set at registration")
+
+        // 同名再取（大小写不敏感）
+        check(try works.fetch(name: "让发送不打断阅读")?.id == w.id, "fetch by exact name")
+        check(try works.fetch(name: " 让发送不打断阅读 ")?.id == w.id, "fetch trims whitespace")
+        check(try works.fetch(name: "LET发送不打断阅读") == nil, "NOCASE unique ≠ fuzzy match")
+
+        // 换绑：confirmed 不动，needsConfirmation 亮起
+        let rebound = try works.rebind(id: w.id, to: .kimiWork)
+        check(rebound?.boundTarget == .kimiWork, "rebind moves boundTarget")
+        check(rebound?.needsConfirmation == true, "rebind requires confirmation")
+        check(rebound?.confirmedTarget == .claudeCode, "confirmedTarget untouched by rebind")
+
+        // 重复 rebind 到同一 target：幂等
+        let again = try works.rebind(id: w.id, to: .kimiWork)
+        check(again?.needsConfirmation == true, "idempotent rebind keeps the flag")
+
+        try works.confirm(id: w.id)
+        let confirmed = try works.fetch(id: w.id)
+        check(confirmed?.confirmedTarget == .kimiWork, "confirm adopts boundTarget")
+        check(confirmed?.needsConfirmation == false, "confirmed clears the flag")
+    }
+
+    print("== 两层去处: CapturePanelModel 两步确认 + 先留着回调 ==")
+    do {
+        let cap = sample()
+        let work = Work(name: "焦点行为检查", boundTarget: .kimiWork, confirmedTarget: .claudeCode)
+
+        // 换绑未确认 → 第一次 confirm 只是确认新地址
+        var fired: [(DeliveryTarget?, String)] = []
+        let m1 = CapturePanelModel(
+            capture: cap, initialTarget: work.boundTarget, boundWork: work,
+            onConfirm: { t, n in fired.append((t, n)) }, onCancel: {})
+        check(m1.workNeedsConfirmation, "panel sees the unconfirmed rebind")
+        check(m1.confirmLabel.contains("确认新地址"), "label says ack-first, honestly")
+        m1.confirm()
+        check(fired.isEmpty, "first confirm does NOT deliver")
+        check(m1.rebindAcknowledged, "first confirm arms the ack")
+        m1.confirm()
+        check(fired.count == 1 && fired[0].0 == .kimiWork, "second confirm delivers to the NEW address")
+
+        // 已确认 → 单步直送
+        let confirmedWork = Work(name: "焦点行为检查", boundTarget: .kimiWork, confirmedTarget: .kimiWork)
+        let m2 = CapturePanelModel(
+            capture: cap, initialTarget: .kimiWork, boundWork: confirmedWork,
+            onConfirm: { t, _ in fired.append((t, "x")) }, onCancel: {})
+        check(!m2.workNeedsConfirmation, "confirmed work: no gate")
+        m2.confirm()
+        check(fired.last?.0 == .kimiWork, "single-step deliver when confirmed")
+
+        // 两层显示
+        check(m2.destinationTitle == "焦点行为检查", "title = work name")
+        check(m2.destinationSubtitle == m2.targetLabel(.kimiWork), "subtitle = receiver session")
+
+        // 先留着回调
+        var held: (DeliveryTarget?, String)?
+        let m3 = CapturePanelModel(
+            capture: cap, initialTarget: .chatgptDesktop,
+            onConfirm: { _, _ in }, onCancel: {},
+            onHold: { t, n in held = (t, n) })
+        check(m3.canHold, "hold wired")
+        m3.note = "回头一起看"
+        m3.hold()
+        check(held?.0 == .chatgptDesktop && held?.1 == "回头一起看", "hold passes target + note")
+
+        // mismatch 闸：已确认的工作在面板里另选接收方 = 换绑，同样要两步确认
+        var fired2: [(DeliveryTarget?, String)] = []
+        let m4 = CapturePanelModel(
+            capture: cap, initialTarget: .chatgptDesktop, boundWork: confirmedWork,
+            onConfirm: { t, n in fired2.append((t, n)) }, onCancel: {})
+        check(!m4.workNeedsConfirmation, "confirmed work stored state: no pending rebind")
+        check(m4.receiverChanged, "picking a different receiver for a bound work IS a rebind")
+        check(m4.confirmLabel.contains("确认新地址"), "ack-first label on in-panel receiver switch")
+        check(m4.destinationSubtitle?.contains("接收会话已更换") == true, "subtitle flags the switch")
+        m4.confirm()
+        check(fired2.isEmpty, "first confirm only acknowledges the new address")
+        check(!m4.receiverChanged || m4.rebindAcknowledged, "ack disarms the gate")
+        m4.confirm()
+        check(fired2.count == 1 && fired2[0].0 == .chatgptDesktop, "second confirm delivers to the newly picked receiver")
+
+        // 选中与绑定一致的接收方 → 闸不起
+        let m5 = CapturePanelModel(
+            capture: cap, initialTarget: .kimiWork, boundWork: confirmedWork,
+            onConfirm: { t, n in fired2.append((t, n)) }, onCancel: {})
+        check(!m5.receiverChanged, "unchanged receiver: no gate")
+        check(m5.destinationSubtitle == m5.targetLabel(.kimiWork), "plain subtitle when receiver unchanged")
     }
 } catch {
     print("EXCEPTION: \(error)")

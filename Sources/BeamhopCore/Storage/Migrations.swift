@@ -191,6 +191,37 @@ enum Migrations {
             try SelfMigration.addColumnIfMissing(db, table: "deliveries", column: "duration_ms",
                                                  ddl: "ALTER TABLE deliveries ADD COLUMN duration_ms INTEGER;")
         }
+        // v6 (2026-10-19 product essays): the two ideas hardened into the app.
+        //  1. pocket_items — the "先留着" hold stack (essay 01): ordered held materials with
+        //     their note and intended target; FK cascade like deliveries.
+        //  2. works — named destinations (essay 02): a human-recognizable work name bound to
+        //     a receiving tool; rebinding to a different receiver raises needsConfirmation
+        //     until the user explicitly confirms the new address at delivery time.
+        m.registerMigration("v6") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS pocket_items (
+                    id              TEXT PRIMARY KEY,
+                    capture_id      TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,
+                    note            TEXT,
+                    intended_target TEXT,
+                    position      INTEGER NOT NULL,
+                    created_at      INTEGER NOT NULL
+                );
+                """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_pocket_position ON pocket_items(position);")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_pocket_capture ON pocket_items(capture_id);")
+
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS works (
+                    id               TEXT PRIMARY KEY,
+                    name             TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    bound_target     TEXT NOT NULL,
+                    confirmed_target TEXT,
+                    created_at       INTEGER NOT NULL,
+                    updated_at       INTEGER NOT NULL
+                );
+                """)
+        }
         return m
     }
 }

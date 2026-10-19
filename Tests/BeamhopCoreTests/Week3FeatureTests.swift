@@ -38,8 +38,11 @@ final class Week3FeatureTests: XCTestCase {
         XCTAssertEqual(PanelShortcut.cowork.target, .cowork)
         XCTAssertEqual(PanelShortcut.kimiWork.target, .kimiWork)
         XCTAssertNil(PanelShortcut.inboxOnly.target)
-        XCTAssertEqual(PanelShortcut.allCases.count, 5)
-        XCTAssertEqual(Set(PanelShortcut.allCases.map(\.rawValue)), Set(["0", "1", "2", "3", "4"]))
+        // essay 01: ⌘5 「先留着」 is a sixth shortcut (nil target like inbox-only, isHold)
+        XCTAssertEqual(PanelShortcut.hold.rawValue, "5")
+        XCTAssertTrue(PanelShortcut.hold.isHold)
+        XCTAssertEqual(PanelShortcut.allCases.count, 6)
+        XCTAssertEqual(Set(PanelShortcut.allCases.map(\.rawValue)), Set(["0", "1", "2", "3", "4", "5"]))
         XCTAssertEqual(PanelShortcut.kimiWork.badge, "⌘4")
     }
 
@@ -159,6 +162,32 @@ final class Week3FeatureTests: XCTestCase {
         XCTAssertEqual(m.summaryLine, "A")
         XCTAssertEqual(m.targetLabel(.cowork), "Cowork → clipboard")
         XCTAssertEqual(m.targetLabel(.clipboard), "Clipboard")
+    }
+
+    // MARK: Essay 02 — work / receiving-session two-layer destination + rebind gate
+
+    func testPanelReceiverChangeRequiresAck() {
+        let cap = sampleCapture()
+        // bound == confirmed: the stored work has NO pending rebind…
+        let work = Work(name: "焦点行为检查", boundTarget: .claudeCode, confirmedTarget: .claudeCode)
+        var fired: [(DeliveryTarget?, String)] = []
+        let m = CapturePanelModel(capture: cap, initialTarget: .chatgptDesktop, boundWork: work,
+                                  onConfirm: { t, n in fired.append((t, n)) }, onCancel: {})
+        // …but picking a DIFFERENT receiver in-panel IS a rebind → two-step gate
+        XCTAssertFalse(m.workNeedsConfirmation)
+        XCTAssertTrue(m.receiverChanged)
+        XCTAssertTrue(m.confirmLabel.contains("确认新地址"))
+        XCTAssertTrue(m.destinationSubtitle?.contains("接收会话已更换") == true)
+        m.confirm()
+        XCTAssertTrue(fired.isEmpty, "first confirm only acknowledges the new address")
+        m.confirm()
+        XCTAssertEqual(fired.count, 1)
+        XCTAssertEqual(fired[0].0, .chatgptDesktop)
+
+        // unchanged receiver → no gate (mirror of SelfTest m5)
+        let m2 = CapturePanelModel(capture: cap, initialTarget: .claudeCode, boundWork: work,
+                                   onConfirm: { _, _ in }, onCancel: {})
+        XCTAssertFalse(m2.receiverChanged)
     }
 
     // MARK: DeliveryTarget raw values

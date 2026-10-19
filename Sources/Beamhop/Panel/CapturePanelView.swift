@@ -2,7 +2,8 @@ import SwiftUI
 import BeamhopCore
 
 /// Keyboard-first capture panel (Week 3 spec §2.1). Cursor lands in the note field on open;
-/// ⌘1/2/3/0 pick the target, Enter delivers, Esc cancels (capture stays in the Inbox).
+/// ⌘1/2/3/4 pick the target, Enter delivers, Esc cancels (capture stays in the Inbox),
+/// ⌘5 「先留着」parks it in the pocket (essay 01), ⌘0 saves to Inbox only.
 struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
     @FocusState private var noteFocused: Bool
@@ -41,20 +42,33 @@ struct CapturePanelView: View {
                 .font(.body)
                 .focused($noteFocused)
 
+            // 工作名（可选，essay 02）：给这个去处起个名字，下次认出这件工作
+            TextField("Work name (optional), e.g. 让发送不打断阅读", text: $model.workName)
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            if model.boundWork != nil {
+                destinationCard
+            }
+
             Divider()
 
-            // 目标行：⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork / ⌘4 Kimi Work / ⌘0 仅入 Inbox
+            // 目标行：⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork / ⌘4 Kimi Work / ⌘5 先留着 / ⌘0 仅入 Inbox
             // （键位映射唯一来源是 PanelShortcut，按钮与键盘路由不会漂移）
             VStack(alignment: .leading, spacing: 6) {
                 Text("Deliver to")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    ForEach(PanelShortcut.allCases.filter { $0 != .inboxOnly }, id: \.self) { sc in
+                    ForEach(PanelShortcut.allCases.filter { $0.target != nil }, id: \.self) { sc in
                         targetButton(sc)
                     }
                 }
-                inboxButton
+                HStack(spacing: 10) {
+                    holdButton
+                    inboxButton
+                }
             }
 
             HStack {
@@ -73,8 +87,38 @@ struct CapturePanelView: View {
         .onAppear { noteFocused = true }
     }
 
+    /// Essay 02 的两层去处卡：上面是人认得的工作名，下面是当前接收会话；
+    /// 换绑未确认时副标题用警示色提示「接收会话已更换」。
+    private var destinationCard: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: "folder")
+                    .foregroundStyle(.secondary)
+                Text(model.destinationTitle)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+            }
+            if let subtitle = model.destinationSubtitle {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.caption2)
+                        .foregroundStyle(model.workNeedsConfirmation && !model.rebindAcknowledged
+                                         ? Color.orange : .secondary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(model.workNeedsConfirmation && !model.rebindAcknowledged
+                                         ? Color.orange : .secondary)
+                        .lineLimit(1)
+                }
+                .padding(.leading, 20)
+            }
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private func targetButton(_ sc: PanelShortcut) -> some View {
-        let target = sc.target!   // 非 inboxOnly 的 shortcut 必有 target（PanelShortcut 测试约束）
+        let target = sc.target!   // 过滤后必有 target（PanelShortcut 测试约束）
         let selected = model.selectedTarget == target
         return Button {
             model.selectedTarget = target
@@ -89,6 +133,25 @@ struct CapturePanelView: View {
         }
         .buttonStyle(.plain)
         .keyboardShortcut(KeyEquivalent(Character(sc.rawValue)), modifiers: .command)
+    }
+
+    /// 「先留着」(⌘5, essay 01)：不进 Inbox-only 也不投递，放入口袋；只有暂存材料存在时
+    /// 口袋界面才需要出现 —— 默认形态仍是原地路由。
+    private var holdButton: some View {
+        Button {
+            model.hold()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "tray.and.arrow.down")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text("\(PanelShortcut.hold.badge) 先留着")
+                    .font(.callout)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canHold)
+        .keyboardShortcut(KeyEquivalent(Character(PanelShortcut.hold.rawValue)), modifiers: .command)
     }
 
     private var inboxButton: some View {

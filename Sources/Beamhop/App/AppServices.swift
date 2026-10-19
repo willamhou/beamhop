@@ -16,6 +16,8 @@ final class AppServices {
     private(set) var database: Database?
     private(set) var store: CaptureStore?
     private(set) var events: EventStore?
+    private(set) var pocketStore: PocketStore?
+    private(set) var workStore: WorkStore?
     private(set) var capture: CaptureService?
     private(set) var delivery: DeliveryService?
     private(set) var menuBar: MenuBarController?
@@ -25,6 +27,7 @@ final class AppServices {
         return svc
     }
     private(set) lazy var inbox = InboxWindowController()
+    private(set) lazy var pocket = PocketWindowController()   // 「先留着」hold stack (essay 01)
     private(set) lazy var compatibility = CompatibilityWindowController()
     private(set) lazy var panel = CapturePanelController()   // Week 3 floating window
     private(set) lazy var firstRun = FirstRunWindowController(
@@ -38,6 +41,7 @@ final class AppServices {
         menuBar = MenuBarController(
             onCapture: { [weak self] in self?.doCapture() },
             onInbox: { [weak self] in self?.inbox.show() },
+            onPocket: { [weak self] in self?.pocket.show() },
             onDiagnostics: { [weak self] in self?.diagnostics.show() },
             onCompatibility: { [weak self] in self?.compatibility.show() }
         )
@@ -53,6 +57,10 @@ final class AppServices {
             self.store = store
             let events = EventStore(db)
             self.events = events
+            let pocketStore = PocketStore(db)
+            self.pocketStore = pocketStore
+            let workStore = WorkStore(db)
+            self.workStore = workStore
             self.capture = CaptureService(store: store)
             self.delivery = DeliveryService(store: store)
             inbox.model.configure(store: store, events: events) { [weak self] capture, target in
@@ -60,6 +68,9 @@ final class AppServices {
                 DispatchQueue.global(qos: .userInitiated).async {
                     self?.delivery?.deliver(capture, to: target)
                 }
+            }
+            pocket.model.configure(store: pocketStore) { [weak self] batch in
+                self?.deliverPocketBatch(batch)
             }
             log.info("database opened at \(AppPaths.databaseURL.path, privacy: .public) recovered=\(db.recoveredFromCorruption)")
         } catch {
@@ -77,6 +88,9 @@ final class AppServices {
         })
         hotkeys.register(Hotkey(id: 3, keyCode: 9, modifiers: cmdShift, name: "⌘⇧V Emergency deliver") {
             [weak self] in self?.emergencyClipboardPaste()
+        })
+        hotkeys.register(Hotkey(id: 4, keyCode: 35, modifiers: cmdShift, name: "⌘⇧P Pocket") {
+            [weak self] in self?.pocket.show()
         })
         if !hotkeys.failed.isEmpty {
             log.warning("hotkey conflicts: \(self.hotkeys.failed.joined(separator: ", "), privacy: .public)")
@@ -161,13 +175,26 @@ final class AppServices {
     private func showPanel(_ cap: Capture, delivery: DeliveryService) {
         let state = signposter.beginInterval("panel_show")
         let pt0 = Date()
+
+        // Essay 02: re-bind the remembered named destination (if any) and surface an
+        // unconfirmed receiver change. The panel pre-selects the work's CURRENT binding —
+        // the first Enter then only acknowledges the change, the second delivers.
+        let rememberedWork = targetMemory.lastWorkName.flatMap { name in
+            try? workStore?.fetch(name: name)
+        }
+        let defaultTarget = rememberedWork?.boundTarget ?? targetMemory.last
+
         panel.show(
             capture: cap,
-            defaultTarget: targetMemory.last,
+            defaultTarget: defaultTarget,
+            boundWork: rememberedWork,
+            workName: rememberedWork?.name ?? "",
             onConfirm: { [weak self] target, note in
                 guard let self else { return }
                 self.events?.record(name: EventStore.Name.panelConfirm,
                                     detail: "target=\(target?.rawValue ?? "inbox_only")")
+                let workName = self.panel.currentModel?.workName
+                self.registerOrRebindWork(workName: workName, chosenTarget: target)
                 guard let target else {
                     // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost,
                     // then hand focus back so the next ⌘⇧Space captures the real work, not us.
@@ -181,7 +208,14 @@ final class AppServices {
                     // self is already bound strongly by the outer onConfirm guard; capturing it
                     // weakly here only re-triggers #ImplicitStrongCapture (outer strong scope).
                     delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { chosen, ok in
-                        if ok { self.targetMemory.markSucceeded(chosen) }
+                        if ok {
+                            self.targetMemory.markSucceeded(chosen, workName: workName)
+                            // Essay 02: a successful delivery to a work verifies its address.
+                            if let workName, let work = try? self.workStore?.fetch(name: workName),
+                               work.needsConfirmation {
+                                try? self.workStore?.confirm(id: work.id)
+                            }
+                        }
                         // Degraded to clipboard (focus/paste/registration failure): nothing else
                         // took focus, so restore — same residue as Esc. On success the target app
                         // is frontmost and the guard inside makes this a no-op.
@@ -196,11 +230,93 @@ final class AppServices {
                 self.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
                 Notifier.info(L10n.s("Saved to Inbox"), cap.id)
                 self.restorePrePanelFocus()
+            },
+            onHold: { [weak self] target, note in
+                guard let self, let pocketStore else { return }
+                // 「先留着」(essay 01): park in the pocket — order, note and intended target
+                // survive; nothing is delivered, reading position stays put.
+                do {
+                    let item = try pocketStore.hold(captureID: cap.id,
+                                                    note: note.isEmpty ? nil : note,
+                                                    intendedTarget: target)
+                    self.events?.record(name: EventStore.Name.pocketHold,
+                                        detail: "target=\(target?.rawValue ?? "undecided")",
+                                        captureID: cap.id)
+                    let n = (try? pocketStore.count()) ?? 0
+                    Notifier.info(L10n.f("Held in pocket (%lld)", Int64(n)),
+                                  L10n.s("Press ⌘⇧P to review and send"))
+                    self.log.info("held \(item.id, privacy: .public) stack=\(n)")
+                } catch {
+                    self.log.error("pocket hold failed: \(String(describing: error), privacy: .public)")
+                    Notifier.error(L10n.s("Could not hold"), String(describing: error))
+                }
+                self.restorePrePanelFocus()
             })
         let panelMs = Int(Date().timeIntervalSince(pt0) * 1000)
         signposter.endInterval("panel_show", state, "\(panelMs)ms")
         log.info("panel_ms=\(panelMs)")
         events?.record(name: EventStore.Name.panelShown, detail: "ms=\(panelMs)", captureID: cap.id)
+    }
+
+    /// Essay 02 destination bookkeeping at confirm time:
+    /// - new name → register (the act of naming + choosing IS the first confirmation);
+    /// - existing work, user picked a DIFFERENT target in this panel → explicit in-panel
+    ///   rebind: the pick itself verifies the address, so rebind + confirm together;
+    /// - existing work, same target → leave confirmation state untouched (a separate
+    ///   rebind elsewhere may still require the two-step ack in the panel).
+    private func registerOrRebindWork(workName: String?, chosenTarget: DeliveryTarget?) {
+        guard let workStore, let raw = workName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty, let target = chosenTarget else { return }
+        do {
+            if let existing = try workStore.fetch(name: raw) {
+                if existing.boundTarget != target {
+                    // Record the new address, but DO NOT confirm here: the two-step gate in
+                    // CapturePanelModel already made the user acknowledge the change, and the
+                    // post-delivery callback below is what actually verifies the address
+                    // (delivery succeeded). Rebinding without a successful delivery leaves
+                    // needsConfirmation true — honest state if the delivery never lands.
+                    _ = try workStore.rebind(id: existing.id, to: target)
+                    log.info("work '\(raw, privacy: .public)' rebound \(existing.boundTarget.rawValue) → \(target.rawValue)")
+                }
+            } else {
+                _ = try workStore.register(name: raw, boundTo: target)
+                log.info("work registered: \(raw, privacy: .public) → \(target.rawValue, privacy: .public)")
+            }
+        } catch {
+            log.error("work bookkeeping failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Pocket batch delivery (essay 01/02): send the held stack in hold ORDER, one item at a
+    /// time (sequential — parallel AX activation would fight over focus). Each item goes to its
+    /// own intended target (undecided → clipboard as the honest fallback), then leaves the
+    /// pocket. On any failure the item STAYS in the pocket (failure recovery: material is
+    /// never silently lost) and the batch stops so the user sees exactly where it broke.
+    private func deliverPocketBatch(_ batch: [(PocketItem, Capture)]) {
+        guard let delivery, let pocketStore else { return }
+        events?.record(name: EventStore.Name.pocketBatch, detail: "count=\(batch.count)")
+        var queue = Array(batch)
+        func step() {
+            guard !queue.isEmpty else { return }
+            let (item, cap) = queue.removeFirst()
+            let target = item.intendedTarget ?? .clipboard
+            delivery.deliver(cap, to: target, userNote: item.note) { [weak self] _, ok in
+                guard let self else { return }
+                if ok {
+                    try? self.pocketStore?.remove(id: item.id)
+                    self.events?.record(name: EventStore.Name.pocketItemDelivered,
+                                        detail: "target=\(target.rawValue)", captureID: cap.id)
+                    step()
+                } else {
+                    self.events?.record(name: EventStore.Name.pocketItemFailed,
+                                        detail: "target=\(target.rawValue)", captureID: cap.id)
+                    Notifier.error(L10n.s("Pocket delivery stopped"),
+                                   L10n.f("Item %lld failed and stays in the pocket.", Int64(queue.count + 1)))
+                    DispatchQueue.main.async { self.pocket.model.reload() }
+                }
+            }
+        }
+        DispatchQueue.global(qos: .userInitiated).async { step() }
     }
 
     /// §7-C: reactivate the app that was frontmost before the panel took key — best-effort, and

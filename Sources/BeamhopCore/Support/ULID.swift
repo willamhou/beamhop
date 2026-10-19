@@ -35,6 +35,16 @@ public enum ULID {
         "res_" + generate(date: date)
     }
 
+    /// A pocket item id: `pok_<26-char ulid>` (hold stack, product essays 2026-10-19).
+    public static func pocketID(date: Date = Date()) -> String {
+        "pok_" + generate(date: date)
+    }
+
+    /// A work id: `wrk_<26-char ulid>` (named destination, product essay 02).
+    public static func workID(date: Date = Date()) -> String {
+        "wrk_" + generate(date: date)
+    }
+
     /// Short, human-facing prefix of a capture id (e.g. for compact UI labels).
     /// `cap_01J9Z…` -> `cap_01J9Z6` style (prefix + first 6 ulid chars).
     public static func shortPrefix(of captureID: String, length: Int = 6) -> String {
