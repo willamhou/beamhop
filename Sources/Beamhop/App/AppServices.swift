@@ -178,8 +178,9 @@ final class AppServices {
                 // Delivery off-main (AX activation sleeps); failure paths inside DeliveryService
                 // degrade to clipboard and notify — never silent.
                 DispatchQueue.global(qos: .userInitiated).async {
-                    delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { [weak self] chosen, ok in
-                        guard let self else { return }
+                    // self is already bound strongly by the outer onConfirm guard; capturing it
+                    // weakly here only re-triggers #ImplicitStrongCapture (outer strong scope).
+                    delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { chosen, ok in
                         if ok { self.targetMemory.markSucceeded(chosen) }
                         // Degraded to clipboard (focus/paste/registration failure): nothing else
                         // took focus, so restore — same residue as Esc. On success the target app

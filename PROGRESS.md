@@ -1,7 +1,7 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
-> Last updated: 2026-10-19 — dogfood instrumentation + Phase 1.5 patches (zh-Hans toggle, AX deadline, one-click MCP register) (events + delivery durations + `scripts/dogfood-metrics.sh`).
+> Last updated: 2026-10-19 — **Inbox detail chain (Timeline) landed; §7-C focus-restore fix landed; stable self-signed dev identity ("Beamhop Sign") works fully headless (one-time TCC grant left, needs an unlocked screen); main merged in — dogfood instrumentation + Phase 1.5 patches (zh-Hans toggle, AX deadline, one-click MCP register) + `scripts/dogfood-metrics.sh`**.
 
 > 🗂 Full pre-2026-10 history (Chinese) is archived at [docs/zh/PROGRESS.zh.md](docs/zh/PROGRESS.zh.md).
 
@@ -11,7 +11,7 @@
 
 Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 149 SelfTest checks. **MCP write-back (plan A) + search dedup merged 2026-10-18** (stage table below). **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); `swift test`/XCTest work on machines with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`, CI runs them on macos-15); the original dev Mac still has CLT only.
 
-**Blockers**: ① signed distribution needs a machine with Xcode + Developer ID signing; ② ad-hoc signing means every repack needs the Accessibility grant re-enabled in System Settings.
+**Blockers**: ① signed distribution needs a machine with Xcode + Developer ID signing; ② ~~ad-hoc signing means every repack needs the Accessibility grant re-enabled~~ **SOLVED 2026-10-19** — repacks now sign with the stable self-signed "Beamhop Sign" identity (TCC anchors the grant to the certificate, verified DR-stable across repacks); the remaining one-time grant uses `scripts/tcc-grant-runbook.md` (needs the screen unlocked once).
 
 ---
 
@@ -30,6 +30,9 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 | **MCP write-back (plan A)** | ✅ **done + on-device verified** | `save_result`/`fetch_results`/`search_captures` + `results` table (v4 migration, FK cascade — renumbered from v3 at merge, see Migrations.swift note); decision record `docs/superpowers/specs/2026-10-18-memory-mcp-decision.md`; SelfTest + mcp-smoke green; real Claude Desktop session e2e 2026-10-18: fetch_capture → search_captures(deduped) → save_result → conclusion in Inbox, agent=claude_desktop |
 | **MCP search dedup** | ✅ implemented + verified on real Inbox | `search_captures` collapses re-captures by `contentIdentity` (app+title+url+text, exact); each hit = newest of group + `duplicate_count`/`first_seen_at`/`last_seen_at`; `include_duplicates=true` for raw list. Real Inbox: "beamhop" 10 raw hits → 4 groups |
 | `swift test` (XCTest) | ✅ unblocked (2026-10-18) | works locally with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`) — the "license" blocker was stale; mirror kept in sync with SelfTest from now on |
+| **Inbox detail chain (Timeline)** | ✅ implemented + tested (visual check pending unlock) | spec `docs/superpowers/specs/2026-10-19-inbox-detail-chain.md`; `TimelineBuilder` (Core, pure) merges deliveries+results ascending, tie → delivery first; Inbox detail renders unified Timeline, list rows show `↩ N` badge; SelfTest +7 / XCTest mirror +1 (29 total) |
+| **Stable dev signing ("Beamhop Sign")** | ✅ done, fully headless | `scripts/setup-dev-signing.sh` (dedicated keychain + self-signed cert + partition list) + `packaging/build-app.sh` auto-detect; DR = `certificate leaf H"a1eff22c…"` identical across repacks → TCC grant survives rebuilds; app launches and runs (pid-verified); Accessibility grant itself pending an unlocked screen (`scripts/tcc-grant-runbook.md`) |
+| §7-C focus-restore fix | ✅ merged into working tree | pre-panel frontmost app re-activated on Esc / ⌘0 / clipboard-degraded paths only (never steals focus from a successful delivery); orphan-safe (never captures Beamhop-on-Beamhop) |
 | Xcode project + signed build | ⬜ blocked | same as above |
 
 ---
@@ -56,9 +59,9 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 cd /Users/leo/Documents/Kimi/Workspaces/beamhop
 export DEVELOPER_DIR=/Library/Developer/CommandLineTools   # needed while Xcode license is unaccepted
 swift build                 # build all targets (incl. GRDB)
-swift run BeamhopSelfTest   # 102 checks, expect ALL PASS ✅
-./packaging/build-app.sh    # assemble dist/Beamhop.app
-open dist/Beamhop.app       # grant Accessibility again after every repack (ad-hoc signature)
+swift run BeamhopSelfTest   # 141 checks, expect ALL PASS ✅
+./packaging/build-app.sh    # assemble dist/Beamhop.app (auto-signs "Beamhop Sign" if set up)
+open dist/Beamhop.app       # first grant only: scripts/tcc-grant-runbook.md (stable identity ⇒ no re-grant after repacks)
 ```
 
 **Dogfood gate report (evolution-decisions §3) — run this weekly during the dogfood window:**
@@ -96,7 +99,8 @@ claude mcp remove beamhop -s user
 Package.swift
 Sources/
   BeamhopCore/                 # testable logic (no AppKit; depends on GRDB)
-    Models/      Capture, Delivery, Source/DomainHint/DeliveryTarget
+    Models/      Capture, Delivery, CaptureResult, Source/DomainHint/DeliveryTarget,
+                 TimelineEntry+TimelineBuilder (detail-chain merge, pure/testable)
     Storage/     Database (WAL + openReadOnly + corruption recovery), migrations (dual FTS5+triggers),
                  CaptureStore (CRUD+search), CaptureReader (read-only)
     Capture/     AppBlacklist, DuplicateGate (W3-4 <500ms same-window re-press guard)
@@ -134,7 +138,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ MCP server against real Claude Code (`fetch_capture` returns a real capture)
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
-- ✅ Logic: 149 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport + v5 reconcile + zh-Hans strings + AXDeadline**, MCP dedup + plan-A write-back)
+- ✅ Logic: 149 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport + v5 reconcile + zh-Hans strings + AXDeadline**, MCP dedup + plan-A write-back, **TimelineBuilder detail chain**)
 - ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
@@ -158,7 +162,11 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 - **Kimi editor: kAXValueAttribute set-value returns success but does NOT take effect** (placeholder pollution) → inject by focusing the composer + clipboard paste (`safePasteOnly`, no Enter). New chat via sidebar button `desc="新建会话"`.
 - **Windows/panels: `isReleasedWhenClosed = false`** (the red close destroys the window and the hotkey can never reopen it — S5).
 - **Global hotkeys: Carbon `RegisterEventHotKey`** (no Input Monitoring permission; check the OSStatus for conflicts).
-- **TCC binds signature identity + path**: ad-hoc-signed rebuilds change the cdhash → the Accessibility grant silently drops. Every `./packaging/build-app.sh` + restart requires re-enabling Beamhop in System Settings. A self-signed codesigning cert would stabilize this but openssl-generated certs would not pair into a usable identity in the login keychain (attempted 2026-10-18, reverted).
+- **TCC binds signature identity + path**: ad-hoc-signed rebuilds change the cdhash → the Accessibility grant silently drops. **SOLVED 2026-10-19** with a stable self-signed identity — `scripts/setup-dev-signing.sh` + auto-detect in `packaging/build-app.sh`. Sub-lessons from the debug journey (do NOT retry these dead ends):
+  - **`security add-trusted-cert` HANGS headless** (authd prompt blocks forever) — and trust is NOT needed anyway: TCC anchors the grant on the leaf certificate's designated requirement (`identifier "com.beamhop.app" and certificate leaf = H"…"`), which is stable across repacks regardless of keychain trust. Gatekeeper/spctl rejection is expected and irrelevant for local dev.
+  - **A private key in the LOGIN keychain blocks `codesign` headless**: securityd requires a user-presence consent that queues behind the lock screen (symptom: codesign frozen in `SecurityServer::ClientSession::generateSignature` → `mach_msg`; `sample` confirms). Fix: dedicated keychain (`security create-keychain -p …`) + `security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k <pw>` — then codesign is fully dialog-free. `-A` on import alone is NOT sufficient.
+  - **Import quirks (LibreSSL 3.3.6 / macOS 26)**: `security import` of a PKCS#12 fails "MAC verification failed" even with `-legacy` and non-empty passwords; import PEM key + cert separately instead. Private key PEM must be PKCS#1 (`BEGIN RSA PRIVATE KEY`) — LibreSSL's `openssl rsa -in pkcs8.pem -out trad.pem` emits that by default (no `-traditional` flag). `security delete-key` is trimmed in macOS 26 — orphaned cert/key cleanup needs Keychain Access GUI. Orphans from the 2026-10-19 first attempt ("Beamhop Dev", login-keychain "Beamhop Sign") are inert but will prompt if something tries to use them.
+  - **Screen locked = GUI automation impossible**: every app window reports "no display" (screencapture is black; `caffeinate -u` only wakes to the lock screen). TCC toggles and keychain consent must wait for an unlocked session — see `scripts/tcc-grant-runbook.md`.
 - **Clipboard safe paste (§12.3)**: store raw Data per item/per type, refuse if unreadable; only ClaudeCodeDelivery restores; the clipboard fallback handoff does not.
 - **auto-Enter only when "the located terminal is frontmost + claude is running"**, else let the user confirm (never Enter into the wrong window).
 - ⚠️ **Incident**: during S6 testing, scripted synthetic keystrokes + undo were sent into the user's real Notes and wiped one note (recovered). **Never send synthetic keys/undo into the user's real apps**; capture is read-only AX.
@@ -177,13 +185,16 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 ## 7. Next steps (dependency-ordered)
 
 **A. Unblock formal engineering (user action, ~2 min)**
-1. `sudo xcodebuild -license accept` → unlocks `swift test`, XCTest mirror, real signing.
-2. Then: Developer ID signing for `dist/Beamhop.app` (kills the repack-regrant cycle).
+1. ~~`sudo xcodebuild -license accept`~~ — stale: `swift test` already works locally via the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`); CI runs both suites on macos-15.
+2. Developer ID signing for `dist/Beamhop.app` remains the public-release gate (paid Apple account).
+3. **One-time Accessibility grant** (screen must be unlocked; everything else automated): follow `scripts/tcc-grant-runbook.md` — after this, repacks no longer drop the grant.
 
 **B. Perf & acceptance closure (Week 3 leftovers)**
 - ✅ 20-press P95 done 2026-10-18 (211ms, results in §8) — method deviation: info-level os_log is not persisted on this Mac; used screen-diff + DB columns instead of the §3 grep.
 - Ongoing tracking is automated: run `scripts/dogfood-metrics.sh` weekly during the dogfood window (panel_ms now also durable in `events`).
+- ✅ §7-C focus-stealing fix landed 2026-10-19 (restore pre-panel frontmost on Esc/⌘0/clipboard-degrade).
 - Re-run AX word-grab spot checks on the 8 S6 apps.
+- Visual check of the new Inbox Timeline (detail chain) on a capture with agent write-backs, once the screen is unlocked.
 
 **C. Product candidates (pick after a week of dogfood)**
 - ~~Prompt-injection language~~: plan-A write-back trigger landed (Chinese base); unify EN/zh on top of the toggle later if wanted.
@@ -215,7 +226,7 @@ User-verified this session:
 Perf P95: ✅ **2026-10-18, 20-press automated session (synthetic ⌘⇧Space via CGEventPost; panel visibility detected by screencapture crop-diff; capture_ms read from the DB `capture_duration_ms` column)**. Method deviation: this Mac does NOT persist info-level os_log messages (`log show` only ever shows errors from Beamhop, and `log stream` captures nothing) — the spec §3 grep method is unusable here, so panel latency was measured as press→panel-visible-on-screen.
 - press→panel-visible: 18/20 valid samples (2 synthetic presses were dropped by the OS), min 179 / median 195 / **P95 211 / max 211 ms** — end-to-end is already under the 300ms panel_ms budget, and in-app panel_ms is only a fraction of this number. ✅
 - capture_ms (session): P95 = 6ms, but 17/20 presses captured Beamhop itself (0ms AX — see focus-stealing finding below), so this is the optimistic floor. Real-app reference from today's organic captures: Chrome 122–155ms, Kimi 3–55ms. Worst realistic end-to-end ≈ 155 + ~150 ≈ 300ms — right at budget; fine for now, re-measure with Chrome frontmost if it ever feels slow.
-- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.
+- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). ~~Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.~~ **Fixed 2026-10-19** (`restorePrePanelFocus` in AppServices).
 
 Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_desktop versions_tested += 26.1007.71326 (dual bundle id, AXEditable gone, composer depth ~30, set-value OK); kimi_work added (paste-injection mechanism, new-chat button desc).
 

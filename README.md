@@ -14,7 +14,7 @@ swift test                  # BeamhopCore XCTest (requires full Xcode)
 swift run BeamhopSelfTest   # logic self-test (86 checks, no Xcode/XCTest needed)
 swift run Beamhop           # menu-bar app (✦ icon + ⌘⇧Space/⌘⇧I/⌘⇧V + Inbox/diagnostics/compatibility windows)
 scripts/mcp-smoke.sh        # MCP stdio smoke (S1 frame format + seed data)
-./packaging/build-app.sh    # assemble dist/Beamhop.app (ad-hoc signed)
+./packaging/build-app.sh    # assemble dist/Beamhop.app (auto-signs with the "Beamhop Sign" dev identity if set up — run scripts/setup-dev-signing.sh once; otherwise ad-hoc)
 ```
 
 Pushing any branch runs all checks on GitHub Actions (macos-15 + ubuntu) — compile can be verified without a local Mac.

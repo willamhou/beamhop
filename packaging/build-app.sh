@@ -47,10 +47,28 @@ fi
 cp -R "$resource_bundle" "$contents/Resources/$(basename "$resource_bundle")"
 
 plutil -lint "$contents/Info.plist"
+
+# Stable dev signing (scripts/setup-dev-signing.sh): when the dedicated keychain exists,
+# prefer the self-signed "Beamhop Sign" identity over ad-hoc — TCC then anchors the grant
+# to the certificate and survives repacks (ad-hoc cdhash changes drop it every time).
+dev_keychain="$HOME/Library/Keychains/beamhop-sign.keychain-db"
+if [[ -z "${BEAMHOP_CODESIGN_IDENTITY:-}" && -f "$dev_keychain" ]] \
+    && security find-certificate -c "Beamhop Sign" "$dev_keychain" >/dev/null 2>&1; then
+  BEAMHOP_CODESIGN_IDENTITY="Beamhop Sign"
+  BEAMHOP_CODESIGN_KEYCHAIN="$dev_keychain"
+  echo "dev signing: using 'Beamhop Sign' from $dev_keychain"
+fi
+
+codesign_args=(--force --deep --options runtime)
 if [[ -n "${BEAMHOP_CODESIGN_IDENTITY:-}" ]]; then
-  codesign --force --deep --options runtime --sign "$BEAMHOP_CODESIGN_IDENTITY" "$staging/Beamhop.app"
+  if [[ -n "${BEAMHOP_CODESIGN_KEYCHAIN:-}" ]]; then
+    # self-signed: no notarization-timestamp service; --timestamp=none keeps signing offline
+    security unlock-keychain -p "${BEAMHOP_KEYCHAIN_PASSWORD:?Supply the signing password through a secret provider}" "$BEAMHOP_CODESIGN_KEYCHAIN" 2>/dev/null || true
+    codesign_args+=(--keychain "$BEAMHOP_CODESIGN_KEYCHAIN" --timestamp=none)
+  fi
+  codesign "${codesign_args[@]}" --sign "$BEAMHOP_CODESIGN_IDENTITY" "$staging/Beamhop.app"
 else
-  codesign --force --deep --sign - "$staging/Beamhop.app"
+  codesign "${codesign_args[@]}" --sign - "$staging/Beamhop.app"
 fi
 
 mkdir -p "$output_dir"

@@ -92,7 +92,12 @@ S1 Claude Code MCP **✅ PASS** / S2 Cowork **🟢 mechanism confirmed** / S3 Ch
 - Error logging & telemetry (local only, no reporting)
 - Auto-update mechanism (Sparkle)
 
-**Spec placeholder**: `specs/YYYY-MM-DD-phase-1-5-patches.md` (draft after MVP completes)
+**Delivered under Phase 1.5 so far**:
+- ✅ 2026-10-18 Dogfood gate instrumentation — events table + delivery durations + `scripts/dogfood-metrics.sh` (evolution-decisions §3 gate table)
+- ✅ 2026-10-19 **Inbox detail chain (Timeline)** — spec [2026-10-19-inbox-detail-chain.md](specs/2026-10-19-inbox-detail-chain.md); deliveries + agent write-backs merged into one ascending timeline in the Inbox detail view (`TimelineBuilder` in Core, SelfTest+XCTest covered); the first user-visible increment of the "fact trajectory" track (capture → deliveries → results)
+- ✅ 2026-10-19 **Stable dev signing** — `scripts/setup-dev-signing.sh`; repacks no longer drop the Accessibility grant (TCC anchored to the self-signed leaf)
+
+**Spec placeholder**: `specs/YYYY-MM-DD-phase-1-5-patches.md` (consolidate remaining patches when the dogfood window closes)
 
 ---
 
