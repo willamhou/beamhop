@@ -532,6 +532,103 @@ do {
             check(true, "fileNotFound when DB absent")
         }
     }
+    print("== Focus recovery + self-capture regression ==")
+    do {
+        check(CaptureFocusPolicy.isSelf(sourcePID: 42, sourceBundleID: "unknown", ownPID: 42),
+              "SwiftPM self PID rejected even without bundle ID")
+        check(CaptureFocusPolicy.isSelf(sourcePID: 43, sourceBundleID: "com.beamhop.app", ownPID: 42),
+              "another Beamhop instance rejected by bundle ID")
+        check(!CaptureFocusPolicy.isSelf(sourcePID: 7, sourceBundleID: "com.apple.Safari", ownPID: 42),
+              "external source allowed")
+        func restore(_ front: Int32?, source: Int32 = 7, terminated: Bool = false,
+                     window: Bool = false) -> Bool {
+            CaptureFocusPolicy.shouldRestore(sourcePID: source, ownPID: 42, frontmostPID: front,
+                                             sourceTerminated: terminated, hasVisibleBeamhopWindow: window)
+        }
+        check(restore(42), "cancel/save/clipboard restores source while Beamhop owns focus")
+        check(!restore(9), "delivery target or user's clicked app keeps focus")
+        check(!restore(7), "already active source needs no activation")
+        check(!restore(nil), "unknown foreground is left alone")
+        check(!restore(42, terminated: true), "exited source never activated")
+        check(!restore(42, window: true), "Inbox/new panel keeps focus")
+        check(!restore(42, source: 42), "never restores Beamhop itself")
+    }
+
+    print("== Inbox external write-back + selection regression ==")
+    do {
+        let (db, path) = try freshDB()
+        defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
+        let store = CaptureStore(db)
+        let events = EventStore(db)
+        var rows: [Capture] = []
+        for index in 0..<61 {
+            var row = sample(windowTitle: "Document \(index)")
+            row.createdAt = Int64(index + 1000)
+            try store.insert(row)
+            rows.append(row)
+        }
+        let origin = rows[0], other = rows[1]
+        let model = InboxModel()
+        model.configure(store: store, events: events, onDeliver: { _, _ in })
+        model.reload()
+        model.selectedID = origin.id
+        check(model.selectedResults.isEmpty, "empty conclusion state")
+        let before = try events.count()
+        let writer = try ResultStore.open(path: path)
+        let result = CaptureResult(originCaptureID: origin.id, agent: "codex", sessionID: "test-session",
+                                   content: "结论\n" + String(repeating: "证据", count: 1500), createdAt: 3000)
+        try writer.insert(result)
+        try writer.insert(CaptureResult(originCaptureID: other.id, agent: "kimi", content: "other"))
+        try store.recordDelivery(Delivery(captureID: origin.id, target: .claudeCode,
+                                          deliveredAt: 2000, status: .success))
+        model.refreshSelectedDetails()
+        check(model.selectedResults == [result], "row 61 sees external write-back verbatim, including session and long content")
+        check(model.resultCounts[origin.id] == 1, "selected result badge refreshed")
+        check(model.deliveries[origin.id]?.count == 1, "row 61 delivery history loaded")
+        check(try events.count() == before, "polling does not inflate engagement events")
+        model.selectedID = other.id
+        check(model.selectedResults.first?.content == "other", "selection never leaks previous capture's conclusion")
+        model.selectedID = nil
+        check(model.selectedResults.isEmpty, "deselection clears conclusion")
+        model.selectedID = origin.id
+        model.softDelete(origin)
+        check(model.selectedID == nil && model.selectedResults.isEmpty, "soft delete clears selected detail")
+        model.selectedID = other.id
+        try db.queue.write { try $0.execute(sql: "DROP TABLE results") }
+        model.refreshSelectedDetails()
+        check(model.detailErrorMessage != nil, "conclusion read error is visible")
+        check(model.selectedResults.isEmpty, "conclusion read error does not leave stale content")
+    }
+
+    print("== Inbox result pagination + timeline regression ==")
+    do {
+        let (store, path) = try freshStore()
+        defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
+        let origin = sample()
+        try store.insert(origin)
+        for index in 0..<101 {
+            try store.insertResult(CaptureResult(originCaptureID: origin.id, agent: "codex",
+                                                 content: "\(index)", createdAt: Int64(index)))
+        }
+        let model = InboxModel()
+        model.configure(store: store, events: nil, onDeliver: { _, _ in })
+        model.reload()
+        model.selectedID = origin.id
+        check(model.resultCounts[origin.id] == 101, "badge counts all conclusions")
+        check(model.selectedResults.count == 100 && model.hasMoreResults, "latest 100 with explicit load-more")
+        model.loadMoreResults()
+        check(model.selectedResults.count == 101 && !model.hasMoreResults, "older conclusions remain accessible")
+        model.reload()
+        check(model.selectedID == origin.id && model.selectedResults.count == 101, "refresh preserves selection and pagination")
+
+        let d = Delivery(id: 1, captureID: origin.id, target: .claudeCode, deliveredAt: 200, status: .success)
+        let a = CaptureResult(id: "res_a", originCaptureID: origin.id, agent: "codex", content: "a", createdAt: 100)
+        let b = CaptureResult(id: "res_b", originCaptureID: origin.id, agent: "codex", content: "b", createdAt: 200)
+        let c = CaptureResult(id: "res_c", originCaptureID: origin.id, agent: "kimi", content: "c", createdAt: 200)
+        check(TimelineBuilder.entries(deliveries: [d], results: [c, a, b])
+                == [.result(a), .delivery(d), .result(b), .result(c)], "chronological timeline with deterministic delivery-first ties")
+        check(TimelineBuilder.entries(deliveries: [], results: []).isEmpty, "empty timeline")
+    }
 } catch {
     print("EXCEPTION: \(error)")
     failures += 1

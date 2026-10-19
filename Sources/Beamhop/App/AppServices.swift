@@ -113,13 +113,17 @@ final class AppServices {
     /// calls are safe from a background thread. The panel show itself happens on the main thread.
     private let signposter = OSSignposter(subsystem: "com.beamhop.app", category: "perf")
     private var targetMemory = TargetMemory()   // BeamhopCore: 默认 Claude Code，仅成功投递更新
+    private var captureInFlight = false       // main-thread gate; DuplicateGate is not thread-safe
 
     private func doCapture() {
         guard capture != nil, delivery != nil else {
             Notifier.error(L10n.s("Database not ready — cannot capture")); return
         }
+        guard !captureInFlight else { return }
+        captureInFlight = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self, let capture = self.capture, let delivery = self.delivery else { return }
+            defer { DispatchQueue.main.async { self.captureInFlight = false } }
             let state = self.signposter.beginInterval("capture")
             let t0 = Date()
             let outcome = capture.captureFrontmost()
@@ -163,8 +167,13 @@ final class AppServices {
                 // Delivery off-main (AX activation sleeps); failure paths inside DeliveryService
                 // degrade to clipboard and notify — never silent.
                 DispatchQueue.global(qos: .userInitiated).async {
-                    delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { [weak self] chosen, ok in
-                        if ok { self?.targetMemory.markSucceeded(chosen) }
+                    delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { [weak services = self] chosen, ok in
+                        DispatchQueue.main.async {
+                            if ok { services?.targetMemory.markSucceeded(chosen) }
+                            // If delivery stopped before activating its target, release our
+                            // focus. A target app already in front is deliberately left alone.
+                            services?.panel.restoreSourceIfStillActive(captureID: cap.id)
+                        }
                     }
                 }
             },

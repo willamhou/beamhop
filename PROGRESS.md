@@ -1,13 +1,15 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
-> Last updated: 2026-10-19 — dogfood instrumentation + Phase 1.5 patches (zh-Hans toggle, AX deadline, one-click MCP register) (events + delivery durations + `scripts/dogfood-metrics.sh`).
+> Last updated: 2026-10-19 — focus restoration/self-capture guard + Inbox agent conclusions + isolated native regression (`codex/focus-inbox-results`; awaiting real-device acceptance).
 
 > 🗂 Full pre-2026-10 history (Chinese) is archived at [docs/zh/PROGRESS.zh.md](docs/zh/PROGRESS.zh.md).
 
 ---
 
 ## 0. Status in one paragraph
+
+**Latest increment (2026-10-19)**: cancel/Inbox-only/clipboard paths restore the source only while Beamhop owns focus; native delivery keeps the destination in front; self-capture is rejected before AX reads/DB inserts. Inbox now renders delivery + agent-conclusion timelines (author/session/time, full-text expansion, pagination), refreshes selected details every 2 seconds while active, and reloads on focus. Native fixture regression passed 20 consecutive open/cancel cycles and live external write-back refresh. See [regression record](docs/regressions/2026-10-19-focus-inbox.md). The paragraph below describes the previously merged baseline, not newly run CI.
 
 Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 149 SelfTest checks. **MCP write-back (plan A) + search dedup merged 2026-10-18** (stage table below). **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); `swift test`/XCTest work on machines with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`, CI runs them on macos-15); the original dev Mac still has CLT only.
 
@@ -56,7 +58,7 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 cd /Users/leo/Documents/Kimi/Workspaces/beamhop
 export DEVELOPER_DIR=/Library/Developer/CommandLineTools   # needed while Xcode license is unaccepted
 swift build                 # build all targets (incl. GRDB)
-swift run BeamhopSelfTest   # 102 checks, expect ALL PASS ✅
+swift run BeamhopSelfTest   # expect ALL PASS ✅ (includes focus + Inbox regression)
 ./packaging/build-app.sh    # assemble dist/Beamhop.app
 open dist/Beamhop.app       # grant Accessibility again after every repack (ad-hoc signature)
 ```
@@ -134,7 +136,8 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ MCP server against real Claude Code (`fetch_capture` returns a real capture)
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
-- ✅ Logic: 149 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport + v5 reconcile + zh-Hans strings + AXDeadline**, MCP dedup + plan-A write-back)
+- ✅ Logic: SelfTest green, including new focus/self-capture, Inbox external-write/selection/pagination/error and deterministic timeline coverage; XCTest mirror added in `FocusInboxRegressionTests.swift`.
+- ✅ Native fixture regression: 20 consecutive panel open/cancel cycles; self capture creates no DB row; save/clipboard returns focus; click-away and delivery retain destination focus; late completion does not affect a new panel; Inbox polls two agents' write-backs. Uses temporary fixture apps/database only.
 - ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
@@ -177,10 +180,13 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 ## 7. Next steps (dependency-ordered)
 
 **A. Unblock formal engineering (user action, ~2 min)**
-1. `sudo xcodebuild -license accept` → unlocks `swift test`, XCTest mirror, real signing.
-2. Then: Developer ID signing for `dist/Beamhop.app` (kills the repack-regrant cycle).
+1. This Mac still has CLT only: `swift test` fails resolving the `XCTest` module. Install/select full Xcode to run the updated mirror locally; accepting a license alone cannot add the missing framework. Another Mac's Xcode validation does not validate this machine.
+2. Developer ID signing/notarization for distribution (ad-hoc `.app` assembly remains available).
 
 **B. Perf & acceptance closure (Week 3 leftovers)**
+- ✅ Focus restoration and self-capture fixes + native fixture regression (`codex/focus-inbox-results`). Inbox conclusions are now actually loaded/rendered by the UI; earlier MCP write-back acceptance established storage/protocol behavior only.
+- ⬜ Re-test real-app capture → panel → cancel/delivery on a fresh `.app`, especially fullscreen/Stage Manager/multiple displays after the panel activation change.
+- ⬜ Re-measure real-source hotkey→panel latency. The original 211ms session mostly captured Beamhop itself; `panel_ms` still times only `showPanel`, not the preceding capture. Do not use it as a complete real-source latency gate.
 - ✅ 20-press P95 done 2026-10-18 (211ms, results in §8) — method deviation: info-level os_log is not persisted on this Mac; used screen-diff + DB columns instead of the §3 grep.
 - Ongoing tracking is automated: run `scripts/dogfood-metrics.sh` weekly during the dogfood window (panel_ms now also durable in `events`).
 - Re-run AX word-grab spot checks on the 8 S6 apps.
@@ -215,7 +221,7 @@ User-verified this session:
 Perf P95: ✅ **2026-10-18, 20-press automated session (synthetic ⌘⇧Space via CGEventPost; panel visibility detected by screencapture crop-diff; capture_ms read from the DB `capture_duration_ms` column)**. Method deviation: this Mac does NOT persist info-level os_log messages (`log show` only ever shows errors from Beamhop, and `log stream` captures nothing) — the spec §3 grep method is unusable here, so panel latency was measured as press→panel-visible-on-screen.
 - press→panel-visible: 18/20 valid samples (2 synthetic presses were dropped by the OS), min 179 / median 195 / **P95 211 / max 211 ms** — end-to-end is already under the 300ms panel_ms budget, and in-app panel_ms is only a fraction of this number. ✅
 - capture_ms (session): P95 = 6ms, but 17/20 presses captured Beamhop itself (0ms AX — see focus-stealing finding below), so this is the optimistic floor. Real-app reference from today's organic captures: Chrome 122–155ms, Kimi 3–55ms. Worst realistic end-to-end ≈ 155 + ~150 ≈ 300ms — right at budget; fine for now, re-measure with Chrome frontmost if it ever feels slow.
-- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.
+- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). **Fixed in the 2026-10-19 patch**: restore source conditionally, preserve destination/user focus, reject own PID/bundle before reading or inserting. Native fixture regression passed; real-source perf sampling remains pending.
 
 Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_desktop versions_tested += 26.1007.71326 (dual bundle id, AXEditable gone, composer depth ~30, set-value OK); kimi_work added (paste-injection mechanism, new-chat button desc).
 

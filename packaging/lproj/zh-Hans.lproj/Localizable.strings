@@ -59,6 +59,7 @@
 "Database not ready" = "数据库未就绪";
 "Cannot read the latest capture" = "无法读取最新 Capture";
 "Capture failed" = "未抓取";
+"Switch to the app you want to capture, then press ⌘⇧Space" = "请先切到要抓取的 App，再按 ⌘⇧Space";
 "Saved to Inbox" = "已存入 Inbox";
 "Inbox is empty" = "Inbox 为空";
 "Press ⌘⇧Space to capture something first" = "先按 ⌘⇧Space 抓取一条";
@@ -98,6 +99,16 @@
 "No results for \"%@\"" = "没有匹配「%@」的结果。";
 "Search title, body, notes" = "搜索标题、正文、备注";
 "Refresh" = "刷新";
+"Could not refresh Inbox. Try Refresh again." = "无法刷新 Inbox，请点击刷新重试。";
+"Could not load agent conclusions. Try Refresh again." = "无法读取 Agent 结论，请点击刷新重试。";
+"Could not delete capture. Try again." = "无法删除 Capture，请重试。";
+"%d agent conclusions" = "%d 条 Agent 结论";
+"Delivery and agent conclusions" = "投递与 Agent 结论";
+"No deliveries or agent conclusions yet." = "尚无投递记录或 Agent 写回结论。";
+"Session: %@" = "会话：%@";
+"Load earlier conclusions" = "加载更早的结论";
+"Show full conclusion" = "展开完整结论";
+"Show less" = "收起";
 "Move to Recently Deleted" = "移到最近删除";
 "Select a capture" = "选择一条 Capture";
 "Delivered %@" = "已投 %@";

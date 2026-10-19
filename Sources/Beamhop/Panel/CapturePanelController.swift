@@ -15,6 +15,10 @@ final class CapturePanelController {
     /// calls a stale closure from a previous capture.
     private var cancelHandler: (() -> Void)?
     private var resignObserver: NSObjectProtocol?
+    private var sourceApp: NSRunningApplication?
+    private var captureID: String?
+    private var presentation = 0
+    private(set) var currentModel: CapturePanelModel?
 
     /// Show (or replace) the panel for a capture. `onConfirm` receives the chosen target
     /// (nil = 仅入 Inbox) and the note; `onCancel` = Esc / focus-loss path.
@@ -22,20 +26,31 @@ final class CapturePanelController {
               defaultTarget: DeliveryTarget?,
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
               onCancel: @escaping () -> Void) {
+        // Keep the running-app object rather than resolving the PID on close (PID reuse).
+        sourceApp = NSRunningApplication(processIdentifier: pid_t(capture.pid))
+        captureID = capture.id
+        presentation += 1
+        let presentation = self.presentation
         let model = CapturePanelModel(
             capture: capture,
             initialTarget: defaultTarget,
             onConfirm: { [weak self] target, note in
-                guard let self else { return }
+                guard let self, !self.finished, self.presentation == presentation else { return }
                 self.finished = true
                 self.isDelivering = true
                 self.hide()
+                // No target activation follows these choices. Native deliveries own focus
+                // until their completion callback; do not race them by activating the source.
+                if target == nil || target == .clipboard || target == .cowork {
+                    self.restoreSourceIfStillActive(captureID: capture.id)
+                }
                 onConfirm(target, note)
             },
             onCancel: { [weak self] in
-                guard let self else { return }
+                guard let self, !self.finished, self.presentation == presentation else { return }
                 self.finished = true
                 self.hide()
+                self.restoreSourceIfStillActive(captureID: capture.id)
                 onCancel()
             }
         )
@@ -43,6 +58,7 @@ final class CapturePanelController {
         if panel == nil { panel = makePanel() }
         finished = false
         isDelivering = false   // a new showing supersedes any in-flight delivery race guard
+        currentModel = model
         panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model))
         panel?.standardWindowButton(.closeButton)?.isHidden = true
         panel?.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -55,16 +71,27 @@ final class CapturePanelController {
                 forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
             ) { [weak self] _ in
                 guard let self, !self.isDelivering, !self.finished else { return }
-                self.finished = true
-                self.hide()
-                self.cancelHandler?()
+                // App activation and window-key changes arrive separately. On a rapid reopen
+                // an old resign may arrive just before this panel becomes key again. Resolve
+                // on the next main-loop turn and cancel only if it is still non-key.
+                let presentation = self.presentation
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.isDelivering, !self.finished,
+                          self.presentation == presentation,
+                          self.panel?.isKeyWindow == false else { return }
+                    self.finished = true
+                    self.hide()
+                    if let id = self.captureID { self.restoreSourceIfStillActive(captureID: id) }
+                    self.cancelHandler?()
+                }
             }
         }
         self.cancelHandler = onCancel
 
-        // nonactivating panel: explicit activation so keyboard input lands reliably (spec §3.1).
-        panel?.makeKeyAndOrderFront(nil)
+        // This panel deliberately activates Beamhop for keyboard input. Combining explicit
+        // activation with .nonactivatingPanel left stale key-focus transitions on re-open.
         NSApp.activate(ignoringOtherApps: true)
+        panel?.makeKeyAndOrderFront(nil)
     }
 
     func hide() {
@@ -74,10 +101,29 @@ final class CapturePanelController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// Delivery completion may arrive after another capture has opened. Never restore that
+    /// older source, steal focus from the destination, or leave the Inbox while it is in use.
+    func restoreSourceIfStillActive(captureID: String) {
+        guard self.captureID == captureID, let sourceApp else { return }
+        let hasOtherWindow = NSApp.keyWindow.map { $0.isVisible && $0 !== panel } ?? false
+        guard CaptureFocusPolicy.shouldRestore(
+            sourcePID: sourceApp.processIdentifier,
+            ownPID: ProcessInfo.processInfo.processIdentifier,
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            sourceTerminated: sourceApp.isTerminated,
+            hasVisibleBeamhopWindow: isVisible || hasOtherWindow
+        ) else { return }
+        sourceApp.activate(options: [])
+    }
+
+    deinit {
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+    }
+
     private func makePanel() -> NSPanel {
         let p = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 340),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
+            styleMask: [.titled, .fullSizeContentView, .resizable],
             backing: .buffered, defer: false)
         p.level = .floating                                    // above fullscreen apps (S5)
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
