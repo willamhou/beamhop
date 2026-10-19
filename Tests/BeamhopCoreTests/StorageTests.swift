@@ -178,4 +178,26 @@ final class StorageTests: XCTestCase {
         let hits2 = try CaptureReader.open(path: dbURL).searchDeduplicated("cross-app", limit: 10)
         XCTAssertEqual(hits2.first { $0.capture.id == "cap_dup2" }?.duplicateCount, 2)
     }
+
+    // Mirror of the SelfTest "详情链: TimelineBuilder merge" block — keep the two in sync.
+    func testTimelineBuilderMerge() throws {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let d1 = Delivery(captureID: "cap_t", target: .claudeCode, deliveredAt: now, status: .success)
+        let d2 = Delivery(captureID: "cap_t", target: .clipboard, deliveredAt: now + 2000,
+                          status: .failed, errorMessage: "composer not found")
+        let r1 = CaptureResult(originCaptureID: "cap_t", agent: "claude_code",
+                               content: "结论:锁顺序", createdAt: now + 1000)
+        let r2 = CaptureResult(id: "res_x", originCaptureID: "cap_t", agent: "kimi",
+                               content: "补充:最小复现", createdAt: now + 2000)
+        // deliberately unsorted input
+        let e = TimelineBuilder.entries(deliveries: [d2, d1], results: [r2, r1])
+        XCTAssertEqual(e.count, 4)
+        XCTAssertEqual(e.map(\.timestamp), [now, now + 1000, now + 2000, now + 2000])
+        XCTAssertEqual(e[0], .delivery(d1))
+        XCTAssertEqual(e[1], .result(r1))
+        if case .delivery = e[2] {} else { XCTFail("same-ms tie: delivery must sort first") }
+        XCTAssertEqual(e[3], .result(r2))
+        XCTAssertNotEqual(e[0].stableID, e[1].stableID)
+        XCTAssertTrue(TimelineBuilder.entries(deliveries: [], results: []).isEmpty)
+    }
 }

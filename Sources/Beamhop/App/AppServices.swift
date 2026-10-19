@@ -113,6 +113,13 @@ final class AppServices {
     /// calls are safe from a background thread. The panel show itself happens on the main thread.
     private let signposter = OSSignposter(subsystem: "com.beamhop.app", category: "perf")
     private var targetMemory = TargetMemory()   // BeamhopCore: 默认 Claude Code，仅成功投递更新
+    /// §7-C dogfood fix: showing the panel activates Beamhop, and nothing used to reactivate the
+    /// previous app after Esc / Inbox-only confirm — so the next ⌘⇧Space captured Beamhop itself
+    /// (0ms, useless row). Recorded at capture time; restored after panel-close paths that leave
+    /// no other app in front (cancel, ⌘0 Inbox-only, delivery degraded to clipboard).
+    private var appBeforePanel: NSRunningApplication?
+
+    private static let ownBundleID = "com.beamhop.app"
 
     private func doCapture() {
         guard capture != nil, delivery != nil else {
@@ -120,6 +127,12 @@ final class AppServices {
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self, let capture = self.capture, let delivery = self.delivery else { return }
+            // Before capture records its own frontmost, remember OUR pre-panel frontmost — but
+            // never chain a residue: if Beamhop is somehow still frontmost (previous restore
+            // missed), keep the older remembered app instead of capturing Beamhop-on-Beamhop.
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != Self.ownBundleID {
+                self.appBeforePanel = NSWorkspace.shared.frontmostApplication
+            }
             let state = self.signposter.beginInterval("capture")
             let t0 = Date()
             let outcome = capture.captureFrontmost()
@@ -156,27 +169,51 @@ final class AppServices {
                 self.events?.record(name: EventStore.Name.panelConfirm,
                                     detail: "target=\(target?.rawValue ?? "inbox_only")")
                 guard let target else {
-                    // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost.
+                    // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost,
+                    // then hand focus back so the next ⌘⇧Space captures the real work, not us.
                     Notifier.info(L10n.s("Saved to Inbox"), cap.id)
+                    self.restorePrePanelFocus()
                     return
                 }
                 // Delivery off-main (AX activation sleeps); failure paths inside DeliveryService
                 // degrade to clipboard and notify — never silent.
                 DispatchQueue.global(qos: .userInitiated).async {
                     delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { [weak self] chosen, ok in
-                        if ok { self?.targetMemory.markSucceeded(chosen) }
+                        guard let self else { return }
+                        if ok { self.targetMemory.markSucceeded(chosen) }
+                        // Degraded to clipboard (focus/paste/registration failure): nothing else
+                        // took focus, so restore — same residue as Esc. On success the target app
+                        // is frontmost and the guard inside makes this a no-op.
+                        else { self.restorePrePanelFocus() }
                     }
                 }
             },
             onCancel: { [weak self] in
-                // Esc / focus loss — capture is safe in the Inbox
-                self?.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
+                guard let self else { return }
+                // Esc / focus loss — capture is safe in the Inbox; hand focus back so the next
+                // ⌘⇧Space captures the real work, not us.
+                self.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
                 Notifier.info(L10n.s("Saved to Inbox"), cap.id)
+                self.restorePrePanelFocus()
             })
         let panelMs = Int(Date().timeIntervalSince(pt0) * 1000)
         signposter.endInterval("panel_show", state, "\(panelMs)ms")
         log.info("panel_ms=\(panelMs)")
         events?.record(name: EventStore.Name.panelShown, detail: "ms=\(panelMs)", captureID: cap.id)
+    }
+
+    /// §7-C: reactivate the app that was frontmost before the panel took key — best-effort, and
+    /// ONLY when Beamhop is still frontmost (never steal focus from a delivery that succeeded).
+    /// Runs on the main queue after a beat so orderOut has settled before the re-activation.
+    private func restorePrePanelFocus() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, let prev = self.appBeforePanel,
+                  prev.bundleIdentifier != Self.ownBundleID,
+                  NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Self.ownBundleID
+            else { return }
+            prev.activate(options: [.activateAllWindows])
+            self.log.info("restored focus to \(prev.bundleIdentifier ?? "?", privacy: .public)")
+        }
     }
     /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from
     /// anywhere — the universal fallback that never depends on AX or a running target.

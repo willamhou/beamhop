@@ -10,6 +10,7 @@ import BeamhopCore
 final class InboxModel: ObservableObject {
     @Published var captures: [Capture] = []
     @Published var deliveries: [String: [Delivery]] = [:]
+    @Published var results: [String: [CaptureResult]] = [:]   // detail chain (2026-10-19 spec)
     @Published var selectedID: String? {
         didSet {
             // dogfood engagement signal: a detail view of a (different) capture
@@ -46,7 +47,7 @@ final class InboxModel: ObservableObject {
             events?.record(name: EventStore.Name.inboxSearch, detail: "hits=\(captures.count)")
         }
         if selectedID != nil, !captures.contains(where: { $0.id == selectedID }) { selectedID = nil }
-        loadDeliveries()
+        loadTimelineData()
     }
 
     func runSearch() { reload() }
@@ -67,13 +68,18 @@ final class InboxModel: ObservableObject {
         reload()
     }
 
-    private func loadDeliveries() {
+    /// Deliveries + agent write-backs for the visible rows — the raw material of the detail
+    /// chain (capture → deliveries → results). Same 50-row window as before.
+    private func loadTimelineData() {
         guard let store else { return }
-        var map: [String: [Delivery]] = [:]
+        var dMap: [String: [Delivery]] = [:]
+        var rMap: [String: [CaptureResult]] = [:]
         for c in captures.prefix(50) {
-            if let ds = try? store.deliveries(captureID: c.id), !ds.isEmpty { map[c.id] = ds }
+            if let ds = try? store.deliveries(captureID: c.id), !ds.isEmpty { dMap[c.id] = ds }
+            if let rs = try? store.results(captureID: c.id), !rs.isEmpty { rMap[c.id] = rs }
         }
-        deliveries = map
+        deliveries = dMap
+        results = rMap
     }
 }
 
@@ -117,7 +123,9 @@ struct InboxView: View {
                     }
                 } else {
                     List(model.captures, selection: $model.selectedID) { capture in
-                        CaptureRow(capture: capture, latest: model.deliveries[capture.id]?.first)
+                        CaptureRow(capture: capture,
+                                   latest: model.deliveries[capture.id]?.first,
+                                   resultCount: model.results[capture.id]?.count ?? 0)
                             .tag(capture.id)
                     }
                     .listStyle(.inset)
@@ -156,6 +164,7 @@ struct InboxView: View {
 private struct CaptureRow: View {
     let capture: Capture
     let latest: Delivery?
+    let resultCount: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -163,6 +172,11 @@ private struct CaptureRow: View {
                 Text(capture.windowTitle ?? capture.appName)
                     .font(.body.weight(.medium)).lineLimit(1)
                 Spacer(minLength: 8)
+                // detail chain: agent write-back count (badge only, no content surfacing)
+                if resultCount > 0 {
+                    Text("↩ \(resultCount)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Text(Date(timeIntervalSince1970: Double(capture.createdAt) / 1000),
                      format: .relative(presentation: .named))
                     .font(.caption).foregroundStyle(.secondary)
@@ -234,27 +248,60 @@ private struct CaptureDetail: View {
                     }
                 }
 
-                let history = model.deliveries[capture.id] ?? []
+                // Detail chain (2026-10-19 spec): deliveries + agent write-backs, one timeline.
+                let history = TimelineBuilder.entries(
+                    deliveries: model.deliveries[capture.id] ?? [],
+                    results: model.results[capture.id] ?? [])
                 if !history.isEmpty {
-                    section("Delivery history") {
-                        ForEach(history) { d in
-                            HStack(alignment: .top) {
-                                Image(systemName: d.status == .success
-                                      ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .foregroundStyle(d.status == .success ? Color.green : Color.orange)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(d.target.rawValue) · \(d.status.rawValue)")
-                                        .font(.callout)
-                                    if let err = d.errorMessage {
-                                        Text(err).font(.caption).foregroundStyle(.secondary)
+                    section("Timeline") {
+                        ForEach(history, id: \.stableID) { entry in
+                            switch entry {
+                            case .delivery(let d):
+                                HStack(alignment: .top) {
+                                    Image(systemName: d.status == .success
+                                          ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .foregroundStyle(d.status == .success ? Color.green : Color.orange)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(d.target.rawValue) · \(d.status.rawValue)")
+                                            .font(.callout)
+                                        if let err = d.errorMessage {
+                                            Text(err).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Text(Date(timeIntervalSince1970: Double(d.deliveredAt) / 1000),
+                                         format: .relative(presentation: .named))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            case .result(let r):
+                                HStack(alignment: .top) {
+                                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                                        .foregroundStyle(Color.blue)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(spacing: 6) {
+                                            Text(r.agent).font(.callout.weight(.medium))
+                                            if let sid = r.sessionID, !sid.isEmpty {
+                                                Text("· \(sid)")
+                                                    .font(.caption).foregroundStyle(.secondary)
+                                            }
+                                            Spacer()
+                                            Text(Date(timeIntervalSince1970: Double(r.createdAt) / 1000),
+                                                 format: .relative(presentation: .named))
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        // verbatim conclusion, not distilled (evidence-gate baseline);
+                                        // same 2000-char cap as Body
+                                        Text(String(r.content.prefix(2000)))
+                                            .font(.callout).textSelection(.enabled)
                                     }
                                 }
-                                Spacer()
-                                Text(Date(timeIntervalSince1970: Double(d.deliveredAt) / 1000),
-                                     format: .relative(presentation: .named))
-                                    .font(.caption).foregroundStyle(.secondary)
                             }
                         }
+                    }
+                } else {
+                    section("Timeline") {
+                        Text("No deliveries or agent write-backs yet.")
+                            .font(.callout).foregroundStyle(.secondary)
                     }
                 }
             }

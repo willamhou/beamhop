@@ -532,6 +532,29 @@ do {
             check(true, "fileNotFound when DB absent")
         }
     }
+
+    print("== 详情链: TimelineBuilder merge (2026-10-19 spec) ==")
+    do {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let d1 = Delivery(captureID: "cap_t", target: .claudeCode, deliveredAt: now, status: .success)
+        let d2 = Delivery(captureID: "cap_t", target: .clipboard, deliveredAt: now + 2000,
+                          status: .failed, errorMessage: "composer not found")
+        let r1 = CaptureResult(originCaptureID: "cap_t", agent: "claude_code",
+                               content: "结论:锁顺序", createdAt: now + 1000)
+        let r2 = CaptureResult(id: "res_x", originCaptureID: "cap_t", agent: "kimi",
+                               content: "补充:最小复现", createdAt: now + 2000)
+        // 故意乱序输入
+        let e = TimelineBuilder.entries(deliveries: [d2, d1], results: [r2, r1])
+        check(e.count == 4, "merge keeps every event")
+        check(e.map(\.timestamp) == [now, now + 1000, now + 2000, now + 2000],
+              "ascending by timestamp")
+        check(e[0] == .delivery(d1) && e[1] == .result(r1), "delivery then its result")
+        if case .delivery = e[2] { check(true, "same-ms tie: delivery before result") }
+        else { check(false, "same-ms tie: delivery before result") }
+        check(e[3] == .result(r2), "tie keeps the result after")
+        check(e[0].stableID != e[1].stableID, "stableIDs unique across kinds")
+        check(TimelineBuilder.entries(deliveries: [], results: []).isEmpty, "empty in, empty out")
+    }
 } catch {
     print("EXCEPTION: \(error)")
     failures += 1
