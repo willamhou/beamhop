@@ -23,6 +23,12 @@ trap 'rm -rf "$staging"' EXIT
 contents="$staging/Beamhop.app/Contents"
 mkdir -p "$contents/MacOS" "$contents/Resources"
 cp "$repo_root/packaging/Info.plist" "$contents/Info.plist"
+
+# UI localization: ship the zh-Hans table as a proper lproj — the menu-bar Language
+# submenu (AppleLanguages override) resolves against it on relaunch (2026-10-19).
+if [[ -d "$repo_root/packaging/lproj/zh-Hans.lproj" ]]; then
+  cp -R "$repo_root/packaging/lproj/zh-Hans.lproj" "$contents/Resources/zh-Hans.lproj"
+fi
 cp "$repo_root/.build/release/Beamhop" "$contents/MacOS/Beamhop"
 cp "$repo_root/.build/release/BeamhopMCP" "$contents/MacOS/BeamhopMCP"
 chmod 755 "$contents/MacOS/Beamhop" "$contents/MacOS/BeamhopMCP"

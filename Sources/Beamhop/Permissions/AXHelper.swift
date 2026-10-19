@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import BeamhopCore
 
 /// Accessibility foundation, hardened with Week 0 findings. Week 1 implements only the pieces
 /// needed for the smoke (frontmost app + a system-wide focused-element probe); selectedText/url/
@@ -37,14 +38,15 @@ enum AXHelper {
     }
 
     /// System-wide focused element (S6: app-element query returns nil for most apps).
-    static func systemFocusedElement() -> AXUIElement? {
+    /// `timeout` comes from the caller's AXDeadline budget (default 0.8s).
+    static func systemFocusedElement(timeout: Double = 0.8) -> AXUIElement? {
         let sys = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(sys, 0.8)
+        AXUIElementSetMessagingTimeout(sys, Float(timeout))
         var v: CFTypeRef?
         guard AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &v) == .success,
               let v, CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
         let el = v as! AXUIElement
-        AXUIElementSetMessagingTimeout(el, 0.8)   // codex: bound subsequent reads on this element
+        AXUIElementSetMessagingTimeout(el, Float(timeout))   // codex: bound subsequent reads on this element
         return el
     }
 
@@ -59,10 +61,10 @@ enum AXHelper {
         attr(el, key) as? String
     }
 
-    /// Focused window title for a pid.
-    static func windowTitle(pid: pid_t) -> String? {
+    /// Focused window title for a pid. `timeout` comes from the caller's AXDeadline budget.
+    static func windowTitle(pid: pid_t, timeout: Double = 0.8) -> String? {
         let app = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(app, 0.8)
+        AXUIElementSetMessagingTimeout(app, Float(timeout))
         guard let win = attr(app, kAXFocusedWindowAttribute as String),
               CFGetTypeID(win) == AXUIElementGetTypeID() else { return nil }
         return string(win as! AXUIElement, kAXTitleAttribute as String)
@@ -88,20 +90,30 @@ enum AXHelper {
         var method: String       // "ax-native" | "ax-chromium" | "ax-safari" | "ax-electron-limited"
     }
 
-    /// Per-app selected-text + url extraction (S6 strategy / spec §6.2).
-    static func read(front: FrontApp) -> Read {
-        var r = Read(windowTitle: windowTitle(pid: front.pid), url: nil, selectedText: nil,
+    /// Per-app selected-text + url extraction (S6 strategy / spec §6.2). The whole sequence
+    /// runs inside `deadline` (default 800ms, PROGRESS §7.D): each step checks expiry and
+    /// per-call timeouts shrink to the remaining budget — a slow app gets partial results,
+    /// never a multi-second hang.
+    static func read(front: FrontApp, deadline: AXDeadline = AXDeadline()) -> Read {
+        var r = Read(windowTitle: nil, url: nil, selectedText: nil,
                      isSecure: false, method: "ax-native")
+        if deadline.expired { r.method = "ax-deadline"; return r }
+        r.windowTitle = windowTitle(pid: front.pid, timeout: deadline.callTimeout(default: 0.8))
 
         let isChromiumOrElectron = needsManualAX(bundleID: front.bundleID)
         let isSafari = front.bundleID == "com.apple.Safari"
-        if isChromiumOrElectron { enableManualAX(pid: front.pid); usleep(120_000) }
+        if isChromiumOrElectron {
+            enableManualAX(pid: front.pid)
+            usleep(UInt32(min(120_000, deadline.remaining * 1_000_000)))   // wait, capped by budget
+        }
+        if deadline.expired { r.method = "ax-deadline"; return r }
 
-        guard let focused = systemFocusedElement() else { return r }
+        guard let focused = systemFocusedElement(timeout: deadline.callTimeout(default: 0.8)) else { return r }
         r.isSecure = isSecure(focused)
         r.url = url(focused)
 
         if r.isSecure { r.method = "ax-secure-skipped"; return r }   // never read secure text
+        if deadline.expired { r.method = "ax-deadline"; return r }
 
         let sel = string(focused, kAXSelectedTextAttribute as String)
         if let sel, !sel.isEmpty {

@@ -56,6 +56,6 @@ public final class CapturePanelModel: ObservableObject {
 
     public var confirmLabel: String {
         guard let selectedTarget else { return L10n.s("Save to Inbox only") }
-        return L10n.s("Deliver (\(targetLabel(selectedTarget)))")
+        return L10n.f("Deliver (%@)", targetLabel(selectedTarget))
     }
 }

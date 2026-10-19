@@ -1,7 +1,7 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
-> Last updated: 2026-10-18 — Week 3 verified; **Phase 1.5 dogfood instrumentation landed** (events + delivery durations + `scripts/dogfood-metrics.sh`).
+> Last updated: 2026-10-19 — dogfood instrumentation + Phase 1.5 patches (zh-Hans toggle, AX deadline, one-click MCP register) (events + delivery durations + `scripts/dogfood-metrics.sh`).
 
 > 🗂 Full pre-2026-10 history (Chinese) is archived at [docs/zh/PROGRESS.zh.md](docs/zh/PROGRESS.zh.md).
 
@@ -9,7 +9,7 @@
 
 ## 0. Status in one paragraph
 
-Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 134 SelfTest checks. **MCP write-back (plan A) + search dedup merged 2026-10-18** (stage table below). **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); `swift test`/XCTest work on machines with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`, CI runs them on macos-15); the original dev Mac still has CLT only.
+Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 149 SelfTest checks. **MCP write-back (plan A) + search dedup merged 2026-10-18** (stage table below). **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); `swift test`/XCTest work on machines with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`, CI runs them on macos-15); the original dev Mac still has CLT only.
 
 **Blockers**: ① signed distribution needs a machine with Xcode + Developer ID signing; ② ad-hoc signing means every repack needs the Accessibility grant re-enabled in System Settings.
 
@@ -68,6 +68,16 @@ scripts/dogfood-metrics.sh --days 7        # shorter window
 ```
 Backed by migration v3: append-only `events` (capture outcomes, panel ms, Inbox engagement) + `deliveries.duration_ms`. All local; no telemetry.
 
+**Dogfood protocol (started 2026-10-19):**
+1. On the acceptance Mac: `git pull` → `./packaging/build-app.sh` → `open dist/Beamhop.app`
+   → re-grant Accessibility (ad-hoc signature, TCC drops per repack) → Diagnostics →
+   "Register now" (points MCP at the real `inbox.sqlite`).
+2. Use `⌘⇧Space` for real work daily (gate: ≥10/day). No script ever sends synthetic keys
+   into real apps (incident rule, §6).
+3. Every Friday: run `scripts/dogfood-metrics.sh` and paste the gate table into the dogfood
+   log (this file §9). Two clean weeks → run the evolution-decisions §2.3 memory-route
+   evaluation (plan A already landed; confirm or correct with data).
+
 **MCP server smoke (real protocol):**
 ```bash
 DB=/tmp/x.sqlite; swift run BeamhopSelfTest --seed "$DB"
@@ -124,7 +134,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ MCP server against real Claude Code (`fetch_capture` returns a real capture)
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
-- ✅ Logic: 134 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport + v5 reconcile**, MCP dedup + plan-A write-back)
+- ✅ Logic: 149 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model, raw values, **EventStore + DogfoodReport + v5 reconcile + zh-Hans strings + AXDeadline**, MCP dedup + plan-A write-back)
 - ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
@@ -176,9 +186,15 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 - Re-run AX word-grab spot checks on the 8 S6 apps.
 
 **C. Product candidates (pick after a week of dogfood)**
-- Prompt-injection language: plan-A write-back trigger has now landed (merged 2026-10-18, Chinese base) — unify EN/zh on top of it when the language toggle ships; UI chrome stays English-first.
-- Wire `zh-Hans` UI translation back into the app bundle (translations archived at `packaging/lproj/zh-Hans.lproj/`) behind a language toggle.
+- ~~Prompt-injection language~~: plan-A write-back trigger landed (Chinese base); unify EN/zh on top of the toggle later if wanted.
+- ~~zh-Hans UI~~: **done 2026-10-19 (code)** — menu-bar Language submenu flips the per-app `AppleLanguages` override and relaunches; `build-app.sh` ships `zh-Hans.lproj` into the bundle; interpolated labels use `L10n.f`. On-device visual check pending (restart-apply flow).
 - Cowork MCPB end-to-end.
+
+**D. Week 2 close-out**
+- ~~AX total 800ms deadline~~: **done 2026-10-19** — `AXDeadline` (BeamhopCore, unit-tested) bounds the whole `AXHelper.read` pass; expiry returns partials (`ax-deadline`).
+- ~~MCP one-click registration~~: **done 2026-10-19 (code)** — Diagnostics "Register now" runs the real `claude mcp add` (bundle MCP binary + real DB path, augmented PATH for GUI context) and verifies `~/.claude.json`; copy-command fallback under `swift run`. On-device verify pending.
+- ⬜ app→extension >1MB chunking protocol + bidirectional reassembly test.
+- ⬜ Multi-browser/profile routing (currently single connection, "latest host wins").
 
 **D. Phase 2 prerequisite (after Week 3 + acceptance + two weeks of dogfood)**
 - One-hour evaluation per the evolution-decisions spec §2.3 (personal-model review + dogfood signals) → pick the memory route → kick off.
@@ -202,3 +218,12 @@ Perf P95: ✅ **2026-10-18, 20-press automated session (synthetic ⌘⇧Space vi
 - Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.
 
 Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_desktop versions_tested += 26.1007.71326 (dual bundle id, AXEditable gone, composer depth ~30, set-value OK); kimi_work added (paste-injection mechanism, new-chat button desc).
+
+---
+
+## 9. Dogfood log (weekly gate-table pastes)
+
+> Format: date + window + the `scripts/dogfood-metrics.sh` gate table. Two clean weeks of
+> data → evolution-decisions §2.3 evaluation.
+
+- (empty — first paste due the Friday after the dogfood launch)

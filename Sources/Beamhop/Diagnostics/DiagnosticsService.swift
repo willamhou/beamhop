@@ -59,22 +59,33 @@ struct DiagnosticsService {
     }
 
     private func claudeCodeMCPRow() -> DiagRow {
-        let registered = mcpServerRegistered(name: "beamhop")
-        let claudeOnPath = which("claude") != nil
-        let state: DiagState = registered ? .ok : (claudeOnPath ? .warn : .fail)
+        let registered = Self.mcpServerRegistered(name: "beamhop")
+        let claudePath = whichClaude()
+        let mcpBin = Self.bundledMCPBinary()
+        let state: DiagState = registered ? .ok : (claudePath != nil ? .warn : .fail)
         let detail = registered ? "Registered (top-level mcpServers in ~/.claude.json)"
-            : (claudeOnPath ? "Not registered — one-click registration ships with the Week 2 host" : "No `claude` CLI detected")
-        return DiagRow(name: "Claude Code MCP registration",
-                       state: state,
-                       detail: detail,
-                       // Week 1: command preview only (host binary is Week 2). codex.
-                       fixTitle: registered ? nil : "Copy registration command",
-                       fix: registered ? nil : {
-                           // Week 2: command preview incl. --db (real one-click register is a follow-up).
-                           let cmd = "claude mcp add beamhop -s user -- <absolute path to BeamhopMCP> --db \(AppPaths.databaseURL.path)"
-                           NSPasteboard.general.clearContents()
-                           NSPasteboard.general.setString(cmd, forType: .string)
-                       })
+            : (claudePath != nil ? "Not registered — one-click register below"
+                                 : "No `claude` CLI detected (install Claude Code first)")
+        let fixTitle: String?
+        let fix: (() -> Void)?
+        if registered {
+            fixTitle = nil; fix = nil
+        } else if let claudePath, let mcpBin {
+            // Week 2 close-out (2026-10-19): real one-click registration via `claude mcp add`.
+            fixTitle = "Register now"
+            fix = { Self.registerMCP(claude: claudePath, mcpBinary: mcpBin) }
+        } else {
+            // Fallback (dev `swift run` without an app bundle, or missing claude): copy the command.
+            let bin = mcpBin ?? "<absolute path to BeamhopMCP>"
+            fixTitle = "Copy registration command"
+            fix = {
+                let cmd = "claude mcp add beamhop -s user -- \(bin) --db \(AppPaths.databaseURL.path)"
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(cmd, forType: .string)
+            }
+        }
+        return DiagRow(name: "Claude Code MCP registration", state: state, detail: detail,
+                       fixTitle: fixTitle, fix: fix)
     }
 
     private func coworkRow() -> DiagRow {
@@ -112,7 +123,60 @@ struct DiagnosticsService {
 
     // MARK: helpers
 
-    private func mcpServerRegistered(name: String) -> Bool {
+    /// `claude mcp add beamhop -s user -- <bundle MCP> --db <inbox>` off the main thread;
+    /// outcome surfaces via Notifier and the row re-evaluates on the next window open.
+    private static func registerMCP(claude: String, mcpBinary: String) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: claude)
+            p.arguments = ["mcp", "add", "beamhop", "-s", "user", "--", mcpBinary,
+                           "--db", AppPaths.databaseURL.path]
+            var env = ProcessInfo.processInfo.environment
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            // GUI apps get a minimal PATH; the claude CLI (and the node it may spawn) lives
+            // in one of these.
+            env["PATH"] = ["/opt/homebrew/bin", "/usr/local/bin", "\(home)/.claude/local",
+                           "\(home)/.local/bin", env["PATH"] ?? ""].joined(separator: ":")
+            p.environment = env
+            do {
+                try p.run()
+                p.waitUntilExit()
+                let ok = p.terminationStatus == 0 && mcpServerRegistered(name: "beamhop")
+                DispatchQueue.main.async {
+                    if ok {
+                        Notifier.success(L10n.s("Beamhop MCP registered"),
+                                         L10n.s("Restart Claude Code sessions to pick it up"))
+                    } else {
+                        Notifier.error(L10n.s("Registration failed"),
+                                       "claude mcp add exited \(p.terminationStatus)")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    Notifier.error(L10n.s("Registration failed"), String(describing: error))
+                }
+            }
+        }
+    }
+
+    /// The BeamhopMCP binary shipped next to the app executable (nil under `swift run`).
+    private static func bundledMCPBinary() -> String? {
+        let p = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/BeamhopMCP").path
+        return FileManager.default.isExecutableFile(atPath: p) ? p : nil
+    }
+
+    private func whichClaude() -> String? {
+        if let p = which("claude") { return p }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        for candidate in ["/opt/homebrew/bin/claude", "/usr/local/bin/claude",
+                          "\(home)/.claude/local/claude", "\(home)/.local/bin/claude",
+                          "\(home)/.npm-global/bin/claude"] {
+            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+        }
+        return nil
+    }
+
+    private static func mcpServerRegistered(name: String) -> Bool {
         let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

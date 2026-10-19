@@ -1,10 +1,24 @@
-// Chinese translations — ARCHIVED, not shipped (repo policy 2026-10-18: English is the default).
-// To ship Chinese UI: copy this file into the app bundle as Contents/Resources/zh-Hans.lproj/Localizable.strings
-// (see PROGRESS §7.C).
-// Key caveats: (1) keys are the FULLY-INTERPOLATED runtime strings — "%@" entries below are
-// illustrative for future format-style lookup and will not match as-is; (2) AppKit programmatic
-// strings (NSMenuItem titles) are not auto-localized — wrap them in L10n.s when shipping this.
-// Generated from the pre-i18n Chinese originals during the 2026-10-18 English-first migration.
+// Chinese translations — SHIPPED (2026-10-19): build-app.sh copies this file into the app
+// bundle as Contents/Resources/zh-Hans.lproj/Localizable.strings; the menu-bar Language
+// submenu flips the per-app AppleLanguages override and relaunches to apply.
+// Key caveats: (1) interpolated runtime strings must use L10n.f("… %@ …") so the format
+// key here matches; (2) AppKit programmatic strings (NSMenuItem titles) are wrapped in
+// L10n.s at the call site. Generated from the pre-i18n Chinese originals during the
+// 2026-10-18 English-first migration.
+
+// MARK: Language menu
+"Language" = "语言";
+"Restart Beamhop now to apply the language change?" = "现在重启 Beamhop 以应用新语言？";
+"The new language takes effect after Beamhop restarts." = "新语言将在 Beamhop 重启后生效。";
+"Restart Now" = "立即重启";
+"Later" = "稍后";
+
+// MARK: Diagnostics (one-click MCP registration)
+"Not registered — one-click register below" = "未注册——用下方按钮一键注册";
+"Register now" = "立即注册";
+"Beamhop MCP registered" = "Beamhop MCP 已注册";
+"Restart Claude Code sessions to pick it up" = "重启 Claude Code 会话后生效";
+"Registration failed" = "注册失败";
 
 // MARK: Panel
 "Captured" = "已抓取";

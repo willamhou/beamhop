@@ -370,6 +370,45 @@ do {
         check(true, "dogfood report runs on reconciled DB")
     }
 
+    print("== Phase 1.5: zh-Hans UI strings (language toggle) ==")
+    do {
+        let path = FileManager.default.currentDirectoryPath
+            + "/packaging/lproj/zh-Hans.lproj/Localizable.strings"
+        check(FileManager.default.fileExists(atPath: path), "zh-Hans strings file exists in repo")
+        let dict = NSDictionary(contentsOfFile: path) as? [String: String]
+        check(dict != nil, "strings file parses as a plist dictionary")
+        if let dict {
+            check(dict.count >= 115, "≥115 zh translations (\(dict.count))")
+            check(dict.values.allSatisfy { !$0.isEmpty }, "no empty translations")
+            check(dict["Language"] == "语言", "language-menu keys present")
+            check(dict["Deliver (%@)"] != nil, "format-style key present for L10n.f")
+            // duplicate keys would be silently merged by NSDictionary — compare raw assignment
+            // lines against the parsed count to catch them
+            let raw = try String(contentsOfFile: path, encoding: .utf8)
+            let assignmentLines = raw.split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { $0.hasPrefix("\"") && $0.contains(" = ") }
+                .count
+            check(assignmentLines == dict.count, "no duplicate keys (\(assignmentLines) lines = \(dict.count) parsed)")
+        }
+    }
+
+    print("== Phase 1.5: AXDeadline (total AX budget) ==")
+    do {
+        let d = AXDeadline(budget: 1.0)
+        check(!d.expired, "fresh deadline not expired")
+        check(d.remaining <= 1.0 && d.remaining > 0.9, "remaining ≈ budget when fresh")
+        check(d.callTimeout(default: 0.8) <= 0.8, "call timeout capped by per-call default")
+        Thread.sleep(forTimeInterval: 0.05)
+        check(d.callTimeout(default: 0.8) <= 0.95, "call timeout capped by remaining budget")
+        let zero = AXDeadline(budget: 0)
+        check(zero.expired, "zero budget is immediately expired")
+        check(zero.remaining == 0, "remaining clamps at zero")
+        check(zero.callTimeout(default: 0.8) == 0.05, "expired deadline still yields a floor timeout (0.05s)")
+        let neg = AXDeadline(budget: -5)
+        check(neg.expired && neg.remaining == 0, "negative budget treated as expired")
+    }
+
     print("== Week 3: DeliveryTarget raw values ==")
     do {
         check(DeliveryTarget.kimiWork.rawValue == "kimi_work", "kimi_work raw value")
