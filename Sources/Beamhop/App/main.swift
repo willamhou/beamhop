@@ -1,6 +1,21 @@
 import AppKit
 import BeamhopCore
 
+#if DEBUG
+// Isolated fixtures only: no real DB, hotkeys, MCP registration, paste or synthetic key events.
+if CommandLine.arguments.contains("--focus-fixture") {
+    UIRegression.fixture()
+    exit(0)
+}
+if let i = CommandLine.arguments.firstIndex(of: "--ui-regression") {
+    guard i + 1 < CommandLine.arguments.count else {
+        fputs("Usage: Beamhop --ui-regression <preview-directory>\n", stderr)
+        exit(2)
+    }
+    exit(UIRegression.run(output: URL(fileURLWithPath: CommandLine.arguments[i + 1])))
+}
+#endif
+
 // Menu-bar app entry. SwiftPM executable drives NSApplication directly (like the Week 0 S5
 // demo) — no SwiftUI App/Settings scene, so the empty-Settings blank-window issue codex
 // flagged doesn't apply here. The Xcode app target (post-Xcode-install) will use the

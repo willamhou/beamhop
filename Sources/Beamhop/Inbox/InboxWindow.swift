@@ -2,85 +2,11 @@ import AppKit
 import SwiftUI
 import BeamhopCore
 
-/// Inbox window (spec §9.2): every capture lands here; searchable (dual FTS5), inspectable
-/// (full provenance), re-deliverable. Skeleton port of the Week 3 UI onto the Mac-version
-/// services — list + search + detail + failure reasons are the non-negotiable core (§12.4).
-/// Not @MainActor-annotated: AppServices wires this from nonisolated bootstrap code; every
-/// call site (window show / search / toolbar) runs on the main thread in practice.
-final class InboxModel: ObservableObject {
-    @Published var captures: [Capture] = []
-    @Published var deliveries: [String: [Delivery]] = [:]
-    @Published var selectedID: String? {
-        didSet {
-            // dogfood engagement signal: a detail view of a (different) capture
-            if let id = selectedID, id != oldValue {
-                events?.record(name: EventStore.Name.captureViewed, captureID: id)
-            }
-        }
-    }
-    @Published var searchQuery = ""
-
-    var selected: Capture? { captures.first { $0.id == selectedID } }
-
-    private var store: CaptureStore?
-    private var events: EventStore?
-    private var onDeliver: ((Capture, DeliveryTarget) -> Void)?
-
-    func configure(store: CaptureStore, events: EventStore?, onDeliver: @escaping (Capture, DeliveryTarget) -> Void) {
-        self.store = store
-        self.events = events
-        self.onDeliver = onDeliver
-    }
-
-    /// Window shown (hotkey, menu, or first-run) — the §3 "Inbox revisits" numerator.
-    func logOpened() {
-        events?.record(name: EventStore.Name.inboxOpened)
-    }
-
-    func reload() {
-        guard let store else { return }
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let result = query.isEmpty ? try? store.recent(limit: 200) : try? store.search(query)
-        captures = result ?? []
-        if !query.isEmpty {
-            events?.record(name: EventStore.Name.inboxSearch, detail: "hits=\(captures.count)")
-        }
-        if selectedID != nil, !captures.contains(where: { $0.id == selectedID }) { selectedID = nil }
-        loadDeliveries()
-    }
-
-    func runSearch() { reload() }
-
-    func deliver(_ capture: Capture, to target: DeliveryTarget) {
-        events?.record(name: EventStore.Name.inboxRedeliver,
-                       detail: "target=\(target.rawValue)", captureID: capture.id)
-        onDeliver?(capture, target)
-        // delivery runs off-main (AX activation sleeps); pick up the recorded row shortly after.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.reload() }
-    }
-
-    func softDelete(_ capture: Capture) {
-        guard let store else { return }
-        try? store.softDelete(id: capture.id)
-        events?.record(name: EventStore.Name.captureSoftDeleted, captureID: capture.id)
-        if selectedID == capture.id { selectedID = nil }
-        reload()
-    }
-
-    private func loadDeliveries() {
-        guard let store else { return }
-        var map: [String: [Delivery]] = [:]
-        for c in captures.prefix(50) {
-            if let ds = try? store.deliveries(captureID: c.id), !ds.isEmpty { map[c.id] = ds }
-        }
-        deliveries = map
-    }
-}
-
 /// Window follows the Diagnostics pattern: created once, hidden not destroyed (S5), content
-/// refreshed on each show.
-final class InboxWindowController {
+/// refreshed on each show and when it regains focus after an agent writes via MCP.
+final class InboxWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
+    private var refreshTimer: Timer?
     let model = InboxModel()
 
     func show() {
@@ -91,6 +17,7 @@ final class InboxWindowController {
                 backing: .buffered, defer: false)
             w.title = "Beamhop Inbox"
             w.isReleasedWhenClosed = false
+            w.delegate = self
             w.center()
             window = w
         }
@@ -100,6 +27,25 @@ final class InboxWindowController {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        model.reload()
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self, self.window?.isVisible == true else { return }
+            self.model.refreshSelectedDetails()
+        }
+    }
+
+    func windowDidResignKey(_ notification: Notification) { stopRefreshing() }
+    func windowWillClose(_ notification: Notification) { stopRefreshing() }
+
+    private func stopRefreshing() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+
+    deinit { refreshTimer?.invalidate() }
 }
 
 struct InboxView: View {
@@ -117,13 +63,19 @@ struct InboxView: View {
                     }
                 } else {
                     List(model.captures, selection: $model.selectedID) { capture in
-                        CaptureRow(capture: capture, latest: model.deliveries[capture.id]?.first)
+                        CaptureRow(capture: capture, latest: model.deliveries[capture.id]?.first,
+                                   resultCount: model.resultCounts[capture.id] ?? 0)
                             .tag(capture.id)
                     }
                     .listStyle(.inset)
                 }
             }
             .navigationTitle("Inbox")
+            .safeAreaInset(edge: .bottom) {
+                if let error = model.errorMessage {
+                    Text(error).font(.callout).foregroundStyle(.orange).padding()
+                }
+            }
             .searchable(text: $model.searchQuery, prompt: "Search title, body, notes")
             .onSubmit(of: .search) { model.runSearch() }
             .onChange(of: model.searchQuery) { _, q in
@@ -156,6 +108,7 @@ struct InboxView: View {
 private struct CaptureRow: View {
     let capture: Capture
     let latest: Delivery?
+    let resultCount: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -163,6 +116,11 @@ private struct CaptureRow: View {
                 Text(capture.windowTitle ?? capture.appName)
                     .font(.body.weight(.medium)).lineLimit(1)
                 Spacer(minLength: 8)
+                if resultCount > 0 {
+                    Label("\(resultCount)", systemImage: "arrow.uturn.backward.circle")
+                        .font(.caption).foregroundStyle(.blue)
+                        .accessibilityLabel(Text(L10n.f("%d agent conclusions", resultCount)))
+                }
                 Text(Date(timeIntervalSince1970: Double(capture.createdAt) / 1000),
                      format: .relative(presentation: .named))
                     .font(.caption).foregroundStyle(.secondary)
@@ -234,10 +192,16 @@ private struct CaptureDetail: View {
                     }
                 }
 
-                let history = model.deliveries[capture.id] ?? []
+                if let error = model.detailErrorMessage {
+                    Text(error).font(.callout).foregroundStyle(.orange)
+                }
+                let history = TimelineBuilder.entries(
+                    deliveries: model.deliveries[capture.id] ?? [], results: model.selectedResults)
                 if !history.isEmpty {
-                    section("Delivery history") {
-                        ForEach(history) { d in
+                    section(L10n.s("Delivery and agent conclusions")) {
+                        ForEach(history, id: \.stableID) { entry in
+                            switch entry {
+                            case .delivery(let d):
                             HStack(alignment: .top) {
                                 Image(systemName: d.status == .success
                                       ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -254,13 +218,25 @@ private struct CaptureDetail: View {
                                      format: .relative(presentation: .named))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
+                            case .result(let result):
+                                AgentConclusionView(result: result)
+                            }
                         }
+                        if model.hasMoreResults {
+                            Button("Load earlier conclusions") { model.loadMoreResults() }
+                        }
+                    }
+                } else if model.detailErrorMessage == nil {
+                    section(L10n.s("Delivery and agent conclusions")) {
+                        Text("No deliveries or agent conclusions yet.")
+                            .font(.callout).foregroundStyle(.secondary)
                     }
                 }
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Color(nsColor: .textBackgroundColor))
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
@@ -275,6 +251,39 @@ private struct CaptureDetail: View {
         HStack(alignment: .firstTextBaseline) {
             Text(k).font(.caption).foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
             Text(v ?? "—").font(.callout).textSelection(.enabled)
+        }
+    }
+}
+
+private final class ConclusionExpansion: ObservableObject {
+    @Published var expanded = false
+}
+
+private struct AgentConclusionView: View {
+    let result: CaptureResult
+    @StateObject private var expansion = ConclusionExpansion()
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(result.agent).font(.callout.weight(.semibold))
+                    Spacer()
+                    Text(Date(timeIntervalSince1970: Double(result.createdAt) / 1000),
+                         format: .dateTime).font(.caption).foregroundStyle(.secondary)
+                }
+                if let session = result.sessionID, !session.isEmpty {
+                    Text(L10n.f("Session: %@", session))
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                Text(expansion.expanded ? result.content : String(result.content.prefix(500)))
+                    .font(.callout).textSelection(.enabled)
+                if result.content.count > 500 {
+                    Button(L10n.s(expansion.expanded ? "Show less" : "Show full conclusion")) { expansion.expanded.toggle() }
+                        .buttonStyle(.link)
+                }
+            }
         }
     }
 }

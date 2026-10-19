@@ -23,11 +23,15 @@ final class CaptureService {
     func captureFrontmost() -> CaptureOutcome {
         let t0 = Date()
 
-        guard AXIsProcessTrusted() else {
-            return .rejected(reason: L10n.s("Accessibility permission not granted — cannot capture (enable it in the Diagnostics window)"))
-        }
         guard let front = AXHelper.frontmostApp() else {
             return .rejected(reason: L10n.s("Cannot identify the frontmost app"))
+        }
+        guard !CaptureFocusPolicy.isSelf(sourcePID: front.pid, sourceBundleID: front.bundleID,
+                                         ownPID: ProcessInfo.processInfo.processIdentifier) else {
+            return .rejected(reason: L10n.s("Switch to the app you want to capture, then press ⌘⇧Space"))
+        }
+        guard AXIsProcessTrusted() else {
+            return .rejected(reason: L10n.s("Accessibility permission not granted — cannot capture (enable it in the Diagnostics window)"))
         }
         if AppBlacklist.isBlocked(front.bundleID) {
             return .rejected(reason: "\(front.name) is on the blacklist (passwords/banking) — capture refused")
