@@ -161,3 +161,5 @@
 "确认新地址后存入 Inbox" = "确认新地址后存入 Inbox";
 "Pocket delivery stopped" = "口袋投递已中断";
 "Item %lld failed and stays in the pocket." = "第 %lld 项投递失败,仍留在口袋中。";
+"Work name…" = "工作名…";
+"口袋 · %lld" = "口袋 · %lld";

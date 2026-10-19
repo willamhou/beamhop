@@ -191,7 +191,7 @@ do {
     do {
         check(PanelShortcut.claudeCode.target == .claudeCode, "⌘1 → Claude Code")
         check(PanelShortcut.chatgptDesktop.target == .chatgptDesktop, "⌘2 → ChatGPT")
-        check(PanelShortcut.cowork.target == .cowork, "⌘3 → Cowork")
+        check(PanelShortcut.clipboard.target == .clipboard, "⌘3 → 剪贴板 (honest, not fake Cowork)")
         check(PanelShortcut.kimiWork.target == .kimiWork, "⌘4 → Kimi Work")
         check(PanelShortcut.inboxOnly.target == nil, "⌘0 → Inbox only (nil target)")
         check(PanelShortcut.hold.isHold && PanelShortcut.hold.target == nil, "⌘5 → 先留着 (hold, nil target)")
@@ -200,11 +200,32 @@ do {
               "keys are 0-5, no drift")
         check(PanelShortcut.kimiWork.badge == "⌘4", "badge ⌘4")
         check(PanelShortcut.hold.badge == "⌘5", "badge ⌘5")
-        // 每个可投递 target 都有对应 shortcut（防新增 DeliveryTarget 后漏配键位）
+        // 每个可投递 target 都有对应 shortcut（防新增 DeliveryTarget 后漏配键位）；
+        // .cowork 除外——S2 集成未完成，面板不假装它能投递。
         let mapped = Set(PanelShortcut.allCases.compactMap(\.target))
-        for t in DeliveryTarget.allCases where t != .clipboard {
+        for t in DeliveryTarget.allCases where t != .cowork {
             check(mapped.contains(t), "target \(t.rawValue) has a panel shortcut")
         }
+    }
+
+    print("== 可用去处: TargetAvailability (没有装的不显示, 不做假选择) ==")
+    do {
+        let all = TargetAvailability.resolve(hasClaudeCLI: true, hasChatGPTApp: true, hasKimiApp: true)
+        check(all == [.claudeCode, .chatgptDesktop, .kimiWork, .clipboard], "full house: apps then clipboard")
+        check(all.last == .clipboard, "clipboard always available (honest fallback)")
+        let none = TargetAvailability.resolve(hasClaudeCLI: false, hasChatGPTApp: false, hasKimiApp: false)
+        check(none == [.clipboard], "bare machine: clipboard only")
+        let partial = TargetAvailability.resolve(hasClaudeCLI: false, hasChatGPTApp: true, hasKimiApp: false)
+        check(partial == [.chatgptDesktop, .clipboard], "partial: only what's installed")
+        // usable(): 记住的目标消失时回退, Inbox(nil) 保持 Inbox
+        check(TargetAvailability.usable(.kimiWork, among: all) == .kimiWork, "available target kept")
+        check(TargetAvailability.usable(.kimiWork, among: partial) == .chatgptDesktop, "vanished target falls back to first available")
+        check(TargetAvailability.usable(nil, among: all) == nil, "Inbox choice stays Inbox")
+        // 面板模型用 visibleTargets 过滤: cowork 不在列表时不会成为 selected
+        let mVis = CapturePanelModel(capture: sample(), initialTarget: .cowork,
+                                     visibleTargets: [.claudeCode, .clipboard],
+                                     onConfirm: { _, _ in }, onCancel: {})
+        check(mVis.selectedTarget == .claudeCode, "invisible initial target falls back")
     }
 
     print("== Week 3: TargetMemory (记住上次投递目标) ==")

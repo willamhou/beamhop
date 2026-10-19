@@ -28,6 +28,7 @@ final class AppServices {
     }
     private(set) lazy var inbox = InboxWindowController()
     private(set) lazy var pocket = PocketWindowController()   // 「先留着」hold stack (essay 01)
+    private(set) lazy var pocketHUD = PocketHUDController()    // bottom-right chip showing the stack exists
     private(set) lazy var compatibility = CompatibilityWindowController()
     private(set) lazy var panel = CapturePanelController()   // Week 3 floating window
     private(set) lazy var firstRun = FirstRunWindowController(
@@ -69,9 +70,16 @@ final class AppServices {
                     self?.delivery?.deliver(capture, to: target)
                 }
             }
-            pocket.model.configure(store: pocketStore) { [weak self] batch in
+            let hud = self.pocketHUD
+            hud.onOpen = { [weak self] in self?.pocket.show() }
+            pocket.model.configure(store: pocketStore,
+                                   onDeliverBatch: { [weak self] batch in
                 self?.deliverPocketBatch(batch)
-            }
+            }, onCountChange: { [weak hud] count in
+                hud?.update(count: count)
+            })
+            // boot state: if the pocket already holds items (previous session), show the chip
+            pocket.model.reload()
             log.info("database opened at \(AppPaths.databaseURL.path, privacy: .public) recovered=\(db.recoveredFromCorruption)")
         } catch {
             log.error("database open failed: \(String(describing: error), privacy: .public)")
@@ -183,10 +191,14 @@ final class AppServices {
             try? workStore?.fetch(name: name)
         }
         let defaultTarget = rememberedWork?.boundTarget ?? targetMemory.last
+        // Only offer destinations that are REAL on this machine (no fake choices);
+        // the model falls back gracefully if the remembered target vanished.
+        let visibleTargets = TargetDetector.availableTargets()
 
         panel.show(
             capture: cap,
             defaultTarget: defaultTarget,
+            visibleTargets: visibleTargets,
             boundWork: rememberedWork,
             workName: rememberedWork?.name ?? "",
             onConfirm: { [weak self] target, note in
@@ -243,6 +255,7 @@ final class AppServices {
                                         detail: "target=\(target?.rawValue ?? "undecided")",
                                         captureID: cap.id)
                     let n = (try? pocketStore.count()) ?? 0
+                    self.pocket.model.reload()   // fires the bottom-right HUD count
                     Notifier.info(L10n.f("Held in pocket (%lld)", Int64(n)),
                                   L10n.s("Press ⌘⇧P to review and send"))
                     self.log.info("held \(item.id, privacy: .public) stack=\(n)")

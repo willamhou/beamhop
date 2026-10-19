@@ -12,14 +12,20 @@ final class PocketModel: ObservableObject {
 
     private var store: PocketStore?
     private var onDeliverBatch: (([(PocketItem, Capture)]) -> Void)?
+    /// Fired after every reload with the live count — drives the bottom-right HUD.
+    private var onCountChange: ((Int) -> Void)?
 
-    func configure(store: PocketStore, onDeliverBatch: @escaping ([(PocketItem, Capture)]) -> Void) {
+    func configure(store: PocketStore,
+                   onDeliverBatch: @escaping ([(PocketItem, Capture)]) -> Void,
+                   onCountChange: ((Int) -> Void)? = nil) {
         self.store = store
         self.onDeliverBatch = onDeliverBatch
+        self.onCountChange = onCountChange
     }
 
     func reload() {
         items = (try? store?.liveStack()) ?? []
+        onCountChange?(items.count)
     }
 
     var count: Int { items.count }
@@ -49,11 +55,16 @@ final class PocketWindowController {
                 backing: .buffered, defer: false)
             w.title = "Beamhop Pocket"
             w.isReleasedWhenClosed = false
-            w.center()
             window = w
         }
         model.reload()
         window?.contentView = NSHostingView(rootView: PocketView(model: model))
+        // bottom-right, next to the HUD chip — the pocket lives in that corner now
+        if let window, let sf = NSScreen.main?.visibleFrame {
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(x: sf.maxX - size.width - 16,
+                                          y: sf.minY + 16))
+        }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -103,6 +114,17 @@ struct PocketView: View {
     }
 }
 
+/// Human-readable receiver label for pocket rows (same vocabulary as the capture panel).
+private func pocketTargetLabel(_ target: DeliveryTarget) -> String {
+    switch target {
+    case .claudeCode: return L10n.s("Claude Code")
+    case .chatgptDesktop: return L10n.s("ChatGPT")
+    case .cowork: return L10n.s("Cowork → clipboard")
+    case .clipboard: return L10n.s("Clipboard")
+    case .kimiWork: return L10n.s("Kimi Work")
+    }
+}
+
 private struct PocketRow: View {
     let index: Int
     let item: PocketItem
@@ -122,8 +144,8 @@ private struct PocketRow: View {
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if let target = item.intendedTarget {
-                        Text(target.rawValue)
-                            .font(.caption.monospaced())
+                        Text(pocketTargetLabel(target))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1)

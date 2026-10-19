@@ -22,6 +22,11 @@ public final class CapturePanelModel: ObservableObject {
 
     public let capture: Capture
 
+    /// Targets that actually exist on this machine (AppServices resolves via
+    /// TargetAvailability + TargetDetector). Chips outside this list are not rendered
+    /// and their shortcuts do nothing — no fake choices. Defaults to everything for tests.
+    public let visibleTargets: [DeliveryTarget]
+
     /// The work this panel's destination resolves to (nil when workName is empty/unknown).
     /// `workNeedsConfirmation` is derived from it; injected by AppServices at show time.
     public let boundWork: Work?
@@ -51,13 +56,15 @@ public final class CapturePanelModel: ObservableObject {
 
     public init(capture: Capture,
                 initialTarget: DeliveryTarget?,
+                visibleTargets: [DeliveryTarget] = DeliveryTarget.allCases,
                 boundWork: Work? = nil,
                 workName: String = "",
                 onConfirm: @escaping (DeliveryTarget?, String) -> Void,
                 onCancel: @escaping () -> Void,
                 onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
         self.capture = capture
-        self.selectedTarget = initialTarget
+        self.visibleTargets = visibleTargets
+        self.selectedTarget = TargetAvailability.usable(initialTarget, among: visibleTargets)
         self.boundWork = boundWork
         self.workName = workName
         self.onConfirm = onConfirm

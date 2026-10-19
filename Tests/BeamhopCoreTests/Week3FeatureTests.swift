@@ -35,7 +35,8 @@ final class Week3FeatureTests: XCTestCase {
     func testPanelShortcutMapping() {
         XCTAssertEqual(PanelShortcut.claudeCode.target, .claudeCode)
         XCTAssertEqual(PanelShortcut.chatgptDesktop.target, .chatgptDesktop)
-        XCTAssertEqual(PanelShortcut.cowork.target, .cowork)
+        // 2026-10-19 UI pass: ⌘3 is clipboard, not the fake "Cowork → clipboard"
+        XCTAssertEqual(PanelShortcut.clipboard.target, .clipboard)
         XCTAssertEqual(PanelShortcut.kimiWork.target, .kimiWork)
         XCTAssertNil(PanelShortcut.inboxOnly.target)
         // essay 01: ⌘5 「先留着」 is a sixth shortcut (nil target like inbox-only, isHold)
@@ -48,9 +49,28 @@ final class Week3FeatureTests: XCTestCase {
 
     func testEveryDeliverableTargetHasShortcut() {
         let mapped = Set(PanelShortcut.allCases.compactMap(\.target))
-        for t in DeliveryTarget.allCases where t != .clipboard {
+        // .cowork is the only exception: S2 integration doesn't exist yet, so the
+        // panel must not pretend it can deliver there.
+        for t in DeliveryTarget.allCases where t != .cowork {
             XCTAssertTrue(mapped.contains(t), "target \(t.rawValue) has no panel shortcut")
         }
+    }
+
+    // MARK: TargetAvailability (only REAL destinations on the panel — no fake choices)
+
+    func testTargetAvailabilityResolveAndFallback() {
+        let all = TargetAvailability.resolve(hasClaudeCLI: true, hasChatGPTApp: true, hasKimiApp: true)
+        XCTAssertEqual(all, [.claudeCode, .chatgptDesktop, .kimiWork, .clipboard])
+        XCTAssertEqual(TargetAvailability.resolve(hasClaudeCLI: false, hasChatGPTApp: false, hasKimiApp: false),
+                         [.clipboard])
+        XCTAssertEqual(TargetAvailability.usable(.kimiWork, among: all), .kimiWork)
+        XCTAssertEqual(TargetAvailability.usable(.kimiWork, among: [.chatgptDesktop, .clipboard]), .chatgptDesktop)
+        XCTAssertNil(TargetAvailability.usable(nil, among: all))
+        // the model applies the same fallback to its initial target
+        let m = CapturePanelModel(capture: sampleCapture(), initialTarget: .cowork,
+                                  visibleTargets: [.claudeCode, .clipboard],
+                                  onConfirm: { _, _ in }, onCancel: {})
+        XCTAssertEqual(m.selectedTarget, .claudeCode)
     }
 
     // MARK: TargetMemory (panel pre-selects last successful target)

@@ -21,6 +21,7 @@ final class CapturePanelController {
     /// (essay 01) — park in the pocket instead of delivering.
     func show(capture: Capture,
               defaultTarget: DeliveryTarget?,
+              visibleTargets: [DeliveryTarget] = DeliveryTarget.allCases,
               boundWork: Work? = nil,
               workName: String = "",
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
@@ -29,6 +30,7 @@ final class CapturePanelController {
         let model = CapturePanelModel(
             capture: capture,
             initialTarget: defaultTarget,
+            visibleTargets: visibleTargets,
             boundWork: boundWork,
             workName: workName,
             onConfirm: { [weak self] target, note in

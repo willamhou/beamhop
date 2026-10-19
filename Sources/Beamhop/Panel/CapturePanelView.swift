@@ -1,17 +1,18 @@
 import SwiftUI
 import BeamhopCore
 
-/// Keyboard-first capture panel (Week 3 spec §2.1). Cursor lands in the note field on open;
-/// ⌘1/2/3/4 pick the target, Enter delivers, Esc cancels (capture stays in the Inbox),
-/// ⌘5 「先留着」parks it in the pocket (essay 01), ⌘0 saves to Inbox only.
+/// Keyboard-first capture panel (Week 3 spec §2.1), slimmed 2026-10-19 after dogfood
+/// feedback: one glance = source + preview, one row of inputs (instruction + work name),
+/// one row of REAL destinations (filtered by TargetDetector — no fake choices), Enter /
+/// Esc / ⌘5 先留着. Cursor lands in the note field on open.
 struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
     @FocusState private var noteFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 顶部：已抓取摘要 + 正文预览 + URL（只读，避开顶部拖拽区没有——panel 无标题栏拖拽问题）
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
+            // 顶部：已抓取摘要（一行）+ 正文预览 + URL（只读）
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.on.doc")
                         .foregroundStyle(.secondary)
@@ -20,13 +21,17 @@ struct CapturePanelView: View {
                         .lineLimit(1)
                 }
                 if let preview = model.previewText {
-                    Text(preview)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let url = model.capture.url, let host = URL(string: url)?.host {
+                    HStack(spacing: 4) {
+                        Text(preview)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let url = model.capture.url, let host = URL(string: url)?.host {
+                            Text("· \(host)")
+                        }
+                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                } else if let url = model.capture.url, let host = URL(string: url)?.host {
                     Text(host)
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -36,32 +41,33 @@ struct CapturePanelView: View {
 
             Divider()
 
-            // 指令框：出现即 focus（验收 §2.2 第 1 条）
-            TextField("Instruction (optional), e.g. summarize this…", text: $model.note)
-                .textFieldStyle(.plain)
-                .font(.body)
-                .focused($noteFocused)
+            // 输入行：指令（主）+ 工作名（次，essay 02）并排，省掉一个大字段的高度
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                TextField("Instruction (optional), e.g. summarize this…", text: $model.note)
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .focused($noteFocused)
+                TextField("Work name…", text: $model.workName)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 140)
+            }
 
-            // 工作名（可选，essay 02）：给这个去处起个名字，下次认出这件工作
-            TextField("Work name (optional), e.g. 让发送不打断阅读", text: $model.workName)
-                .textFieldStyle(.plain)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
+            // 两层去处（essay 02）：一行小字，换绑未确认时警示色；未绑定工作则不占空间
             if model.boundWork != nil {
-                destinationCard
+                destinationLine
             }
 
             Divider()
 
-            // 目标行：⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork / ⌘4 Kimi Work / ⌘5 先留着 / ⌘0 仅入 Inbox
-            // （键位映射唯一来源是 PanelShortcut，按钮与键盘路由不会漂移）
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Deliver to")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            // 目标行：只渲染这台机器上真实存在的去处（AppServices 注入 visibleTargets）
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 10) {
-                    ForEach(PanelShortcut.allCases.filter { $0.target != nil }, id: \.self) { sc in
+                    // 按键位序渲染（⌘1→⌘4），可用性只决定"显不显示"
+                    ForEach(PanelShortcut.allCases.filter { sc in
+                        sc.target != nil && model.visibleTargets.contains(sc.target!)
+                    }, id: \.self) { sc in
                         targetButton(sc)
                     }
                 }
@@ -82,40 +88,33 @@ struct CapturePanelView: View {
                     .buttonStyle(.borderedProminent)
             }
         }
-        .padding(16)
-        .frame(width: 520)
+        .padding(14)
+        .frame(width: 460)
         .onAppear { noteFocused = true }
     }
 
-    /// Essay 02 的两层去处卡：上面是人认得的工作名，下面是当前接收会话；
-    /// 换绑未确认时副标题用警示色提示「接收会话已更换」。
-    private var destinationCard: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Image(systemName: "folder")
-                    .foregroundStyle(.secondary)
-                Text(model.destinationTitle)
-                    .font(.callout.weight(.medium))
+    /// Essay 02 的两层去处：一行小字「工作名 ⇢ 接收会话」，换绑未确认时警示色。
+    private var destinationLine: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "folder")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(model.destinationTitle)
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+            Image(systemName: "arrow.turn.down.right")
+                .font(.caption2)
+                .foregroundStyle(gateActive ? Color.orange : .secondary)
+            if let subtitle = model.destinationSubtitle {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(gateActive ? Color.orange : .secondary)
                     .lineLimit(1)
             }
-            if let subtitle = model.destinationSubtitle {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.caption2)
-                        .foregroundStyle(model.workNeedsConfirmation && !model.rebindAcknowledged
-                                         ? Color.orange : .secondary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(model.workNeedsConfirmation && !model.rebindAcknowledged
-                                         ? Color.orange : .secondary)
-                        .lineLimit(1)
-                }
-                .padding(.leading, 20)
-            }
         }
-        .padding(8)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
+
+    private var gateActive: Bool { model.receiverChanged && !model.rebindAcknowledged }
 
     private func targetButton(_ sc: PanelShortcut) -> some View {
         let target = sc.target!   // 过滤后必有 target（PanelShortcut 测试约束）
