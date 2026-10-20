@@ -39,18 +39,32 @@ enum NativeUISmoke {
         func settle(_ seconds: TimeInterval = 0.3) {
             RunLoop.current.run(until: Date().addingTimeInterval(seconds))
         }
-        func accessibilityNodes(_ root: Any) -> [NSAccessibilityProtocol] {
-            var result: [NSAccessibilityProtocol] = []
-            var queue: [Any] = [root]
+        // SwiftUI accessibility proxies can implement the informal NSObject API
+        // without conforming to NSAccessibilityProtocol. Keep those nodes in the
+        // traversal; dropping them makes a working control invisible to this test.
+        func accessibilityNodes(_ root: NSObject) -> [NSObject] {
+            var result: [NSObject] = []
+            var queue: [NSObject] = [root]
             var visited = Set<ObjectIdentifier>()
             while !queue.isEmpty, result.count < 500 {
-                let node = queue.removeFirst()
-                guard let element = node as? NSAccessibilityProtocol else { continue }
+                let element = queue.removeFirst()
                 guard visited.insert(ObjectIdentifier(element)).inserted else { continue }
                 result.append(element)
-                queue.append(contentsOf: element.accessibilityChildren() ?? [])
+                let children: [Any]
+                if let modern = element as? NSAccessibilityProtocol {
+                    children = modern.accessibilityChildren() ?? []
+                } else {
+                    children = element.accessibilityAttributeValue(.children) as? [Any] ?? []
+                }
+                queue.append(contentsOf: children.compactMap { $0 as? NSObject })
             }
             return result
+        }
+        func identifier(_ element: NSObject) -> String? {
+            if let modern = element as? NSAccessibilityProtocol {
+                return modern.accessibilityIdentifier()
+            }
+            return element.accessibilityAttributeValue(.identifier) as? String
         }
         func capture(_ panel: NSPanel?, name: String, expectedWidth: CGFloat) throws {
             guard let panel, let view = panel.contentView else {
@@ -122,8 +136,13 @@ enum NativeUISmoke {
         settle()
         check("native editor updates note", controller.currentModel?.note == "Native keyboard input")
         controller.currentModel?.note = ""
-        let nodes = accessibilityNodes(controller.panel!.contentView!)
-        let destination = nodes.first { $0.accessibilityIdentifier() == "capture.destination" }
+        let nodes = accessibilityNodes(controller.panel!)
+        let accessibilityDump = nodes.map { node in
+            "\(type(of: node)) id=\(identifier(node) ?? "-") formal=\(node is NSAccessibilityProtocol)"
+        }.joined(separator: "\n")
+        try accessibilityDump.write(to: output.appendingPathComponent("accessibility-\(suffix).txt"),
+                                    atomically: true, encoding: .utf8)
+        let destination = nodes.first { identifier($0) == "capture.destination" }
         check("destination control accessible", destination != nil)
         // Exercise native menu tracking and its actual action, including focus-loss behavior.
         var menuChosen = false
@@ -139,7 +158,11 @@ enum NativeUISmoke {
             }
             RunLoop.main.add(timer, forMode: .common)
         }
-        _ = destination?.accessibilityPerformPress()
+        if let modern = destination as? NSAccessibilityProtocol {
+            _ = modern.accessibilityPerformPress()
+        } else {
+            destination?.accessibilityPerformAction(.press)
+        }
         NotificationCenter.default.removeObserver(observer)
         settle()
         check("destination menu changes receiver without dismissal", menuChosen && controller.isVisible
