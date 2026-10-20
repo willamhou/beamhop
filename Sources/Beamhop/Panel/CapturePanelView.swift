@@ -31,17 +31,6 @@ struct CapturePanelView: View {
             Button {
                 destinationMenu.show(model: model) { naming = true }
             } label: {
-                            Text(shortcut.target!.displayName)
-                        }
-                        .keyboardShortcut(KeyEquivalent(Character(shortcut.rawValue)), modifiers: .command)
-                    }
-                }
-                Divider()
-                Button("Remember with a name…") { naming = true }
-                    .disabled(model.selectedTarget == nil)
-                Button("Save to Inbox only") { model.chooseTool(nil) }
-                    .keyboardShortcut("0", modifiers: .command)
-            } label: {
                 HStack(spacing: 10) {
                     Image(systemName: model.selectedTarget == nil ? "tray" : "arrow.up.forward.app")
                         .font(.system(size: 22, weight: .light))
