@@ -20,9 +20,9 @@ public enum TargetAvailability {
     }
 
     /// Keep the remembered/initial target only if it's still deliverable here;
-    /// otherwise fall back to the first available target (or nil = Inbox when empty).
+    /// otherwise require a new choice. Availability is not permission to change receivers.
     public static func usable(_ target: DeliveryTarget?, among available: [DeliveryTarget]) -> DeliveryTarget? {
         guard let target else { return nil }
-        return available.contains(target) ? target : (available.first ?? nil)
+        return available.contains(target) ? target : nil
     }
 }

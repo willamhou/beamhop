@@ -64,13 +64,14 @@ final class Week3FeatureTests: XCTestCase {
         XCTAssertEqual(TargetAvailability.resolve(hasClaudeCLI: false, hasChatGPTApp: false, hasKimiApp: false),
                          [.clipboard])
         XCTAssertEqual(TargetAvailability.usable(.kimiWork, among: all), .kimiWork)
-        XCTAssertEqual(TargetAvailability.usable(.kimiWork, among: [.chatgptDesktop, .clipboard]), .chatgptDesktop)
+        XCTAssertNil(TargetAvailability.usable(.kimiWork, among: [.chatgptDesktop, .clipboard]))
         XCTAssertNil(TargetAvailability.usable(nil, among: all))
         // the model applies the same fallback to its initial target
         let m = CapturePanelModel(capture: sampleCapture(), initialTarget: .cowork,
                                   visibleTargets: [.claudeCode, .clipboard],
                                   onConfirm: { _, _ in }, onCancel: {})
-        XCTAssertEqual(m.selectedTarget, .claudeCode)
+        XCTAssertNil(m.selectedTarget)
+        XCTAssertFalse(m.canConfirm)
     }
 
     // MARK: TargetMemory (panel pre-selects last successful target)

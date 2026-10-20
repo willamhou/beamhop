@@ -219,13 +219,13 @@ do {
         check(partial == [.chatgptDesktop, .clipboard], "partial: only what's installed")
         // usable(): 记住的目标消失时回退, Inbox(nil) 保持 Inbox
         check(TargetAvailability.usable(.kimiWork, among: all) == .kimiWork, "available target kept")
-        check(TargetAvailability.usable(.kimiWork, among: partial) == .chatgptDesktop, "vanished target falls back to first available")
+        check(TargetAvailability.usable(.kimiWork, among: partial) == nil, "vanished target requires a new choice")
         check(TargetAvailability.usable(nil, among: all) == nil, "Inbox choice stays Inbox")
         // 面板模型用 visibleTargets 过滤: cowork 不在列表时不会成为 selected
         let mVis = CapturePanelModel(capture: sample(), initialTarget: .cowork,
                                      visibleTargets: [.claudeCode, .clipboard],
                                      onConfirm: { _, _ in }, onCancel: {})
-        check(mVis.selectedTarget == .claudeCode, "invisible initial target falls back")
+        check(mVis.selectedTarget == nil && !mVis.canConfirm, "invisible initial target blocks handoff")
     }
 
     print("== Week 3: TargetMemory (记住上次投递目标) ==")

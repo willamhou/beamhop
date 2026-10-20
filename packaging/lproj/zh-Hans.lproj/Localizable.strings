@@ -209,3 +209,5 @@
 "Cancelled" = "已取消";
 
 "Could not prepare materials for %@" = "未能把材料填入 %@";
+
+"Unavailable · choose another destination or hold for later" = "暂不可用 · 换个去处，或先留着";

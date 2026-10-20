@@ -39,6 +39,19 @@ enum NativeUISmoke {
         func settle(_ seconds: TimeInterval = 0.3) {
             RunLoop.current.run(until: Date().addingTimeInterval(seconds))
         }
+        func accessibilityNodes(_ root: Any) -> [NSAccessibilityProtocol] {
+            var result: [NSAccessibilityProtocol] = []
+            var queue: [Any] = [root]
+            var visited = Set<ObjectIdentifier>()
+            while !queue.isEmpty, result.count < 500 {
+                let node = queue.removeFirst()
+                guard let element = node as? NSAccessibilityProtocol else { continue }
+                guard visited.insert(ObjectIdentifier(element)).inserted else { continue }
+                result.append(element)
+                queue.append(contentsOf: element.accessibilityChildren() ?? [])
+            }
+            return result
+        }
         func capture(_ panel: NSPanel?, name: String, expectedWidth: CGFloat) throws {
             guard let panel, let view = panel.contentView else {
                 check(name + " exists", false)
@@ -83,12 +96,16 @@ enum NativeUISmoke {
         let controller = CapturePanelController()
         var confirms = 0
         var cancels = 0
+        var savedNotes: [String] = []
         var held: String?
         func show() {
             controller.show(capture: sample, defaultTarget: .kimiWork,
                             visibleTargets: [.claudeCode, .kimiWork, .clipboard],
                             boundWork: work, workName: work.name, availableWorks: [work],
-                            onConfirm: { _, _ in confirms += 1 }, onCancel: { cancels += 1 },
+                            onConfirm: { _, _ in confirms += 1 }, onCancel: {
+                                cancels += 1
+                                savedNotes.append(controller.currentModel?.note ?? "")
+                            },
                             onHold: { _, note in held = note })
             settle()
         }
@@ -98,6 +115,29 @@ enum NativeUISmoke {
         check("capture can receive keyboard", controller.panel?.canBecomeKey == true)
         check("capture is not a document window", controller.panel?.canBecomeMain == false)
         try capture(controller.panel, name: "capture", expectedWidth: 420)
+        let nodes = accessibilityNodes(controller.panel!.contentView!)
+        let destination = nodes.first { $0.accessibilityIdentifier() == "capture.destination" }
+        check("destination control accessible", destination != nil)
+        // Exercise native menu tracking and its actual action, including focus-loss behavior.
+        var menuChosen = false
+        let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
+            object: nil, queue: .main) { notification in
+            guard let menu = notification.object as? NSMenu else { return }
+            let timer = Timer(timeInterval: 0.1, repeats: false) { _ in
+                if let index = menu.items.firstIndex(where: { $0.keyEquivalent == "3" }) {
+                    menu.performActionForItem(at: index)
+                    menuChosen = true
+                }
+                menu.cancelTracking()
+            }
+            RunLoop.main.add(timer, forMode: .common)
+        }
+        _ = destination?.accessibilityPerformPress()
+        NotificationCenter.default.removeObserver(observer)
+        settle()
+        check("destination menu changes receiver without dismissal", menuChosen && controller.isVisible
+              && controller.currentModel?.selectedTarget == .clipboard)
+        controller.currentModel?.chooseWork(work)
         check("shortcut works with menu closed", key("3", code: 20, modifiers: .command, to: controller.panel))
         check("shortcut chooses clipboard", controller.currentModel?.selectedTarget == .clipboard)
         check("shortcut leaves named work", controller.currentModel?.workName.isEmpty == true)
@@ -108,7 +148,8 @@ enum NativeUISmoke {
         show()
         controller.currentModel?.note = chinese ? "回头和刚才那段一起看" : "Keep this with the earlier passage"
         show()
-        check("replacing a capture saves previous draft", cancels == 2)
+        check("replacing a capture saves previous draft", cancels == 2
+              && savedNotes.last == (chinese ? "回头和刚才那段一起看" : "Keep this with the earlier passage"))
         controller.currentModel?.note = chinese ? "第一行交代\n第二行说明\n第三行补充" : "First line of context\nSecond line of context\nThird line of context"
         controller.currentModel?.selectedTarget = .claudeCode
         settle()

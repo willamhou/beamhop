@@ -38,17 +38,27 @@ public final class PocketModel: ObservableObject {
 
     public func toggle(_ id: String) {
         guard !isDelivering else { return }
+        let previousIntent = Set(selection.map(Self.intent))
+        let previousTarget = selectedTarget
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
         error = nil
+        // Keep an explicit choice while adding/removing materials for the same work.
+        // Clear it only when crossing into a different original destination.
+        if !selectedIDs.isEmpty, Set(selection.map(Self.intent)) == previousIntent {
+            selectedTarget = previousTarget
+            return
+        }
         let targets = Set(selection.compactMap { $0.0.intendedTarget })
         selectedTarget = targets.count == 1 ? targets.first : nil
     }
 
     /// A different named work must not ride along just because it uses the same app.
     public var hasMixedDestinations: Bool {
-        Set(selection.map {
-            ($0.0.workName?.lowercased() ?? "") + "\u{0}" + ($0.0.intendedTarget?.rawValue ?? "")
-        }).count > 1
+        Set(selection.map(Self.intent)).count > 1
+    }
+
+    private static func intent(_ pair: Pair) -> String {
+        (pair.0.workName?.lowercased() ?? "") + "\u{0}" + (pair.0.intendedTarget?.rawValue ?? "")
     }
 
     public var canDeliver: Bool {

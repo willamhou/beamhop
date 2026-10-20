@@ -227,7 +227,7 @@ final class AppServices {
                                 self.targetMemory.markSucceeded(chosen, workName: workName)
                                 if let workName, let work = try? self.workStore?.fetch(name: workName),
                                    work.needsConfirmation {
-                                    try? self.workStore?.confirm(id: work.id)
+                                    try? self.workStore?.confirm(id: work.id, expectedTarget: chosen)
                                 }
                             }
                             // Clipboard keeps the source app; prepared drafts stay visible for review.

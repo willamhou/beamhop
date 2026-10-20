@@ -5,6 +5,7 @@ import BeamhopCore
 struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
     @State private var naming = false
+    @State private var destinationMenu = DestinationMenuPresenter()
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -27,24 +28,9 @@ struct CapturePanelView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Menu {
-                if !model.availableWorks.isEmpty {
-                    Section("Recent work") {
-                        ForEach(model.availableWorks) { work in
-                            Button { model.chooseWork(work) } label: {
-                                Text("\(work.name) · \(work.boundTarget.displayName)")
-                            }
-                            .disabled(!model.visibleTargets.contains(work.boundTarget))
-                        }
-                    }
-                }
-                Section("Applications") {
-                    ForEach(PanelShortcut.allCases.filter { shortcut in
-                        shortcut.target.map { model.visibleTargets.contains($0) } ?? false
-                    }, id: \.self) { shortcut in
-                        Button {
-                            model.chooseTool(shortcut.target)
-                        } label: {
+            Button {
+                destinationMenu.show(model: model) { naming = true }
+            } label: {
                             Text(shortcut.target!.displayName)
                         }
                         .keyboardShortcut(KeyEquivalent(Character(shortcut.rawValue)), modifiers: .command)
@@ -68,7 +54,9 @@ struct CapturePanelView: View {
                         if !model.workName.isEmpty, let target = model.selectedTarget {
                             Text(target.displayName).font(.caption).foregroundStyle(.secondary)
                         }
-                        Text(model.selectedTarget?.handoffDetail ?? L10n.s("Keep a local record"))
+                        Text(model.unavailableTarget != nil
+                             ? L10n.s("Unavailable · choose another destination or hold for later")
+                             : model.selectedTarget?.handoffDetail ?? L10n.s("Keep a local record"))
                             .font(.caption).foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
@@ -80,10 +68,11 @@ struct CapturePanelView: View {
                 .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
                 .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .background(DestinationMenuAnchor(presenter: destinationMenu))
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(L10n.f("Destination: %@", model.destinationTitle))
+            .accessibilityIdentifier("capture.destination")
 
             if naming {
                 TextField("Name this work", text: $model.workName)
@@ -113,6 +102,7 @@ struct CapturePanelView: View {
                 .disabled(!model.canHold)
                 Spacer()
                 Button(model.confirmLabel) { model.confirm() }
+                    .disabled(!model.canConfirm)
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.regular)

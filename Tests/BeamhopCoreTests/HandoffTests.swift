@@ -180,4 +180,60 @@ final class HandoffTests: XCTestCase {
             XCTAssertEqual(try JSONDecoder().decode(DeliveryStatus.self, from: JSONEncoder().encode(status)), status)
         }
     }
+    func testUnavailableReceiverCannotSendOrForgetHeldIntent() {
+        var confirmations = 0
+        var held: DeliveryTarget?
+        let model = CapturePanelModel(capture: capture("a"), initialTarget: .kimiWork,
+                                      visibleTargets: [.clipboard],
+                                      onConfirm: { _, _ in confirmations += 1 }, onCancel: {},
+                                      onHold: { target, _ in held = target })
+        XCTAssertFalse(model.canConfirm)
+        model.confirm()
+        XCTAssertEqual(confirmations, 0)
+        model.hold()
+        XCTAssertEqual(held, .kimiWork)
+        XCTAssertFalse(model.handleShortcut("2"))
+        XCTAssertTrue(model.handleShortcut("3"))
+        XCTAssertEqual(model.selectedTarget, .clipboard)
+        XCTAssertTrue(model.canConfirm)
+        model.confirm()
+        XCTAssertEqual(confirmations, 1)
+    }
+
+    func testPocketKeepsAnExplicitReceiverWithinTheSameWork() throws {
+        try withStore { pocket, captures in
+            let a = capture("a"), b = capture("b")
+            for cap in [a, b] { try captures.insert(cap) }
+            let one = try pocket.hold(captureID: a.id, note: nil, intendedTarget: nil)
+            let two = try pocket.hold(captureID: b.id, note: nil, intendedTarget: nil)
+            let model = PocketModel()
+            model.configure(store: pocket, onDeliver: { _, _, _ in })
+            model.reload()
+            model.toggle(one.id)
+            model.selectedTarget = .clipboard
+            model.toggle(two.id)
+            XCTAssertEqual(model.selectedTarget, .clipboard)
+            XCTAssertTrue(model.canDeliver)
+            model.toggle(one.id)
+            XCTAssertEqual(model.selectedTarget, .clipboard)
+            model.toggle(two.id)
+            XCTAssertNil(model.selectedTarget)
+        }
+    }
+
+    func testDelayedReceiptCannotConfirmANewerReceiver() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let db = try BeamhopCore.Database(path: directory.appendingPathComponent("work.sqlite"))
+        let store = WorkStore(db)
+        let work = try store.register(name: "A", boundTo: .claudeCode)
+        _ = try store.rebind(id: work.id, to: .kimiWork)
+        _ = try store.rebind(id: work.id, to: .chatgptDesktop)
+        try store.confirm(id: work.id, expectedTarget: .kimiWork)
+        XCTAssertTrue(try XCTUnwrap(store.fetch(id: work.id)).needsConfirmation)
+        try store.confirm(id: work.id, expectedTarget: .chatgptDesktop)
+        XCTAssertFalse(try XCTUnwrap(store.fetch(id: work.id)).needsConfirmation)
+    }
+
 }

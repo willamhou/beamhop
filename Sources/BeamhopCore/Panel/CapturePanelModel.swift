@@ -16,9 +16,16 @@ import Combine
 public final class CapturePanelModel: ObservableObject {
     /// nil = "仅入 Inbox" (⌘0): an explicit no-delivery choice, distinct from Esc-cancel.
     @Published public var selectedTarget: DeliveryTarget? {
-        didSet { if selectedTarget != oldValue { rebindAcknowledged = false } }
+        didSet {
+            if selectedTarget != oldValue { rebindAcknowledged = false }
+            if let selectedTarget, visibleTargets.contains(selectedTarget) { unavailableTarget = nil }
+        }
     }
     @Published public var note: String = ""
+    @Published public private(set) var unavailableTarget: DeliveryTarget?
+    public var canConfirm: Bool {
+        unavailableTarget == nil && (selectedTarget.map { visibleTargets.contains($0) } ?? true)
+    }
     /// Optional named-destination binding (essay 02). Empty = plain tool-level routing.
     @Published public var workName: String = "" {
         didSet { if workName != oldValue { rebindAcknowledged = false } }
@@ -43,12 +50,14 @@ public final class CapturePanelModel: ObservableObject {
         workName = work.name
         // An unavailable receiver must not silently become a different app.
         selectedTarget = visibleTargets.contains(work.boundTarget) ? work.boundTarget : nil
+        unavailableTarget = visibleTargets.contains(work.boundTarget) ? nil : work.boundTarget
         rebindAcknowledged = false
     }
 
     public func chooseTool(_ target: DeliveryTarget?) {
         workName = ""
         selectedTarget = target
+        unavailableTarget = target.flatMap { visibleTargets.contains($0) ? nil : $0 }
     }
 
     /// Menu contents are lazy in SwiftUI. Keep shortcuts available while that menu is closed.
@@ -107,6 +116,8 @@ public final class CapturePanelModel: ObservableObject {
             availableWorks.contains(where: { $0.id == work.id }) ? [] : [work]
         } ?? [])
         self.workName = workName ?? boundWork?.name ?? ""
+        let intended = boundWork?.boundTarget ?? initialTarget
+        self.unavailableTarget = intended.flatMap { visibleTargets.contains($0) ? nil : $0 }
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         self.onHold = onHold
@@ -115,6 +126,7 @@ public final class CapturePanelModel: ObservableObject {
     /// Deliver. Two-step when a rebound work is unacknowledged: first press only acknowledges
     /// (the label already shows the NEW receiver), second press fires the real callback.
     public func confirm() {
+        guard canConfirm else { return }
         if receiverChanged && !rebindAcknowledged {
             rebindAcknowledged = true
             return
@@ -126,7 +138,7 @@ public final class CapturePanelModel: ObservableObject {
 
     /// 「先留着」— essay 01: keep the material (with note + current target choice) in the
     /// pocket; nothing is delivered, the reading position stays put.
-    public func hold() { onHold?(selectedTarget, note) }
+    public func hold() { onHold?(unavailableTarget ?? selectedTarget, note) }
 
     public var canHold: Bool { onHold != nil }
 
@@ -162,6 +174,7 @@ public final class CapturePanelModel: ObservableObject {
     public var destinationTitle: String {
         let name = workName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !name.isEmpty { return name }
+        if let unavailableTarget { return targetLabel(unavailableTarget) }
         if let selectedTarget { return targetLabel(selectedTarget) }
         return L10n.s("Inbox")
     }
@@ -175,6 +188,7 @@ public final class CapturePanelModel: ObservableObject {
     }
 
     public var confirmLabel: String {
+        if unavailableTarget != nil { return L10n.s("Choose destination") }
         // Unacknowledged rebind: the first press is an ACK, not a delivery — say so (essay 02:
         // 状态必须照实说; a pretty "Send" that actually just acknowledges would be a lie).
         if receiverChanged && !rebindAcknowledged {

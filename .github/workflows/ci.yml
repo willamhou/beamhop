@@ -33,12 +33,15 @@ jobs:
           path: dist/ui-smoke
           if-no-files-found: warn
           retention-days: 14
-      - name: Upload Beamhop.app artifact (main only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Archive Beamhop.app with executable permissions
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
+        run: ditto -c -k --sequesterRsrc --keepParent dist/Beamhop.app dist/Beamhop-macOS.zip
+      - name: Upload Beamhop.app artifact
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
         uses: actions/upload-artifact@v4
         with:
           name: Beamhop-app-${{ github.sha }}
-          path: dist/Beamhop.app
+          path: dist/Beamhop-macOS.zip
           if-no-files-found: error
           retention-days: 30
 

@@ -42,9 +42,11 @@ public final class WorkStore {
 
     /// The ONLY way confirmedTarget moves. Called solely from explicit user confirmation
     /// in the delivery flow.
-    public func confirm(id: String) throws {
+    public func confirm(id: String, expectedTarget: DeliveryTarget? = nil) throws {
         try db.queue.write { db in
             guard var work = try Work.fetchOne(db, key: id) else { return }
+            // A delayed delivery receipt must not confirm a receiver selected later.
+            if let expectedTarget, work.boundTarget != expectedTarget { return }
             work.confirmedTarget = work.boundTarget
             work.updatedAt = Int64(Date().timeIntervalSince1970 * 1000)
             try work.update(db)
