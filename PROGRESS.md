@@ -10,7 +10,7 @@
 
 ## Current follow-up: compact handoff (2026-10-20)
 
-Branch `codex/refine-capture-workflow`, based on `origin/feat/phase15-detail-chain` (`4007bc0`). User selected a compact shortcut panel with destinations disclosed on demand. The corner pocket remains optional.
+Active development branch: `feat/phase15-detail-chain`. On 2026-10-20 the user directed the compact-handoff fixes from `codex/refine-capture-workflow` to be integrated here and further development to continue on this feature branch. Refine and validate it before opening a PR to `main`. The fixes originated from `4007bc0` and were integrated by fast-forward through `c5fab72`. User selected a compact shortcut panel with destinations disclosed on demand. The corner pocket remains optional.
 
 Implemented: compact destination menu and optional naming; recent named destinations; selection-based corner panel; a single combined payload per handoff; work-intent preservation (v7 migration); recovery without clearing pending selections; serialized delivery; draft protection; no automatic Kimi new chat or terminal Enter; separate copied/prepared receipts; corrected destination acknowledgment and memory. Details and Mac acceptance: [compact handoff](docs/superpowers/specs/2026-10-20-compact-handoff.md).
 
