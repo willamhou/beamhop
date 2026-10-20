@@ -247,6 +247,7 @@ final class AppServices {
             },
             onHold: { [weak self] target, note in
                 guard let self, let pocketStore else { return }
+                self.saveNote(note, for: cap.id)
                 // 「先留着」(essay 01): park in the pocket — order, note and intended target
                 // survive; nothing is delivered, reading position stays put.
                 do {
@@ -307,6 +308,14 @@ final class AppServices {
     private func deliverPocketBatch(_ batch: [PocketModel.Pair], to target: DeliveryTarget,
                                     completion: @escaping (Bool) -> Void) {
         guard let delivery else { completion(false); return }
+        do {
+            // Upgrade notes from items held by older builds before removing a prepared item.
+            for (item, _) in batch { try store?.setUserNote(item.note, captureID: item.captureID) }
+        } catch {
+            Notifier.error(L10n.s("Could not save note"), String(describing: error))
+            completion(false)
+            return
+        }
         events?.record(name: EventStore.Name.pocketBatch, detail: "count=\(batch.count)")
         let handoff = Handoff(items: batch.map { .init(capture: $0.1, note: $0.0.note) })
         delivery.deliver(handoff, to: target) { [weak self] _, ok in

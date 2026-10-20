@@ -207,3 +207,5 @@
 "Prepared · awaiting your send" = "已填入 · 等你发送";
 "Handoff failed" = "交接失败";
 "Cancelled" = "已取消";
+
+"Could not prepare materials for %@" = "未能把材料填入 %@";

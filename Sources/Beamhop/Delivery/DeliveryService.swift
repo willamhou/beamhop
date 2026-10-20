@@ -29,7 +29,7 @@ final class DeliveryService {
         case .claudeCode:
             if let reason = ClaudeCodeDelivery.deliver(handoff) {
                 record(handoff, .claudeCode, .failed, reason, t0: t0)
-                Notifier.error(L10n.s("Claude Code delivery failed → copied to clipboard"), reason)
+                Notifier.error(L10n.f("Could not prepare materials for %@", "Claude Code"), reason)
                 clipboardFallback(handoff, reason: reason, t0: t0)
                 completion?(.claudeCode, false)
             } else {
@@ -44,7 +44,7 @@ final class DeliveryService {
             // S3 verified path: AX opt-in + kAXValueAttribute set-value, no auto-submit.
             if let reason = ChatGPTDelivery.deliver(handoff) {
                 record(handoff, .chatgptDesktop, .failed, reason, t0: t0)
-                Notifier.error(L10n.s("ChatGPT Desktop delivery failed → copied to clipboard"), reason)
+                Notifier.error(L10n.f("Could not prepare materials for %@", "ChatGPT"), reason)
                 clipboardFallback(handoff, reason: reason, t0: t0)
                 completion?(.chatgptDesktop, false)
             } else {
@@ -60,7 +60,7 @@ final class DeliveryService {
             // Verified 2026-10-18: AX-locate the composer, focus it, clipboard-paste (no auto-send).
             if let reason = KimiDelivery.deliver(handoff) {
                 record(handoff, .kimiWork, .failed, reason, t0: t0)
-                Notifier.error(L10n.s("Kimi Work delivery failed → copied to clipboard"), reason)
+                Notifier.error(L10n.f("Could not prepare materials for %@", "Kimi Work"), reason)
                 clipboardFallback(handoff, reason: reason, t0: t0)
                 completion?(.kimiWork, false)
             } else {

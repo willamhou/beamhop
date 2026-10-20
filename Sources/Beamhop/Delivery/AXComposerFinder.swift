@@ -17,7 +17,13 @@ enum AXComposerFinder {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(composer, kAXValueAttribute as CFString, &value) == .success,
               let value, CFGetTypeID(value) == CFStringGetTypeID() else { return false }
-        return (value as! String).isEmpty
+        if (value as! String).isEmpty { return true }
+        // Some Electron editors expose their placeholder as the value. Only an explicit
+        // zero character count proves that it is empty; placeholder text equality doesn't.
+        var count: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(composer, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
+              let count = count as? NSNumber else { return false }
+        return count.intValue == 0
     }
 
     static func findComposer(pid: pid_t) -> AXUIElement? {
