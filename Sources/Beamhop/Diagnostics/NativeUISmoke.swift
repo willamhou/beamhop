@@ -50,21 +50,18 @@ enum NativeUISmoke {
                 let element = queue.removeFirst()
                 guard visited.insert(ObjectIdentifier(element)).inserted else { continue }
                 result.append(element)
-                let children: [Any]
-                if let modern = element as? NSAccessibilityProtocol {
-                    children = modern.accessibilityChildren() ?? []
-                } else {
-                    children = element.accessibilityAttributeValue(.children) as? [Any] ?? []
-                }
+                // NSHostingView inherits the formal protocol from NSView, but
+                // its SwiftUI tree can be exposed through the informal API.
+                let legacy = element.accessibilityAttributeValue(.children) as? [Any] ?? []
+                let modern = (element as? NSAccessibilityProtocol)?.accessibilityChildren() ?? []
+                let children = legacy + modern
                 queue.append(contentsOf: children.compactMap { $0 as? NSObject })
             }
             return result
         }
         func identifier(_ element: NSObject) -> String? {
-            if let modern = element as? NSAccessibilityProtocol {
-                return modern.accessibilityIdentifier()
-            }
-            return element.accessibilityAttributeValue(.identifier) as? String
+            (element.accessibilityAttributeValue(.identifier) as? String)
+                ?? (element as? NSAccessibilityProtocol)?.accessibilityIdentifier()
         }
         func capture(_ panel: NSPanel?, name: String, expectedWidth: CGFloat) throws {
             guard let panel, let view = panel.contentView else {
@@ -158,9 +155,7 @@ enum NativeUISmoke {
             }
             RunLoop.main.add(timer, forMode: .common)
         }
-        if let modern = destination as? NSAccessibilityProtocol {
-            _ = modern.accessibilityPerformPress()
-        } else {
+        if (destination as? NSAccessibilityProtocol)?.accessibilityPerformPress() != true {
             destination?.accessibilityPerformAction(.press)
         }
         NotificationCenter.default.removeObserver(observer)
