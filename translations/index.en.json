@@ -239,5 +239,7 @@
   "sent.length+' 次投递'": "sent.length+(sent.length===1?' delivery':' deliveries')",
   "captures.length+'段材料已交给'": "captures.length+(captures.length===1?' clip sent to ':' clips sent to ')",
   "Beamhop 的产品力，应体现在这两次寻找越来越少。": " Beamhop should prove its value by making both searches less frequent.",
-  "这个动作本身已经有意义：补充上下文。若想让对方立刻做什么，可以再补一句。“补充材料”和“要求执行”应该分得清楚。": "Adding context is itself a meaningful action. Add a note if you want the recipient to act immediately. Supplying material and requesting execution should remain distinguishable."
+  "这个动作本身已经有意义：补充上下文。若想让对方立刻做什么，可以再补一句。“补充材料”和“要求执行”应该分得清楚。": "Adding context is itself a meaningful action. Add a note if you want the recipient to act immediately. Supplying material and requesting execution should remain distinguishable.",
+  "原生截图": "Native screenshots",
+  "./native-ui/index.zh.html": "./native-ui/"
 }

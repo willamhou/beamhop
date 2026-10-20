@@ -46,7 +46,7 @@ def main(english=False):
         '<nav class="site-series" aria-label="产品随笔导航">'
         '<a href="./index.html">随笔 01</a>'
         '<a href="./work-in-hand.html">随笔 02</a>'
-        '<a href="./product-notes.html" aria-current="page">产品讨论</a></nav>'
+        '<a href="./product-notes.html" aria-current="page">产品讨论</a><a href="./native-ui/index.zh.html">原生截图</a></nav>'
     )
     html = f'''<!doctype html>
 <html lang="zh-CN"><head>
@@ -83,6 +83,8 @@ def main(english=False):
             "产品讨论与取舍": "Product discussion and decisions",
             "从实际使用判断功能": "Judge features through use",
             "产品随笔导航": "Product essays",
+            "原生截图": "Native screenshots",
+            "./native-ui/index.zh.html": "./native-ui/",
             "查看 Markdown 原稿": "Read the Markdown source",
             "讨论 · 先把那一下做对": "Notes · Get the handoff right",
             "01 · 让信息过去": "01 · Send the information",

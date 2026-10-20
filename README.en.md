@@ -4,6 +4,7 @@
 
 Two interactive essays and notes from the product discussion. They explore sending material from the current app to an existing agent session while keeping the reader’s place and train of thought.
 
+- [Native macOS screenshots](./native-ui/): production AppKit / SwiftUI views, English/Chinese light/dark appearances, and the corresponding verification reports.
 - [Essay 01 · Send the information. Stay where you are.](./index.en.html): finding a destination for the first time, sending from the source app, and keeping a shelf available when needed.
 - [Essay 02 · Work can branch. Keep your train of thought.](./work-in-hand.en.html): select passages in the article, send beside the selection, and save in a corner shelf that retains selections and notes when collapsed.
 - [Product notes · Get the handoff right.](./product-notes.en.html): ideas, product boundaries, design recommendations, and hypotheses to test. The [Markdown source](./product-notes.en.md) is also available.
@@ -26,4 +27,6 @@ See [AGENTS.md](./AGENTS.md) for editing, translation, and verification instruct
 
 ## Publishing status
 
-The static files are committed to `gh-pages`. A repository administrator will arrange GitHub Pages separately; the public site has not been verified as live. If Pages is enabled later, use this branch’s root directory as its source. `.nojekyll` allows the static files to be published directly.
+The public site is [Beamhop Pages](https://willamhou.github.io/beamhop/index.en.html). It publishes the root of `gh-pages`; `.nojekyll` serves the static files directly.
+
+`native-ui/` contains 20 native PNGs and four reports from `fde3a97` on macOS 15.7.9 (152 checks passed). Unlike the essay interactions, these show the production views. The gallery identifies verified behavior and remaining integration acceptance. Keep the revision, reports and coverage in sync when updating screenshots.

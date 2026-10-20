@@ -1,0 +1,224 @@
+{
+  "appearance" : "light",
+  "checks" : [
+    {
+      "detail" : "",
+      "name" : "localization",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture is a nonactivating panel",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture leaves source app active",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture can receive keyboard",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture actually owns keyboard focus",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture is not a document window",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(420.0, 297.0) fitting=(420.0, 297.0)",
+      "name" : "capture fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "note receives initial focus",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "native editor updates note",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "destination control accessible",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "destination menu changes receiver without dismissal",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shortcut works with menu closed",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shortcut chooses clipboard",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shortcut leaves named work",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "unavailable shortcut ignored",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "Escape handled",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "Escape dismisses exactly once",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "replacing a capture saves previous draft",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(420.0, 358.0) fitting=(420.0, 358.0)",
+      "name" : "capture-confirm-change fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture-confirm-change content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "hold shortcut handled",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "hold dismisses and keeps note",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "confirm does not also cancel",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "real key-window loss cancels once",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shelf leaves source app active",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(360.0, 423.0) fitting=(360.0, 423.0)",
+      "name" : "shelf-selected fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shelf-selected content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shelf Escape hides",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "selection survives reopening",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "one ordered handoff",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(360.0, 448.0) fitting=(360.0, 448.0)",
+      "name" : "shelf-retry fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shelf-retry content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "failure keeps held materials",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "success removes only selected",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(360.0, 279.0) fitting=(360.0, 279.0)",
+      "name" : "shelf-remaining fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "shelf-remaining content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "sourcePID=341",
+      "name" : "real source app available for focus checks",
+      "passed" : true
+    }
+  ],
+  "language" : "en",
+  "os" : "Version 15.7.9 (Build 24G830)",
+  "snapshots" : [
+    {
+      "file" : "capture-en-light.png",
+      "height" : 297,
+      "width" : 420
+    },
+    {
+      "file" : "capture-confirm-change-en-light.png",
+      "height" : 358,
+      "width" : 420
+    },
+    {
+      "file" : "shelf-selected-en-light.png",
+      "height" : 423,
+      "width" : 360
+    },
+    {
+      "file" : "shelf-retry-en-light.png",
+      "height" : 448,
+      "width" : 360
+    },
+    {
+      "file" : "shelf-remaining-en-light.png",
+      "height" : 279,
+      "width" : 360
+    }
+  ]
+}

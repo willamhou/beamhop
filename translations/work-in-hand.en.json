@@ -124,5 +124,7 @@
   "state.receipts.length+' 次'": "state.receipts.length+(state.receipts.length===1?' handoff':' handoffs')",
   "接下来这句话仍然在原来的位置。你没有进入另一个应用，也没有先把材料放进剪板。交接成功，只需要一个小小的确认。": "The next sentence is still in the same place. You have not entered another app or put the passage on the shelf first. A small confirmation is enough after the handoff.",
   "这一版把选择交还给具体时刻：选中文字，才出现发送浮条；主动暂存，右下角才有入口；主动展开，才看见材料。剩下的时候，眼前仍然是你正在读的文章。": "This version leaves each choice to the moment it is needed: selecting text opens the sending popover; saving a clip makes the corner shelf appear; expanding it shows the material. At other times, you are still looking at the article you were reading.",
-  "事实逻辑线关心“这个判断依据什么”；处理线关心“谁接手、准备做什么”。这些关系值得保留。需要回看时，再展开交接记录；发送的那一刻，不必先打开一张关系图。": "The evidence trail asks what supports a judgment. The work trail asks who is taking it on and what they plan to do. These relationships are worth retaining. Open the handoff history when you want to review them; sending a passage need not begin with a relationship diagram."
+  "事实逻辑线关心“这个判断依据什么”；处理线关心“谁接手、准备做什么”。这些关系值得保留。需要回看时，再展开交接记录；发送的那一刻，不必先打开一张关系图。": "The evidence trail asks what supports a judgment. The work trail asks who is taking it on and what they plan to do. These relationships are worth retaining. Open the handoff history when you want to review them; sending a passage need not begin with a relationship diagram.",
+  "原生截图": "Native screenshots",
+  "./native-ui/index.zh.html": "./native-ui/"
 }
