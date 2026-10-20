@@ -24,8 +24,10 @@ final class InboxWindowController: NSObject, NSWindowDelegate {
         model.logOpened()
         model.reload()
         window?.contentView = NSHostingView(rootView: InboxView(model: model))
+        // Opening the Inbox is an explicit application switch. A nonactivating capture
+        // panel can make NSApp appear active while another process remains foreground.
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {

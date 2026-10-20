@@ -134,7 +134,11 @@ final class CapturePanelController {
     /// older source, steal focus from the destination, or leave the Inbox while it is in use.
     func restoreSourceIfStillActive(captureID: String) {
         guard self.captureID == captureID, let sourceApp else { return }
-        let hasOtherWindow = NSApp.keyWindow.map { $0.isVisible && $0 !== panel } ?? false
+        // A document window can already be opening while AppKit still reports the outgoing
+        // panel (or nil) as key. Do not let source restoration overtake that activation.
+        let hasOtherWindow = NSApp.windows.contains {
+            $0 !== panel && $0.isVisible && ($0.canBecomeMain || $0.isKeyWindow)
+        }
         guard CaptureFocusPolicy.shouldRestore(
             sourcePID: sourceApp.processIdentifier,
             ownPID: ProcessInfo.processInfo.processIdentifier,
