@@ -11,6 +11,15 @@ import ApplicationServices
 ///   - focused window can be momentarily absent right after activation → fall back to the
 ///     first window in AXWindows
 enum AXComposerFinder {
+    /// Empty is proved by a readable empty value. Unknown values take the manual path;
+    /// comparing to placeholder text could mistake an actual draft for an empty input.
+    static func isEmpty(_ composer: AXUIElement) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(composer, kAXValueAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == CFStringGetTypeID() else { return false }
+        return (value as! String).isEmpty
+    }
+
     static func findComposer(pid: pid_t) -> AXUIElement? {
         guard let window = resolveWindow(pid: pid) else { return nil }
 

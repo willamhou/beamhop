@@ -28,7 +28,22 @@ public enum DeliveryTarget: String, Codable, CaseIterable, Sendable {
 
 /// Outcome of a delivery attempt (spec §8.1 deliveries.status).
 public enum DeliveryStatus: String, Codable, Sendable {
+    /// Legacy records do not identify how far the old transport got.
     case success
+    case copied
+    case prepared
     case failed
     case cancelled
+
+    public var isSuccessful: Bool { self == .success || self == .copied || self == .prepared }
+
+    public var displayName: String {
+        switch self {
+        case .success: return L10n.s("Handoff recorded")
+        case .copied: return L10n.s("Copied")
+        case .prepared: return L10n.s("Prepared · awaiting your send")
+        case .failed: return L10n.s("Handoff failed")
+        case .cancelled: return L10n.s("Cancelled")
+        }
+    }
 }

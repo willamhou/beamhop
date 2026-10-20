@@ -147,7 +147,7 @@ final class Week3FeatureTests: XCTestCase {
         let m = panelModel(capture: cap)
         XCTAssertEqual(m.summaryLine, "Kimi · Kimi Work · 20 chars")
         XCTAssertEqual(m.previewText, String(repeating: "字", count: 25))
-        XCTAssertEqual(m.confirmLabel, "Deliver (Kimi Work)")
+        XCTAssertEqual(m.confirmLabel, "Fill & review")
     }
 
     func testPanelConfirmCarriesTargetAndNote() {
@@ -196,8 +196,8 @@ final class Week3FeatureTests: XCTestCase {
         // …but picking a DIFFERENT receiver in-panel IS a rebind → two-step gate
         XCTAssertFalse(m.workNeedsConfirmation)
         XCTAssertTrue(m.receiverChanged)
-        XCTAssertTrue(m.confirmLabel.contains("确认新地址"))
-        XCTAssertTrue(m.destinationSubtitle?.contains("接收会话已更换") == true)
+        XCTAssertTrue(m.confirmLabel.contains("Use "))
+        XCTAssertTrue(m.destinationSubtitle?.contains("Receiving app changed") == true)
         m.confirm()
         XCTAssertTrue(fired.isEmpty, "first confirm only acknowledges the new address")
         m.confirm()

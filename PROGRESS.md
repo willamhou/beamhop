@@ -1,11 +1,20 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
-> Last updated: 2026-10-19 — **Inbox detail chain (Timeline) landed; §7-C focus-restore fix landed; stable self-signed dev identity ("Beamhop Sign") works fully headless (one-time TCC grant left, needs an unlocked screen); main merged in — dogfood instrumentation + Phase 1.5 patches (zh-Hans toggle, AX deadline, one-click MCP register) + `scripts/dogfood-metrics.sh`**.
+> Last updated: 2026-10-20 — **Inbox detail chain (Timeline) landed; §7-C focus-restore fix landed; stable self-signed dev identity ("Beamhop Sign") works fully headless (one-time TCC grant left, needs an unlocked screen); main merged in — dogfood instrumentation + Phase 1.5 patches (zh-Hans toggle, AX deadline, one-click MCP register) + `scripts/dogfood-metrics.sh`**.
 
 > 🗂 Full pre-2026-10 history (Chinese) is archived at [docs/zh/PROGRESS.zh.md](docs/zh/PROGRESS.zh.md).
 
 ---
+
+
+## Current follow-up: compact handoff (2026-10-20)
+
+Branch `codex/refine-capture-workflow`, based on `origin/feat/phase15-detail-chain` (`4007bc0`). User selected a compact shortcut panel with destinations disclosed on demand. The corner pocket remains optional.
+
+Implemented: compact destination menu and optional naming; recent named destinations; selection-based corner panel; a single combined payload per handoff; work-intent preservation (v7 migration); recovery without clearing pending selections; serialized delivery; draft protection; no automatic Kimi new chat or terminal Enter; separate copied/prepared receipts; corrected destination acknowledgment and memory. Details and Mac acceptance: [compact handoff](docs/superpowers/specs/2026-10-20-compact-handoff.md).
+
+Validation: Windows host has no Swift/macOS SDK. macOS CI and on-device acceptance pending. Earlier “machine-verified” claims below describe the October 19 implementation, not these changes. Named works still bind apps, not exact agent sessions; app injection still brings the receiver forward for manual review.
 
 ## 0. Status in one paragraph
 

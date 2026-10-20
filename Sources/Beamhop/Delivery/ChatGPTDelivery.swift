@@ -16,7 +16,7 @@ enum ChatGPTDelivery {
     static let bundleIDs = ["com.openai.chat", "com.openai.codex"]
 
     /// Returns nil on success, or a user-facing failure reason (caller falls back to clipboard).
-    static func deliver(_ capture: Capture, userNote: String?) -> String? {
+    static func deliver(_ handoff: Handoff) -> String? {
         guard let (app, bundleID) = runningApp() else {
             return L10n.s("ChatGPT Desktop is not running (open it first, or use the clipboard)")
         }
@@ -36,10 +36,11 @@ enum ChatGPTDelivery {
             return L10n.s("ChatGPT input box (AXTextArea) not found — the version may have changed; use the clipboard")
         }
 
-        // ChatGPT has no MCP channel, so we inject the FULL self-contained markdown (§7.5).
-        // set-value REPLACES the composer's current draft; drafts are usually empty at delivery
-        // time, and preserving an in-progress draft across injection has no reliable AX story.
-        let md = PromptRenderer.fullMarkdown(capture, userNote: userNote)
+        // Replacing a nonempty or unreadable draft loses the user's work. Fall back instead.
+        guard AXComposerFinder.isEmpty(composer) else {
+            return L10n.s("The input already has a draft or could not be checked. Paste the copied materials when ready.")
+        }
+        let md = handoff.markdown
         guard AXUIElementSetAttributeValue(composer, kAXValueAttribute as CFString,
                                            md as CFString) == .success else {
             return L10n.s("AX set-value injection failed (the input box may be read-only or the version changed)")

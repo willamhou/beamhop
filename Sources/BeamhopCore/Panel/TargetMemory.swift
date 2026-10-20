@@ -16,9 +16,8 @@ public struct TargetMemory {
     /// leave the previous choice intact.
     public mutating func markSucceeded(_ target: DeliveryTarget, workName: String? = nil) {
         last = target
-        if let workName, !workName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lastWorkName = workName
-        }
+        let name = workName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastWorkName = name?.isEmpty == false ? name : nil
     }
 
     public mutating func reset() {

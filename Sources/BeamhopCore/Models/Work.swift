@@ -3,8 +3,9 @@ import GRDB
 
 /// A named destination — the two-layer routing idea from product essay 02 (2026-10-19):
 /// the TOP layer is the work the human recognizes ("让发送不打断阅读"); the BOTTOM layer is
-/// the concrete receiving session/tool it is currently bound to (`.claudeCode` etc.).
+/// the receiving app it is currently bound to (`.claudeCode` etc.).
 ///
+/// This is a human label for an app destination, not a verified conversation address.
 /// A work may outlive any single session. When the binding is REBOUND to a different
 /// receiver, `needsConfirmation` becomes true and stays true until the user explicitly
 /// confirms the new receiver at delivery time — a similar name must never silently
@@ -14,7 +15,7 @@ public struct Work: Codable, FetchableRecord, MutablePersistableRecord, Identifi
 
     public var id: String                 // "wrk_<ulid>"
     public var name: String               // 人认得的工作名, unique (case-insensitive in store layer)
-    public var boundTarget: DeliveryTarget   // current receiving session/tool binding
+    public var boundTarget: DeliveryTarget   // app binding only; no conversation identity
     /// The receiver the user last EXPLICITLY confirmed. nil = never confirmed under this name
     /// (e.g. restored/default); confirm at next delivery.
     public var confirmedTarget: DeliveryTarget?

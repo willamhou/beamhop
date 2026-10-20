@@ -13,11 +13,12 @@ public final class PocketStore {
     /// Append at the end of the stack (position = max + 1). Holding preserves the order
     /// materials were gathered in — that order is part of the handoff's meaning.
     @discardableResult
-    public func hold(captureID: String, note: String?, intendedTarget: DeliveryTarget?) throws -> PocketItem {
+    public func hold(captureID: String, note: String?, intendedTarget: DeliveryTarget?, workName: String? = nil) throws -> PocketItem {
         try db.queue.write { db in
             let maxPos = (try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position), 0) FROM pocket_items")) ?? 0
             var item = PocketItem(captureID: captureID,
                                   note: note?.isEmpty == true ? nil : note,
+                                  workName: workName?.trimmingCharacters(in: .whitespacesAndNewlines),
                                   intendedTarget: intendedTarget,
                                   position: maxPos + 1)
             try item.insert(db)
@@ -28,8 +29,15 @@ public final class PocketStore {
     /// Remove one item (sent or dismissed). Positions are normalized to stay dense —
     /// the stack order must read continuously to the user.
     public func remove(id: String) throws {
+        try remove(ids: [id])
+    }
+
+    /// Remove only the acknowledged handoff, atomically. Other selections stay untouched.
+    public func remove(ids: [String]) throws {
         try db.queue.write { db in
-            try db.execute(sql: "DELETE FROM pocket_items WHERE id = ?", arguments: [id])
+            for id in ids {
+                try db.execute(sql: "DELETE FROM pocket_items WHERE id = ?", arguments: [id])
+            }
             try Self.normalizePositions(db)
         }
     }

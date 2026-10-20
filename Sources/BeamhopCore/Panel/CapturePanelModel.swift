@@ -11,14 +11,18 @@ import Combine
 /// - 两层去处 + 换会话确认 (essay 02): an optional work name binds this destination to a
 ///   named work. If that work was REBOUND to a different receiver elsewhere and the user has
 ///   not confirmed the new address, confirm() is two-step: the first call only surfaces the
-///   change (confirmLabel flips to "确认新地址"), the second call actually delivers. A
+///   change (confirmLabel asks to use the new app), the second call actually delivers. A
 ///   similar name can never silently redirect material.
 public final class CapturePanelModel: ObservableObject {
     /// nil = "仅入 Inbox" (⌘0): an explicit no-delivery choice, distinct from Esc-cancel.
-    @Published public var selectedTarget: DeliveryTarget?
+    @Published public var selectedTarget: DeliveryTarget? {
+        didSet { if selectedTarget != oldValue { rebindAcknowledged = false } }
+    }
     @Published public var note: String = ""
     /// Optional named-destination binding (essay 02). Empty = plain tool-level routing.
-    @Published public var workName: String = ""
+    @Published public var workName: String = "" {
+        didSet { if workName != oldValue { rebindAcknowledged = false } }
+    }
 
     public let capture: Capture
 
@@ -29,9 +33,25 @@ public final class CapturePanelModel: ObservableObject {
 
     /// The work this panel's destination resolves to (nil when workName is empty/unknown).
     /// `workNeedsConfirmation` is derived from it; injected by AppServices at show time.
-    public let boundWork: Work?
+    public let availableWorks: [Work]
+    public var boundWork: Work? {
+        let name = workName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return availableWorks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+    }
 
-    /// true = the bound work's receiving session changed since the user last confirmed it.
+    public func chooseWork(_ work: Work) {
+        workName = work.name
+        // An unavailable receiver must not silently become a different app.
+        selectedTarget = visibleTargets.contains(work.boundTarget) ? work.boundTarget : nil
+        rebindAcknowledged = false
+    }
+
+    public func chooseTool(_ target: DeliveryTarget?) {
+        workName = ""
+        selectedTarget = target
+    }
+
+    /// true = the bound work's receiving app changed since the user last confirmed it.
     public var workNeedsConfirmation: Bool { boundWork?.needsConfirmation ?? false }
 
     /// 换绑闸（essay 02）: fires when EITHER the stored work was rebound elsewhere and not
@@ -40,7 +60,7 @@ public final class CapturePanelModel: ObservableObject {
     /// so its address must be verified, not silently switched). Inbox-only (nil target) never
     /// gates: nothing is routed.
     public var receiverChanged: Bool {
-        guard let boundWork else { return false }
+        guard selectedTarget != nil, let boundWork else { return false }
         if workNeedsConfirmation { return true }
         guard let selectedTarget else { return false }
         return selectedTarget != boundWork.boundTarget
@@ -58,15 +78,19 @@ public final class CapturePanelModel: ObservableObject {
                 initialTarget: DeliveryTarget?,
                 visibleTargets: [DeliveryTarget] = DeliveryTarget.allCases,
                 boundWork: Work? = nil,
-                workName: String = "",
+                workName: String? = nil,
+                availableWorks: [Work] = [],
                 onConfirm: @escaping (DeliveryTarget?, String) -> Void,
                 onCancel: @escaping () -> Void,
                 onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
         self.capture = capture
         self.visibleTargets = visibleTargets
-        self.selectedTarget = TargetAvailability.usable(initialTarget, among: visibleTargets)
-        self.boundWork = boundWork
-        self.workName = workName
+        self.selectedTarget = boundWork != nil && !visibleTargets.contains(boundWork!.boundTarget)
+            ? nil : TargetAvailability.usable(initialTarget, among: visibleTargets)
+        self.availableWorks = availableWorks + (boundWork.map { work in
+            availableWorks.contains(where: { $0.id == work.id }) ? [] : [work]
+        } ?? [])
+        self.workName = workName ?? boundWork?.name ?? ""
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         self.onHold = onHold
@@ -117,10 +141,11 @@ public final class CapturePanelModel: ObservableObject {
         }
     }
 
-    /// Essay 02 two-layer display: work name on top, receiving session below.
+    /// Essay 02 two-layer display: work name on top, receiving app below.
     /// With no bound work this degrades to the plain tool label.
     public var destinationTitle: String {
-        if let boundWork, !boundWork.name.isEmpty { return boundWork.name }
+        let name = workName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { return name }
         if let selectedTarget { return targetLabel(selectedTarget) }
         return L10n.s("Inbox")
     }
@@ -129,7 +154,7 @@ public final class CapturePanelModel: ObservableObject {
         guard boundWork != nil, let selectedTarget else { return nil }
         let label = targetLabel(selectedTarget)
         return receiverChanged && !rebindAcknowledged
-            ? L10n.f("接收会话已更换 → %@", label)
+            ? L10n.f("Receiving app changed to %@", label)
             : label
     }
 
@@ -137,12 +162,9 @@ public final class CapturePanelModel: ObservableObject {
         // Unacknowledged rebind: the first press is an ACK, not a delivery — say so (essay 02:
         // 状态必须照实说; a pretty "Send" that actually just acknowledges would be a lie).
         if receiverChanged && !rebindAcknowledged {
-            guard let selectedTarget else {
-                return L10n.s("确认新地址后存入 Inbox")
-            }
-            return L10n.f("确认新地址并发送到 %@", targetLabel(selectedTarget))
+            return L10n.f("Use %@ for this work", targetLabel(selectedTarget!))
         }
         guard let selectedTarget else { return L10n.s("Save to Inbox only") }
-        return L10n.f("Deliver (%@)", targetLabel(selectedTarget))
+        return selectedTarget.handoffAction
     }
 }

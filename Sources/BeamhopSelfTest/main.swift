@@ -287,7 +287,7 @@ do {
                                   onCancel: { cancelled = true })
         check(m.summaryLine == "Kimi · Kimi Work · 20 chars", "summaryLine rounds chars down to 10s")
         check(m.previewText == String(repeating: "字", count: 25), "preview passes short text through")
-        check(m.confirmLabel == "Deliver (Kimi Work)", "confirm label shows selected target")
+        check(m.confirmLabel == "Fill & review", "confirm label shows selected target")
         m.note = "总结一下这段"
         m.confirm()
         check(confirmed?.0 == .kimiWork && confirmed?.1 == "总结一下这段", "confirm carries target + note")
@@ -648,13 +648,13 @@ do {
         let cap = sample()
         let work = Work(name: "焦点行为检查", boundTarget: .kimiWork, confirmedTarget: .claudeCode)
 
-        // 换绑未确认 → 第一次 confirm 只是确认新地址
+        // Changed receiver: first confirm acknowledges the app only.
         var fired: [(DeliveryTarget?, String)] = []
         let m1 = CapturePanelModel(
             capture: cap, initialTarget: work.boundTarget, boundWork: work,
             onConfirm: { t, n in fired.append((t, n)) }, onCancel: {})
         check(m1.workNeedsConfirmation, "panel sees the unconfirmed rebind")
-        check(m1.confirmLabel.contains("确认新地址"), "label says ack-first, honestly")
+        check(m1.confirmLabel.contains("Use "), "label says ack-first, honestly")
         m1.confirm()
         check(fired.isEmpty, "first confirm does NOT deliver")
         check(m1.rebindAcknowledged, "first confirm arms the ack")
@@ -692,8 +692,8 @@ do {
             onConfirm: { t, n in fired2.append((t, n)) }, onCancel: {})
         check(!m4.workNeedsConfirmation, "confirmed work stored state: no pending rebind")
         check(m4.receiverChanged, "picking a different receiver for a bound work IS a rebind")
-        check(m4.confirmLabel.contains("确认新地址"), "ack-first label on in-panel receiver switch")
-        check(m4.destinationSubtitle?.contains("接收会话已更换") == true, "subtitle flags the switch")
+        check(m4.confirmLabel.contains("Use "), "ack-first label on in-panel receiver switch")
+        check(m4.destinationSubtitle?.contains("Receiving app changed") == true, "subtitle flags the switch")
         m4.confirm()
         check(fired2.isEmpty, "first confirm only acknowledges the new address")
         check(!m4.receiverChanged || m4.rebindAcknowledged, "ack disarms the gate")
@@ -706,6 +706,75 @@ do {
             onConfirm: { t, n in fired2.append((t, n)) }, onCancel: {})
         check(!m5.receiverChanged, "unchanged receiver: no gate")
         check(m5.destinationSubtitle == m5.targetLabel(.kimiWork), "plain subtitle when receiver unchanged")
+    }
+
+    print("== Compact handoff regressions ==")
+    do {
+        var memory = TargetMemory()
+        memory.markSucceeded(.claudeCode, workName: " A ")
+        check(memory.lastWorkName == "A", "trim remembered work")
+        memory.markSucceeded(.kimiWork)
+        check(memory.lastWorkName == nil, "plain tool clears old work")
+        let work = Work(name: "A", boundTarget: .claudeCode, confirmedTarget: .claudeCode)
+        var sends = 0
+        let model = CapturePanelModel(capture: sample(), initialTarget: .chatgptDesktop, boundWork: work,
+                                      onConfirm: { _, _ in sends += 1 }, onCancel: {})
+        model.confirm()
+        model.selectedTarget = .kimiWork
+        check(!model.rebindAcknowledged, "changing receiver invalidates ack")
+        model.confirm()
+        check(sends == 0, "new receiver cannot reuse old acknowledgment")
+        model.confirm()
+        check(sends == 1, "new receiver gets explicit confirmation")
+        model.selectedTarget = nil
+        model.confirm()
+        check(sends == 2, "Inbox-only never requires receiver confirmation")
+        model.chooseTool(.clipboard)
+        check(model.boundWork == nil, "choosing a tool leaves named work")
+        let missing = CapturePanelModel(capture: sample(), initialTarget: .claudeCode,
+                                       visibleTargets: [.clipboard], boundWork: work,
+                                       onConfirm: { _, _ in }, onCancel: {})
+        check(missing.selectedTarget == nil, "missing named receiver never routes elsewhere")
+
+        let (db, _) = try freshDB()
+        let captures = CaptureStore(db)
+        let pocket = PocketStore(db)
+        let a = sample(), b = sample(), c = sample()
+        for cap in [a, b, c] { try captures.insert(cap) }
+        let one = try pocket.hold(captureID: a.id, note: "one", intendedTarget: .clipboard, workName: "A")
+        let two = try pocket.hold(captureID: b.id, note: "two", intendedTarget: .clipboard, workName: "A")
+        let other = try pocket.hold(captureID: c.id, note: nil, intendedTarget: .clipboard, workName: "B")
+        check(try pocket.stack().first?.workName == "A", "hold preserves work intent")
+        let shelf = PocketModel()
+        var complete: ((Bool) -> Void)?
+        var batches = 0
+        shelf.configure(store: pocket, onDeliver: { items, _, done in
+            batches += 1
+            check(items.map { $0.0.id } == [one.id, two.id], "selection retains hold order")
+            complete = done
+        })
+        shelf.reload()
+        shelf.toggle(two.id)
+        shelf.toggle(one.id)
+        shelf.deliverSelection()
+        shelf.deliverSelection()
+        check(batches == 1 && shelf.count == 3, "pending handoff stays visible; duplicate press ignored")
+        complete?(false)
+        check(shelf.selectedIDs.count == 2 && shelf.error != nil, "failure preserves selection")
+        shelf.toggle(other.id)
+        check(shelf.hasMixedDestinations && !shelf.canDeliver, "same app, different works cannot be mixed")
+        shelf.toggle(other.id)
+        shelf.deliverSelection()
+        complete?(true)
+        check(shelf.items.map { $0.0.id } == [other.id], "success removes only selected items")
+        check(try captures.count() == 3, "original captures survive handoff")
+        try captures.setUserNote("saved note", captureID: a.id)
+        check(try captures.fetch(id: a.id)?.userNote == "saved note", "note survives cancellation")
+        let handoff = Handoff(items: [.init(capture: a, note: "one"), .init(capture: b, note: "two")])
+        check(handoff.markdown.contains("one") && handoff.markdown.hasSuffix("two\n"), "one payload includes both notes")
+        check(handoff.claudeTrigger.contains(a.id) && handoff.claudeTrigger.contains(b.id), "one trigger references both captures")
+        check(DeliveryStatus.prepared.displayName == "Prepared · awaiting your send", "draft is not agent completion")
+        check(DeliveryStatus.copied.displayName == "Copied", "copy receipt is explicit")
     }
 } catch {
     print("EXCEPTION: \(error)")

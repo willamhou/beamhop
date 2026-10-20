@@ -24,6 +24,7 @@ final class CapturePanelController {
               visibleTargets: [DeliveryTarget] = DeliveryTarget.allCases,
               boundWork: Work? = nil,
               workName: String = "",
+              availableWorks: [Work] = [],
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
               onCancel: @escaping () -> Void,
               onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
@@ -33,6 +34,7 @@ final class CapturePanelController {
             visibleTargets: visibleTargets,
             boundWork: boundWork,
             workName: workName,
+            availableWorks: availableWorks,
             onConfirm: { [weak self] target, note in
                 guard let self else { return }
                 self.finished = true
@@ -98,8 +100,8 @@ final class CapturePanelController {
 
     private func makePanel() -> NSPanel {
         let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 340),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered, defer: false)
         p.level = .floating                                    // above fullscreen apps (S5)
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]

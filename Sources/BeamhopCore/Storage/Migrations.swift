@@ -222,6 +222,9 @@ enum Migrations {
                 );
                 """)
         }
+        m.registerMigration("v7-pocket-work-intent") { db in
+            try db.alter(table: "pocket_items") { t in t.add(column: "work_name", .text) }
+        }
         return m
     }
 }

@@ -23,6 +23,13 @@ public final class CaptureStore {
         try db.queue.write { try d.insert($0) }
     }
 
+    public func setUserNote(_ note: String?, captureID: String) throws {
+        try db.queue.write { db in
+            try db.execute(sql: "UPDATE captures SET user_note = ? WHERE id = ?",
+                           arguments: [note, captureID])
+        }
+    }
+
     /// Soft delete (spec §8.1): set deleted_at; the FTS update trigger keeps the index in sync,
     /// and `search`/`recent` both filter `deleted_at IS NULL`.
     public func softDelete(id: String) throws {

@@ -188,12 +188,10 @@ private struct CaptureRow: View {
             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
 
             if let latest {
-                Label(latest.status == .success
-                      ? "Delivered \(latest.target.rawValue)"
-                      : "Delivery failed: \(latest.errorMessage ?? "unknown reason")",
-                      systemImage: latest.status == .success ? "checkmark.circle" : "exclamationmark.circle")
+                Label("\(latest.status.displayName) · \(latest.target.displayName)",
+                      systemImage: latest.status.isSuccessful ? "checkmark.circle" : "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundStyle(latest.status == .success ? Color.green : Color.orange)
+                    .foregroundStyle(latest.status.isSuccessful ? Color.green : Color.orange)
             } else {
                 Text("Not delivered").font(.caption).foregroundStyle(.tertiary)
             }
@@ -258,11 +256,11 @@ private struct CaptureDetail: View {
                             switch entry {
                             case .delivery(let d):
                                 HStack(alignment: .top) {
-                                    Image(systemName: d.status == .success
+                                    Image(systemName: d.status.isSuccessful
                                           ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                        .foregroundStyle(d.status == .success ? Color.green : Color.orange)
+                                        .foregroundStyle(d.status.isSuccessful ? Color.green : Color.orange)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("\(d.target.rawValue) · \(d.status.rawValue)")
+                                        Text("\(d.target.displayName) · \(d.status.displayName)")
                                             .font(.callout)
                                         if let err = d.errorMessage {
                                             Text(err).font(.caption).foregroundStyle(.secondary)

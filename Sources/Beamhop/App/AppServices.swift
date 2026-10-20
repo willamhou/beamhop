@@ -73,8 +73,8 @@ final class AppServices {
             let hud = self.pocketHUD
             hud.onOpen = { [weak self] in self?.pocket.show() }
             pocket.model.configure(store: pocketStore,
-                                   onDeliverBatch: { [weak self] batch in
-                self?.deliverPocketBatch(batch)
+                                   onDeliver: { [weak self] batch, target, completion in
+                self?.deliverPocketBatch(batch, to: target, completion: completion)
             }, onCountChange: { [weak hud] count in
                 hud?.update(count: count)
             })
@@ -201,12 +201,14 @@ final class AppServices {
             visibleTargets: visibleTargets,
             boundWork: rememberedWork,
             workName: rememberedWork?.name ?? "",
+            availableWorks: (try? workStore?.list()) ?? [],
             onConfirm: { [weak self] target, note in
                 guard let self else { return }
                 self.events?.record(name: EventStore.Name.panelConfirm,
                                     detail: "target=\(target?.rawValue ?? "inbox_only")")
                 let workName = self.panel.currentModel?.workName
                 self.registerOrRebindWork(workName: workName, chosenTarget: target)
+                self.saveNote(note, for: cap.id)
                 guard let target else {
                     // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost,
                     // then hand focus back so the next ⌘⇧Space captures the real work, not us.
@@ -220,18 +222,17 @@ final class AppServices {
                     // self is already bound strongly by the outer onConfirm guard; capturing it
                     // weakly here only re-triggers #ImplicitStrongCapture (outer strong scope).
                     delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { chosen, ok in
-                        if ok {
-                            self.targetMemory.markSucceeded(chosen, workName: workName)
-                            // Essay 02: a successful delivery to a work verifies its address.
-                            if let workName, let work = try? self.workStore?.fetch(name: workName),
-                               work.needsConfirmation {
-                                try? self.workStore?.confirm(id: work.id)
+                        DispatchQueue.main.async {
+                            if ok {
+                                self.targetMemory.markSucceeded(chosen, workName: workName)
+                                if let workName, let work = try? self.workStore?.fetch(name: workName),
+                                   work.needsConfirmation {
+                                    try? self.workStore?.confirm(id: work.id)
+                                }
                             }
+                            // Clipboard keeps the source app; prepared drafts stay visible for review.
+                            self.restorePrePanelFocus()
                         }
-                        // Degraded to clipboard (focus/paste/registration failure): nothing else
-                        // took focus, so restore — same residue as Esc. On success the target app
-                        // is frontmost and the guard inside makes this a no-op.
-                        else { self.restorePrePanelFocus() }
                     }
                 }
             },
@@ -239,6 +240,7 @@ final class AppServices {
                 guard let self else { return }
                 // Esc / focus loss — capture is safe in the Inbox; hand focus back so the next
                 // ⌘⇧Space captures the real work, not us.
+                self.saveNote(self.panel.currentModel?.note ?? "", for: cap.id)
                 self.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
                 Notifier.info(L10n.s("Saved to Inbox"), cap.id)
                 self.restorePrePanelFocus()
@@ -250,7 +252,8 @@ final class AppServices {
                 do {
                     let item = try pocketStore.hold(captureID: cap.id,
                                                     note: note.isEmpty ? nil : note,
-                                                    intendedTarget: target)
+                                                    intendedTarget: target,
+                                                    workName: self.panel.currentModel?.workName)
                     self.events?.record(name: EventStore.Name.pocketHold,
                                         detail: "target=\(target?.rawValue ?? "undecided")",
                                         captureID: cap.id)
@@ -300,36 +303,26 @@ final class AppServices {
         }
     }
 
-    /// Pocket batch delivery (essay 01/02): send the held stack in hold ORDER, one item at a
-    /// time (sequential — parallel AX activation would fight over focus). Each item goes to its
-    /// own intended target (undecided → clipboard as the honest fallback), then leaves the
-    /// pocket. On any failure the item STAYS in the pocket (failure recovery: material is
-    /// never silently lost) and the batch stops so the user sees exactly where it broke.
-    private func deliverPocketBatch(_ batch: [(PocketItem, Capture)]) {
-        guard let delivery, let pocketStore else { return }
+    /// Selected materials are one payload and one transport operation. No per-item paste.
+    private func deliverPocketBatch(_ batch: [PocketModel.Pair], to target: DeliveryTarget,
+                                    completion: @escaping (Bool) -> Void) {
+        guard let delivery else { completion(false); return }
         events?.record(name: EventStore.Name.pocketBatch, detail: "count=\(batch.count)")
-        var queue = Array(batch)
-        func step() {
-            guard !queue.isEmpty else { return }
-            let (item, cap) = queue.removeFirst()
-            let target = item.intendedTarget ?? .clipboard
-            delivery.deliver(cap, to: target, userNote: item.note) { [weak self] _, ok in
-                guard let self else { return }
-                if ok {
-                    try? self.pocketStore?.remove(id: item.id)
-                    self.events?.record(name: EventStore.Name.pocketItemDelivered,
-                                        detail: "target=\(target.rawValue)", captureID: cap.id)
-                    step()
-                } else {
-                    self.events?.record(name: EventStore.Name.pocketItemFailed,
-                                        detail: "target=\(target.rawValue)", captureID: cap.id)
-                    Notifier.error(L10n.s("Pocket delivery stopped"),
-                                   L10n.f("Item %lld failed and stays in the pocket.", Int64(queue.count + 1)))
-                    DispatchQueue.main.async { self.pocket.model.reload() }
+        let handoff = Handoff(items: batch.map { .init(capture: $0.1, note: $0.0.note) })
+        delivery.deliver(handoff, to: target) { [weak self] _, ok in
+            DispatchQueue.main.async {
+                for (item, _) in batch {
+                    self?.events?.record(name: ok ? EventStore.Name.pocketItemDelivered : EventStore.Name.pocketItemFailed,
+                                         detail: "target=\(target.rawValue)", captureID: item.captureID)
                 }
+                completion(ok)
             }
         }
-        DispatchQueue.global(qos: .userInitiated).async { step() }
+    }
+
+    private func saveNote(_ note: String, for captureID: String) {
+        do { try store?.setUserNote(note.isEmpty ? nil : note, captureID: captureID) }
+        catch { Notifier.error(L10n.s("Could not save note"), String(describing: error)) }
     }
 
     /// §7-C: reactivate the app that was frontmost before the panel took key — best-effort, and

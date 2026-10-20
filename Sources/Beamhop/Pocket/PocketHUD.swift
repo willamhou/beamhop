@@ -16,7 +16,8 @@ final class PocketHUDController {
                         styleMask: [.nonactivatingPanel, .fullSizeContentView],
                         backing: .buffered, defer: false)
         p.level = .floating
-        p.collectionBehavior = [.canJoinAllSpaces, .stationary]
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
         p.isMovableByWindowBackground = false
         p.backgroundColor = .clear
@@ -57,7 +58,7 @@ private struct PocketHUDView: View {
             HStack(spacing: 6) {
                 Image(systemName: "tray.and.arrow.down.fill")
                     .font(.system(size: 12))
-                Text(L10n.f("口袋 · %lld", Int64(model.count)))
+                Text(L10n.f("Held · %lld", Int64(model.count)))
                     .font(.callout.weight(.medium))
                 Text("⌘⇧P")
                     .font(.caption)

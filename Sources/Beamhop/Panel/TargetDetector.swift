@@ -13,8 +13,9 @@ enum TargetDetector {
         let hasClaudeCLI = ["/usr/local/bin/claude", "/opt/homebrew/bin/claude",
                             "\(home)/.local/bin/claude"].contains { fm.fileExists(atPath: $0) }
             || fm.fileExists(atPath: "\(home)/.claude")   // CLI leaves this config dir
-        let hasChatGPT = workspace.urlForApplication(withBundleIdentifier: "com.openai.chatgpt") != nil
-            || workspace.urlForApplication(withBundleIdentifier: "com.openai.codex") != nil
+        let hasChatGPT = ChatGPTDelivery.bundleIDs.contains {
+            workspace.urlForApplication(withBundleIdentifier: $0) != nil
+        }
         let hasKimi = workspace.urlForApplication(withBundleIdentifier: "com.moonshot.kimichat") != nil
 
         return TargetAvailability.resolve(hasClaudeCLI: hasClaudeCLI,

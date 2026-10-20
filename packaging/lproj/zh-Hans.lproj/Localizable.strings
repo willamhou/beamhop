@@ -152,7 +152,7 @@
 // MARK: 「先留着」pocket + 两层去处 (2026-10-19 product essays)
 "Pocket  ⌘⇧P" = "口袋  ⌘⇧P";
 "Held in pocket (%lld)" = "已留在口袋(%lld 项)";
-"Press ⌘⇧P to review and send" = "按 ⌘⇧P 查看并整批送出";
+"Press ⌘⇧P to review and send" = "按 ⌘⇧P 挑选要交接的材料";
 "Could not hold" = "暂存失败";
 "Work name (optional), e.g. 让发送不打断阅读" = "工作名(可选),例如「让发送不打断阅读」";
 "Inbox" = "Inbox";
@@ -163,3 +163,47 @@
 "Item %lld failed and stays in the pocket." = "第 %lld 项投递失败,仍留在口袋中。";
 "Work name…" = "工作名…";
 "口袋 · %lld" = "口袋 · %lld";
+
+// MARK: Compact handoff and selective corner shelf (2026-10-20)
+"Recent work" = "最近的工作";
+"Applications" = "应用";
+"Remember with a name…" = "给这个去处起个名字…";
+"Name this work" = "这件事叫什么";
+"Captured material" = "已选取的材料";
+"Destination: %@" = "去处：%@";
+"Keep a local record" = "只保留在本机记录里";
+"Confirm the receiving app for this work before continuing." = "这件事的接收应用变了，请先确认。";
+"Add a note, if needed" = "需要的话，再交代一句";
+"Note" = "备注";
+"Hold for later" = "先留着";
+"Cancel" = "取消";
+"Close" = "收起";
+"Receiving app changed to %@" = "接收应用已改为 %@";
+"Use %@ for this work" = "确认这件事交给 %@";
+"Copy materials" = "复制材料";
+"Fill & review" = "填入并查看";
+"Copy once, then paste where you need it" = "复制到剪贴板，随后自行粘贴";
+"Current terminal · review before sending" = "当前终端 · 查看后自行发送";
+"Current window · review before sending" = "当前窗口 · 查看后自行发送";
+"Held · %lld" = "先留着 · %lld";
+"Held for later" = "先留着";
+"When a destination can wait, hold the material here." = "还没想好给谁，就先留在这里。";
+"Choose what belongs in this handoff." = "挑出这次要一起交过去的材料。";
+"These materials belong to different destinations. Hand them off separately." = "这些材料原本要给不同的去处，请分开交接。";
+"Choose destination" = "选个去处";
+"Undecided" = "还没决定";
+"Select material from %@" = "选择来自 %@ 的材料";
+"Remove from pocket (capture stays in Inbox)" = "从暂存中移除（原文仍保留在 Inbox）";
+"Could not load held materials. Try again." = "暂存材料未能载入，请重试。";
+"Could not remove this material. Try again." = "未能移除这条材料，请重试。";
+"Handoff failed. Your selection is still here." = "这次没交过去，选中的材料还在这里。";
+"Handoff prepared, but these items could not be removed. Check the receiver before retrying." = "材料已准备好，但暂存未能移除。重试前请先查看接收处。";
+"The input already has a draft or could not be checked. Paste the copied materials when ready." = "输入框已有草稿，或无法确认是否为空。材料已供复制，请在合适的位置粘贴。";
+"Prepared in the terminal" = "已填入终端";
+"Could not copy materials" = "未能复制材料";
+"Could not save note" = "未能保存备注";
+"Handoff recorded" = "已记录交接";
+"Copied" = "已复制";
+"Prepared · awaiting your send" = "已填入 · 等你发送";
+"Handoff failed" = "交接失败";
+"Cancelled" = "已取消";

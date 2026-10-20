@@ -16,7 +16,7 @@ enum ClaudeCodeDelivery {
     }
 
     /// Returns nil on success, or a user-facing failure reason (caller falls back to clipboard).
-    static func deliver(_ capture: Capture, userNote: String?) -> String? {
+    static func deliver(_ handoff: Handoff) -> String? {
         guard mcpRegistered() else { return L10n.s("Beamhop MCP is not registered with Claude Code (register it from the Diagnostics window)") }
         guard let target = TerminalLocator.locate() else { return L10n.s("No running terminal found (Terminal/iTerm/…)") }
 
@@ -24,11 +24,9 @@ enum ClaudeCodeDelivery {
             return L10n.s("Could not bring the terminal to the front")
         }
 
-        let trigger = PromptRenderer.claudeCodeTrigger(capture, userNote: userNote)
-        // codex: auto-Enter ONLY when the located terminal was the frontmost one AND a claude
-        // process is likely running — otherwise we could send ⏎ into the wrong window. When unsure,
-        // paste and let the user press Enter.
-        let autoEnter = target.wasFrontmost && TerminalLocator.claudeLikelyRunning()
+        let trigger = handoff.claudeTrigger
+        // No verified session address exists yet. Paste a draft and let the user review it.
+        let autoEnter = false
         do {
             try ClipboardService.safePaste(trigger, pressEnter: autoEnter)
         } catch {

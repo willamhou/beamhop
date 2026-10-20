@@ -12,6 +12,7 @@ public struct PocketItem: Codable, FetchableRecord, MutablePersistableRecord, Id
     public var id: String                 // "pok_<ulid>"
     public var captureID: String
     public var note: String?              // 交代, verbatim
+    public var workName: String?          // intent snapshot; never resolves a new receiver silently
     public var intendedTarget: DeliveryTarget?   // nil = 还没想好给谁
     public var position: Int              // ascending hold order; the stack is ordered
     public var createdAt: Int64           // unix ms
@@ -20,6 +21,7 @@ public struct PocketItem: Codable, FetchableRecord, MutablePersistableRecord, Id
         case id
         case captureID = "capture_id"
         case note
+        case workName = "work_name"
         case intendedTarget = "intended_target"
         case position
         case createdAt = "created_at"
@@ -28,12 +30,14 @@ public struct PocketItem: Codable, FetchableRecord, MutablePersistableRecord, Id
     public init(id: String = ULID.pocketID(),
                 captureID: String,
                 note: String? = nil,
+                workName: String? = nil,
                 intendedTarget: DeliveryTarget? = nil,
                 position: Int,
                 createdAt: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
         self.id = id
         self.captureID = captureID
         self.note = note
+        self.workName = workName
         self.intendedTarget = intendedTarget
         self.position = position
         self.createdAt = createdAt
