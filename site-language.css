@@ -1,0 +1,12 @@
+/* Shared language navigation and room for longer English labels. */
+.masthead{gap:14px 20px;flex-wrap:wrap}.masthead .site-series{margin-left:auto}
+.language-switch{display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.8;white-space:nowrap;color:var(--muted)}
+.masthead .language-switch a{display:inline;text-decoration:none;color:var(--muted)}
+.masthead .language-switch a[aria-current]{color:var(--blue);font-weight:500}
+html[lang="en"] h1{font-size:clamp(38px,5.6vw,60px);letter-spacing:-.045em}
+html[lang="en"] .prose p{letter-spacing:0;line-height:1.9}
+html[lang="en"] .pocket-foot{flex-wrap:wrap}
+html[lang="en"] .experiment-tools{align-items:flex-start}
+html[lang="en"] .site-reading{gap:12px 20px}
+@media(max-width:700px){.masthead .brand small{display:none}.masthead .language-switch{margin-left:auto}.masthead .site-series{order:3;width:100%;margin-left:0}.language-switch{font-size:12px}html[lang="en"] h1{font-size:40px}html[lang="en"] .pocket{max-height:65dvh;overflow:auto}}
+@media(max-width:360px){html[lang="en"] h1{font-size:35px}html[lang="en"] .popover-actions .control{padding-inline:7px;font-size:11px}}
