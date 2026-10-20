@@ -113,8 +113,15 @@ enum NativeUISmoke {
         check("capture is a nonactivating panel", controller.panel?.styleMask.contains(.nonactivatingPanel) == true)
         check("capture leaves source app active", sourcePID != nil && NSWorkspace.shared.frontmostApplication?.processIdentifier == sourcePID)
         check("capture can receive keyboard", controller.panel?.canBecomeKey == true)
+        check("capture actually owns keyboard focus", controller.panel?.isKeyWindow == true)
         check("capture is not a document window", controller.panel?.canBecomeMain == false)
         try capture(controller.panel, name: "capture", expectedWidth: 420)
+        let editor = controller.panel?.firstResponder as? NSTextView
+        check("note receives initial focus", editor != nil)
+        editor?.insertText("Native keyboard input", replacementRange: NSRange(location: 0, length: 0))
+        settle()
+        check("native editor updates note", controller.currentModel?.note == "Native keyboard input")
+        controller.currentModel?.note = ""
         let nodes = accessibilityNodes(controller.panel!.contentView!)
         let destination = nodes.first { $0.accessibilityIdentifier() == "capture.destination" }
         check("destination control accessible", destination != nil)
@@ -161,6 +168,13 @@ enum NativeUISmoke {
         controller.currentModel?.confirm()
         settle()
         check("confirm does not also cancel", confirms == 1 && cancels == 2)
+        show()
+        let otherWindow = NSWindow(contentRect: NSRect(x: 30, y: 30, width: 200, height: 100),
+                                   styleMask: [.titled], backing: .buffered, defer: false)
+        otherWindow.makeKeyAndOrderFront(nil)
+        settle()
+        check("real key-window loss cancels once", !controller.isVisible && cancels == 3)
+        otherWindow.orderOut(nil)
 
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("beamhop-ui-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)

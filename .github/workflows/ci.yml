@@ -10,7 +10,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build all Swift products
-        run: swift build
+        run: |
+          set -o pipefail
+          swift build 2>&1 | tee swift-build.log
       - name: Swift tests (BeamhopCore)
         run: swift test
       - name: Self-test (28 storage checks, XCTest-free)
@@ -33,6 +35,14 @@ jobs:
           path: dist/ui-smoke
           if-no-files-found: warn
           retention-days: 14
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beamhop-build-log-${{ github.sha }}
+          path: swift-build.log
+          if-no-files-found: warn
+          retention-days: 7
       - name: Archive Beamhop.app with executable permissions
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
         run: ditto -c -k --sequesterRsrc --keepParent dist/Beamhop.app dist/Beamhop-macOS.zip
