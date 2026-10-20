@@ -26,7 +26,7 @@ jobs:
               const proposed = fs.readFileSync('.github/phase15-pr-body.md', 'utf8');
               const template = fs.readFileSync('.github/pull_request_template.md', 'utf8');
               const normalize = s => s.replace(/<!--[^]*?-->/g, '').replace(/\s/g, '');
-              const prior = pr.body || '';
+              const prior = (pr.body || '').replace('This PR remains a draft while the integration acceptance items below are open.', 'The integration acceptance items below remain open.');
               const body = !normalize(prior) || normalize(prior) === normalize(template)
                 ? proposed : (prior.includes('152/152 UI assertions') ? prior : prior + '\n\n' + proposed);
               const title = pr.title === 'Feat/phase15 detail chain'

@@ -8,7 +8,7 @@ Capturing a passage now opens a compact native handoff panel with the remembered
 - Add hosted macOS UI verification, native screenshots and downloadable feature builds. Include stable local development signing support.
 - Rewrite the default README in English with Releases, Pages, native screenshot and build links. Publish the gallery separately on `gh-pages`: https://willamhou.github.io/beamhop/native-ui/ .
 
-Named works currently bind an **application**, not a verified agent conversation. Draft preparation still brings the receiver forward for review. This PR remains a draft while the integration acceptance items below are open.
+Named works currently bind an **application**, not a verified agent conversation. Draft preparation still brings the receiver forward for review. The integration acceptance items below remain open.
 
 ## Validation
 
