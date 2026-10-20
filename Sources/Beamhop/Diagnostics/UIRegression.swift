@@ -65,15 +65,6 @@ enum UIRegression {
                 }
             }
 
-            // Exercise the actual self-capture guard separately: normal panel presentation
-            // must never activate Beamhop merely to make this regression pass.
-            app.activate(ignoringOtherApps: true)
-            try wait("Beamhop activates for the self-capture guard") {
-                frontPID == ProcessInfo.processInfo.processIdentifier && NSApp.isActive
-            }
-            if case .rejected = CaptureService(store: store).captureFrontmost() {
-                try expect(try store.count() == 1, "self capture does not create a row")
-            } else { throw Failure(description: "self-capture guard did not reject the app") }
             try show()
             panel.currentModel?.cancel()
             try wait("Esc restores the source") { frontPID == source.processIdentifier && !panel.isVisible }
@@ -130,6 +121,11 @@ enum UIRegression {
             panel.restoreSourceIfStillActive(captureID: cap.id)
             pump(seconds: 0.2)
             try expect(frontPID == ProcessInfo.processInfo.processIdentifier, "Inbox keeps its own focus")
+            // Test self-capture from the real foreground Inbox. There is no need to activate
+            // a windowless accessory app while the fixture processes are still launching.
+            if case .rejected = CaptureService(store: store).captureFrontmost() {
+                try expect(try store.count() == 1, "self capture does not create a row")
+            } else { throw Failure(description: "self-capture guard did not reject the app") }
             inbox.model.selectedID = cap.id
             try expect(inbox.model.selectedResults.isEmpty, "Inbox starts with empty conclusion state")
             try saveViaMCP(path: path, captureID: cap.id)
@@ -220,8 +216,9 @@ enum UIRegression {
     }
 
     private static func waitForApp(_ process: Process) throws -> NSRunningApplication {
-        try wait("fixture app launches") {
+        try wait("fixture app finishes launching and activates") {
             NSRunningApplication(processIdentifier: process.processIdentifier)?.isFinishedLaunching == true
+                && frontPID == process.processIdentifier
         }
         guard let app = NSRunningApplication(processIdentifier: process.processIdentifier) else {
             throw Failure(description: "fixture app not registered")
