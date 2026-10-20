@@ -11,23 +11,25 @@
 ```bash
 swift build                 # build (incl. GRDB)
 swift test                  # BeamhopCore XCTest (requires full Xcode)
-swift run BeamhopSelfTest   # logic self-test (86 checks, no Xcode/XCTest needed)
+swift run BeamhopSelfTest   # logic self-test (no Xcode/XCTest needed)
 swift run Beamhop           # menu-bar app (✦ icon + ⌘⇧Space/⌘⇧I/⌘⇧V + Inbox/diagnostics/compatibility windows)
 scripts/mcp-smoke.sh        # MCP stdio smoke (S1 frame format + seed data)
 ./packaging/build-app.sh    # assemble dist/Beamhop.app (auto-signs with the "Beamhop Sign" dev identity if set up — run scripts/setup-dev-signing.sh once; otherwise ad-hoc)
 ```
 
-Pushing any branch runs all checks on GitHub Actions (macos-15 + ubuntu) — compile can be verified without a local Mac.
+Pushing any branch runs Swift tests, packaging and native panel checks on GitHub Actions (`macos-15`), plus extension and shell checks on Ubuntu. Native UI evidence includes English/Chinese light/dark PNGs and interaction reports. Feature-branch pushes also produce a downloadable development app. See [native UI verification](docs/native-ui-verification.md) for commands, artifacts and coverage.
+
+Active development is on `feat/phase15-detail-chain`: a compact handoff panel with an optional corner shelf. Named works remember the receiving app; they do not yet address a specific agent conversation.
 
 ## Delivery target matrix
 
 | Target | Channel | Evidence |
 |---|---|---|
-| Claude Code CLI | MCP server (data) + AX safe-paste (trigger) | S1 PASS, verified against real Claude Code |
-| ChatGPT Desktop | `AXManualAccessibility` opt-in + composer locate + set-value injection, never auto-send | S3 + v26 re-verified (26.1007.71326) |
-| Kimi Work | AX composer locate + clipboard-paste injection (set-value ineffective on Kimi editor), auto new-chat | probed 2026-10-18 (Kimi 3.2.17, Electron 43) |
+| Claude Code CLI | MCP server (data) + AX safe-paste (trigger), manual submission | MCP protocol covered in CI; current terminal handoff needs integration acceptance |
+| ChatGPT Desktop | Locate a readable empty composer and prepare a draft; otherwise copy for review, never auto-send | Injection mechanism verified on v26; current draft-protection path needs integration acceptance |
+| Kimi Work | Prepare a draft in the current conversation only when its composer is known empty; otherwise copy for review | Paste mechanism probed 2026-10-18; current conversation/draft protection needs integration acceptance |
 | Claude Cowork | `cowork-extension/` MCPB wrapper (mechanism S2 confirmed, E2E pending); clipboard fallback for now | S2 |
-| All targets | clipboard + notification (golden-path fallback, always works) | spec §7.1 |
+| All targets | Clipboard fallback with a copied receipt; copy failure is reported and material is kept | Core recovery checks in CI; copying does not imply agent receipt |
 
 ## Docs
 
