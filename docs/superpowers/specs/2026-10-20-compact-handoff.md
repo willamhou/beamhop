@@ -28,4 +28,4 @@ Mac acceptance before merging:
 4. With empty and nonempty receiving drafts, check ChatGPT and Kimi. Existing text must never be overwritten; Kimi must stay in the current conversation. Check whether Kimi exposes a readable empty value or needs the explicit copy fallback.
 5. In a terminal, verify the entire trigger contains every selected capture and no Return is synthesized. Receipts must say prepared, not completed. Check that Inbox can reopen originals and their notes.
 
-CI compiles/tests/packages on macOS. On-device results must be recorded separately before merge to main.
+macOS CI passed on implementation commit `5569a29`: build, XCTest, CLT SelfTest, MCP smoke, native messaging host and manifest smoke, and app packaging. Extension build and shell checks also passed. Evidence: https://github.com/willamhou/beamhop/actions/runs/39353978077 . Subsequent cleanup only normalizes new-file line endings and records these results. On-device results must be recorded separately before merge to main.

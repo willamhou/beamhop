@@ -14,7 +14,7 @@ Branch `codex/refine-capture-workflow`, based on `origin/feat/phase15-detail-cha
 
 Implemented: compact destination menu and optional naming; recent named destinations; selection-based corner panel; a single combined payload per handoff; work-intent preservation (v7 migration); recovery without clearing pending selections; serialized delivery; draft protection; no automatic Kimi new chat or terminal Enter; separate copied/prepared receipts; corrected destination acknowledgment and memory. Details and Mac acceptance: [compact handoff](docs/superpowers/specs/2026-10-20-compact-handoff.md).
 
-Validation: Windows host has no Swift/macOS SDK. macOS CI and on-device acceptance pending. Earlier “machine-verified” claims below describe the October 19 implementation, not these changes. Named works still bind apps, not exact agent sessions; app injection still brings the receiver forward for manual review.
+Validation: macOS CI passed for `5569a29` ([run 39353978077](https://github.com/willamhou/beamhop/actions/runs/39353978077)): build, XCTest, SelfTest, MCP/native-host smoke checks, app packaging, extension and shell checks. Windows host has no Swift/macOS SDK; on-device acceptance remains pending. Subsequent cleanup only normalizes new-file line endings and records these results. Earlier “machine-verified” claims below describe the October 19 implementation, not these changes. Named works still bind apps, not exact agent sessions; app injection still brings the receiver forward for manual review.
 
 ## 0. Status in one paragraph
 
