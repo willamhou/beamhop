@@ -225,6 +225,8 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 
 ## 8. Week 3 acceptance record (2026-10-18, on-device)
 
+**October 20 feature review:** The hosted macOS run verifies the native panel/shelf interactions listed in the current follow-up. Before promoting the feature PR from draft, separately accept logged-in ChatGPT/Kimi draft protection and current-conversation behavior, real terminal preparation, TCC capture, VoiceOver speech, fullscreen/Stage Manager and multiple displays. The October 18 results below describe the earlier implementation and do not close these items.
+
 User-verified this session:
 1. ⌘⇧Space pops the panel (after Accessibility re-grant on the fresh build) ✅
 2. Target shortcuts ⌘1–⌘4 + ⌘0 present and selectable ✅

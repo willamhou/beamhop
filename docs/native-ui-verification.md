@@ -31,6 +31,8 @@ Each case runs in English and Simplified Chinese, in light and dark appearance:
 
 Core tests separately cover unavailable receivers, explicit destination choices, work isolation, delayed confirmation receipts, migrations and ordered payloads. These tests run before the UI harness.
 
+A permanent copy of the reviewed PNGs and reports is available in the [native macOS gallery](https://willamhou.github.io/beamhop/native-ui/) on the separate `gh-pages` branch. The gallery identifies the tested revision; it is not a live view of the latest app build.
+
 ## Verified run
 
 Commit `fde3a97`, [CI run 39360579032](https://github.com/willamhou/beamhop/actions/runs/39360579032), passed on macOS 15.7.9 (24G830). Each of four locale/appearance combinations passed 38 assertions, for 152/152 total. The artifact contains 20 native PNGs, reviewed for destination detail, confirmation text, long notes and shelf failure state. Swift tests, SelfTest, protocol checks, packaging, extension build and shell checks passed in the same run.

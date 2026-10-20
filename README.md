@@ -1,75 +1,71 @@
 # Beamhop
 
-> macOS menu-bar app — grab context from any app (browser / IDE / Notes / PDF / Figma) and deliver it in one keystroke to any external AI agent (Claude Code, Claude Cowork, ChatGPT Desktop, Kimi Work, …).
+**Capture context. Choose a destination. Keep your train of thought.**
 
-**Status**: Phase 1 MVP — Week 0 Spike ✅ (spec V2.1) → Week 1 foundation ✅ → Week 2 golden path + browser bridge ✅ → integration peripherals ✅ → **Week 3 floating capture panel + Kimi Work delivery ✅ (verified on-device 2026-10-18)**.
+A native macOS menu-bar app for handing material from the app you are using to an external AI tool. Bring along the source and a short note; hold material in a corner shelf when you want to return to it later.
 
-> 📌 **Resume here → [PROGRESS.md](PROGRESS.md)** — progress, verified/pending, recovery commands, pitfalls, next steps. Single entry point.
+**[Releases](https://github.com/willamhou/beamhop/releases) · [Website & product essays](https://willamhou.github.io/beamhop/index.en.html) · [Native screenshots](https://willamhou.github.io/beamhop/native-ui/) · [Builds & checks](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)**
 
-## Build & run (SwiftPM, Command Line Tools is enough)
+[![CI](https://github.com/willamhou/beamhop/actions/workflows/ci.yml/badge.svg?branch=feat%2Fphase15-detail-chain)](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)
 
-```bash
-swift build                 # build (incl. GRDB)
-swift test                  # BeamhopCore XCTest (requires full Xcode)
-swift run BeamhopSelfTest   # logic self-test (no Xcode/XCTest needed)
-swift run Beamhop           # menu-bar app (✦ icon + ⌘⇧Space/⌘⇧I/⌘⇧V + Inbox/diagnostics/compatibility windows)
-scripts/mcp-smoke.sh        # MCP stdio smoke (S1 frame format + seed data)
-./packaging/build-app.sh    # assemble dist/Beamhop.app (auto-signs with the "Beamhop Sign" dev identity if set up — run scripts/setup-dev-signing.sh once; otherwise ad-hoc)
-```
+[![Beamhop’s compact native capture panel](https://willamhou.github.io/beamhop/native-ui/assets/capture-en-light.png)](https://willamhou.github.io/beamhop/native-ui/)
 
-Pushing any branch runs Swift tests, packaging and native panel checks on GitHub Actions (`macos-15`), plus extension and shell checks on Ubuntu. Native UI evidence includes English/Chinese light/dark PNGs and interaction reports. Feature-branch pushes also produce a downloadable development app. See [native UI verification](docs/native-ui-verification.md) for commands, artifacts and coverage.
+*Native AppKit / SwiftUI interface. [Explore all 20 screenshots](https://willamhou.github.io/beamhop/native-ui/), including English, Chinese, light and dark appearances.*
 
-Active development is on `feat/phase15-detail-chain`: a compact handoff panel with an optional corner shelf. Named works remember the receiving app; they do not yet address a specific agent conversation.
+## One handoff, from the app you are using
 
-## Delivery target matrix
+1. **Capture.** Select text and press **⌘⇧Space**. A compact panel shows the material and its source.
+2. **Choose a destination.** Use a receiving app directly, or recall it through an optional work name. Add a note if needed.
+3. **Hand off or hold.** Copy the material, prepare a draft for review, or press **⌘5** to hold it for later. Open the corner shelf with **⌘⇧P**, select what belongs together, and hand it off as one ordered payload.
 
-| Target | Channel | Evidence |
-|---|---|---|
-| Claude Code CLI | MCP server (data) + AX safe-paste (trigger), manual submission | MCP protocol covered in CI; current terminal handoff needs integration acceptance |
-| ChatGPT Desktop | Locate a readable empty composer and prepare a draft; otherwise copy for review, never auto-send | Injection mechanism verified on v26; current draft-protection path needs integration acceptance |
-| Kimi Work | Prepare a draft in the current conversation only when its composer is known empty; otherwise copy for review | Paste mechanism probed 2026-10-18; current conversation/draft protection needs integration acceptance |
-| Claude Cowork | `cowork-extension/` MCPB wrapper (mechanism S2 confirmed, E2E pending); clipboard fallback for now | S2 |
-| All targets | Clipboard fallback with a copied receipt; copy failure is reported and material is kept | Core recovery checks in CI; copying does not imply agent receipt |
+Your Inbox keeps the originals, notes, delivery history and agent results written back through MCP. A failed shelf handoff preserves the material and selection for retry.
 
-## Docs
+Beamhop handles context and handoff; reasoning and execution stay with your external tools. A work name currently remembers an **application**, not a specific conversation. Preparing a draft brings the receiver forward for review. **Copied** and **prepared** receipts do not mean an agent has received or completed the task.
 
-Language policy: **English is the default**; the Chinese originals are archived under [docs/zh/](docs/zh/) (historical deep-specs there are marked translation-pending).
+## Get Beamhop
 
-- [📐 MVP design spec V2.1](docs/zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) — Chinese original (913 lines, translation pending): Codex-reviewed + Week 0 spike writeback
-- [🪟 Week 3 floating-window spec](docs/superpowers/specs/2026-09-18-week-3-floating-window.md) + [implementation plan](docs/superpowers/plans/2026-09-18-week-3-implementation.md)
-- [🧪 Spike results](spike/results.md) — Week 0 decision matrix + [Compatibility Matrix v0](spike/compatibility-matrix-v0.json)
-- [🛠️ Engineering convergence spec](docs/superpowers/specs/2026-09-14-engineering-convergence.md) — branch model, two-machine split, acceptance gates (2026-09)
-- [🧭 Evolution decisions spec](docs/superpowers/specs/2026-09-14-evolution-decisions.md) — Xcode timing, Phase 2 memory direction, Phase 3 triggers (2026-09)
-- [🗺️ Roadmap](docs/superpowers/roadmap.md) — Phase 1 → Phase 4
-- [🧪 Week 0 spike plan](docs/zh/superpowers/plans/2026-06-03-week-0-spike.md) — 6 integration hypotheses (Chinese original, completed)
+**Development preview · macOS 14 or later.** There is no tagged release yet. [Releases](https://github.com/willamhou/beamhop/releases) is the home for future versions; current builds are available through [GitHub Actions](https://github.com/willamhou/beamhop/actions/workflows/ci.yml?query=branch%3Afeat%2Fphase15-detail-chain).
 
-## Naming
+To try a development build, open a successful feature-branch run and download its **Beamhop-app** artifact. Extract the outer artifact and the inner `Beamhop-macOS.zip`, then move `Beamhop.app` into Applications. These builds are ad-hoc signed and not notarized. Grant Accessibility access when requested. See [packaging and MCP setup](packaging/README.md).
 
-- **Beamhop** (capitalized): brand, UI text, prose
-- `beamhop` (lowercase): bundle id, CLI, directories, SQL columns
+## Receiving tools
 
-## Strategy
+| Destination | Current behavior |
+|---|---|
+| Claude Code | MCP supplies the material; a terminal trigger is prepared for manual submission. |
+| ChatGPT Desktop | Prepare a draft in a readable empty composer; otherwise copy for review. Never auto-send. |
+| Kimi Work | Prepare a draft in the current conversation when its composer is known empty; otherwise copy. No automatic new conversation. |
+| Clipboard | Copy once with sources and notes, then paste where you need it. |
+| Claude Cowork | An MCPB wrapper is available in `cowork-extension/`; end-to-end acceptance is pending, with clipboard fallback. |
 
-Phase 1 is a pure agent-agnostic delivery tool; Phase 2 adds memory + cross-device Inbox; Phase 3+ introduces a first-party agent (external delivery stays). See [roadmap.md](docs/superpowers/roadmap.md).
+Only detected applications appear as direct destinations. An unavailable remembered receiver requires an explicit choice. Different named works are kept separate even when they use the same application.
 
-## Getting started on macOS
+## Build and verify
 
-Week 0 spike must run on real macOS hardware (Accessibility API, Cocoa panels, Chrome extensions don't work in Linux containers). Suggested flow:
+On macOS 14+ with Swift 5.10 or newer:
 
 ```bash
-# 1. clone on a mac
 git clone git@github.com:willamhou/beamhop.git
 cd beamhop
-
-# 2. install mac-side deps (spike needs)
-xcode-select --install                     # Xcode CLT (Swift toolchain)
-brew install --cask chatgpt                # ChatGPT Desktop
-brew install --cask kimi                   # Kimi Work desktop (optional target)
-# Accessibility Inspector ships with Xcode
-
-# 3. build and run
-swift build && ./packaging/build-app.sh && open dist/Beamhop.app
-# grant Accessibility when prompted (System Settings → Privacy & Security)
+git switch feat/phase15-detail-chain
+swift build
+swift test                          # requires full Xcode
+swift run BeamhopSelfTest            # works with Command Line Tools
+./packaging/build-app.sh
+open dist/Beamhop.app
 ```
 
-Plans were executed subagent-driven (fresh subagent per task, review between tasks).
+The app includes the menu-bar UI and MCP helper. The [packaging guide](packaging/README.md) covers MCP registration and the browser bridge. For a stable local signing identity, see [development signing](scripts/setup-dev-signing.sh).
+
+CI runs Swift tests, protocol smoke checks, packaging and native UI interactions on **macOS**, plus extension and shell checks on Ubuntu. The [verified native run](https://github.com/willamhou/beamhop/actions/runs/39360579032) passed **152 UI assertions** across four language/appearance combinations and produced the gallery above. Tests cover focus, note editing, destination menus, dismissal, selection and retry. Logged-in agent delivery, VoiceOver speech, fullscreen and multiple displays still require integration acceptance. [Verification scope and artifacts →](docs/native-ui-verification.md)
+
+## Read more
+
+- [Product essays on Pages](https://willamhou.github.io/beamhop/index.en.html) — interactive explorations of destinations, context and the corner shelf; [Chinese edition](https://willamhou.github.io/beamhop/).
+- [Native macOS gallery](https://willamhou.github.io/beamhop/native-ui/) — production views with fixture data and downloadable check reports.
+- [Progress and next steps](PROGRESS.md) — the starting point for contributors. Active development is on `feat/phase15-detail-chain`.
+- [Compact handoff specification](docs/superpowers/specs/2026-10-20-compact-handoff.md) — current behavior and acceptance criteria.
+- [Product positioning](docs/product-positioning.md) · [Roadmap](docs/superpowers/roadmap.md) · [Compatibility evidence](spike/compatibility-matrix-v0.json).
+- [MVP design](docs/zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) · [Engineering conventions](docs/superpowers/specs/2026-09-14-engineering-convergence.md).
+
+English is the default documentation language. Historical Chinese documents live in [docs/zh/](docs/zh/); the product essays provide both languages.
