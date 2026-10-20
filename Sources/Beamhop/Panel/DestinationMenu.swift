@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import BeamhopCore
 
-/// NSMenu supplies native menu tracking. The visible label stays a regular SwiftUI
-/// button: SwiftUI.Menu on macOS flattens multiline labels and drops the receiver detail.
+/// NSMenu supplies native menu tracking. A native button handles input and
+/// accessibility while SwiftUI renders the full multiline destination label.
 final class DestinationMenuPresenter: NSObject {
     weak var anchor: NSView?
     private var actions: [() -> Void] = []
@@ -54,12 +54,47 @@ final class DestinationMenuPresenter: NSObject {
     }
 }
 
-struct DestinationMenuAnchor: NSViewRepresentable {
+/// Keep a concrete AppKit control for keyboard focus and accessibility. The
+/// SwiftUI label above it does not intercept input or duplicate the accessible name.
+struct DestinationButton: NSViewRepresentable {
     let presenter: DestinationMenuPresenter
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        presenter.anchor = view
-        return view
+    let model: CapturePanelModel
+    let onName: () -> Void
+
+    func makeNSView(context: Context) -> DestinationNativeButton {
+        let button = DestinationNativeButton()
+        button.title = ""
+        button.isBordered = false
+        button.setButtonType(.momentaryPushIn)
+        button.setAccessibilityElement(true)
+        button.setAccessibilityIdentifier("capture.destination")
+        updateNSView(button, context: context)
+        return button
     }
-    func updateNSView(_ view: NSView, context: Context) { presenter.anchor = view }
+
+    func updateNSView(_ button: DestinationNativeButton, context: Context) {
+        presenter.anchor = button
+        button.onPress = { presenter.show(model: model, onName: onName) }
+        let detail = model.unavailableTarget != nil
+            ? L10n.s("Unavailable · choose another destination or hold for later")
+            : model.selectedTarget?.handoffDetail ?? L10n.s("Keep a local record")
+        let receiver = (model.selectedTarget ?? model.unavailableTarget)?.displayName
+        button.setAccessibilityLabel(([L10n.f("Destination: %@", model.destinationTitle)]
+            + (receiver.map { [$0] } ?? []) + [detail]).joined(separator: ". "))
+    }
+}
+
+final class DestinationNativeButton: NSButton {
+    var onPress: (() -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        target = self
+        action = #selector(openDestinations(_:))
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    @objc private func openDestinations(_ sender: Any?) { onPress?() }
 }

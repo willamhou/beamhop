@@ -28,9 +28,8 @@ struct CapturePanelView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Button {
-                destinationMenu.show(model: model) { naming = true }
-            } label: {
+            ZStack {
+                DestinationButton(presenter: destinationMenu, model: model) { naming = true }
                 HStack(spacing: 10) {
                     Image(systemName: model.selectedTarget == nil ? "tray" : "arrow.up.forward.app")
                         .font(.system(size: 22, weight: .light))
@@ -55,13 +54,10 @@ struct CapturePanelView: View {
                 }
                 .padding(12)
                 .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                .contentShape(Rectangle())
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .background(DestinationMenuAnchor(presenter: destinationMenu))
             .fixedSize(horizontal: false, vertical: true)
-            .accessibilityLabel(L10n.f("Destination: %@", model.destinationTitle))
-            .accessibilityIdentifier("capture.destination")
 
             if naming {
                 TextField("Name this work", text: $model.workName)
