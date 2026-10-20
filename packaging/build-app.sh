@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
+# Keep credentials out of shell traces and child-process environments.
+set +x
 set -euo pipefail
+signing_password="${BEAMHOP_KEYCHAIN_PASSWORD:-}"
+unset BEAMHOP_KEYCHAIN_PASSWORD
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 output_dir="$repo_root/dist"
@@ -63,11 +67,20 @@ codesign_args=(--force --deep --options runtime)
 if [[ -n "${BEAMHOP_CODESIGN_IDENTITY:-}" ]]; then
   if [[ -n "${BEAMHOP_CODESIGN_KEYCHAIN:-}" ]]; then
     # self-signed: no notarization-timestamp service; --timestamp=none keeps signing offline
-    security unlock-keychain -p "${BEAMHOP_KEYCHAIN_PASSWORD:?Supply the signing password through a secret provider}" "$BEAMHOP_CODESIGN_KEYCHAIN" 2>/dev/null || true
+    # Without a supplied password, use a keychain already unlocked by its owner.
+    if [[ -n "$signing_password" ]] && ! security unlock-keychain -p "$signing_password" "$BEAMHOP_CODESIGN_KEYCHAIN"; then
+      echo "Could not unlock the signing keychain; check the supplied password." >&2
+      exit 5
+    fi
     codesign_args+=(--keychain "$BEAMHOP_CODESIGN_KEYCHAIN" --timestamp=none)
   fi
-  codesign "${codesign_args[@]}" --sign "$BEAMHOP_CODESIGN_IDENTITY" "$staging/Beamhop.app"
+  unset signing_password
+  if ! codesign "${codesign_args[@]}" --sign "$BEAMHOP_CODESIGN_IDENTITY" "$staging/Beamhop.app"; then
+    echo "Signing failed. Unlock the keychain in Keychain Access or supply BEAMHOP_KEYCHAIN_PASSWORD through a secret provider." >&2
+    exit 5
+  fi
 else
+  unset signing_password
   codesign "${codesign_args[@]}" --sign - "$staging/Beamhop.app"
 fi
 

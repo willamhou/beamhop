@@ -74,6 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Development signing credential regression checks
+        run: python3 scripts/dev-signing-smoke.py
       - name: ShellCheck all shell scripts
         run: |
           find scripts host packaging cowork-extension -name '*.sh' -print0 | xargs -0 shellcheck

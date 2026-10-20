@@ -8,7 +8,8 @@
 #
 # What this script creates (all local, no Apple account, no network):
 #   1. A dedicated keychain ~/Library/Keychains/beamhop-sign.keychain-db.
-#      Requires BEAMHOP_KEYCHAIN_PASSWORD supplied privately; no default password.
+#      Supply BEAMHOP_KEYCHAIN_PASSWORD or enter it at the hidden terminal prompt.
+#      There is no built-in password.
 #   2. A self-signed code-signing certificate "Beamhop Sign" (RSA-2048, 10y, EKU=codeSigning).
 #   3. Private key imported with partition-list apple-tool:,apple:,codesign: so `codesign` can
 #      use it WITHOUT any GUI consent dialog (the login-keychain variant prompts securityd and
@@ -20,9 +21,34 @@
 # Developer ID notarization is a Phase-1-release concern.
 #
 # Re-run safely: skips any step whose target already exists.
+# Never print credentials when invoked with bash -x.
+set +x
 set -euo pipefail
+umask 077
 
-PW="${BEAMHOP_KEYCHAIN_PASSWORD:?Supply the signing password through a secret provider}"
+signing_password="${BEAMHOP_KEYCHAIN_PASSWORD:-}"
+unset BEAMHOP_KEYCHAIN_PASSWORD
+if [[ -z "$signing_password" ]]; then
+  if [[ ! -t 0 ]]; then
+    echo "Set BEAMHOP_KEYCHAIN_PASSWORD through a secret provider, or run interactively to enter it." >&2
+    exit 2
+  fi
+  read -r -s -p "Development signing keychain password: " signing_password
+  printf '\n' >&2
+  if [[ ! -f "$HOME/Library/Keychains/beamhop-sign.keychain-db" ]]; then
+    read -r -s -p "Confirm new keychain password: " signing_password_confirmation
+    printf '\n' >&2
+    if [[ "$signing_password" != "$signing_password_confirmation" ]]; then
+      echo "Passwords do not match; no keychain was changed." >&2
+      exit 2
+    fi
+    unset signing_password_confirmation
+  fi
+fi
+if [[ -z "$signing_password" ]]; then
+  echo "An empty signing keychain password is not allowed." >&2
+  exit 2
+fi
 CERT_NAME="Beamhop Sign"
 KC="$HOME/Library/Keychains/beamhop-sign.keychain-db"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/beamhop-sign.XXXXXX")"
@@ -32,10 +58,10 @@ trap 'rm -rf "$WORK"' EXIT
 if [[ -f "$KC" ]]; then
   echo "keychain exists: $KC"
 else
-  security create-keychain -p "$PW" beamhop-sign.keychain
+  security create-keychain -p "$signing_password" beamhop-sign.keychain
   echo "created keychain: $KC"
 fi
-security unlock-keychain -p "$PW" "$KC"
+security unlock-keychain -p "$signing_password" "$KC"
 security set-keychain-settings -lut 86400 "$KC"   # relock after 24h idle, not on sleep
 
 # 2) certificate + key (skip if the cert is already in the keychain)
@@ -56,7 +82,8 @@ else
 fi
 
 # 3) partition list — the step that makes signing consent-dialog-free
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PW" "$KC" >/dev/null
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$signing_password" "$KC" >/dev/null
+unset signing_password
 echo "partition list set (apple-tool:,apple:,codesign:)"
 
 SHA1="$(security find-certificate -c "$CERT_NAME" -Z "$KC" 2>/dev/null | awk '/SHA-1/ {print $3}')"

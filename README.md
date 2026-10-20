@@ -55,7 +55,7 @@ swift run BeamhopSelfTest            # works with Command Line Tools
 open dist/Beamhop.app
 ```
 
-The app includes the menu-bar UI and MCP helper. The [packaging guide](packaging/README.md) covers MCP registration and the browser bridge. For a stable local signing identity, see [development signing](scripts/setup-dev-signing.sh).
+The app includes the menu-bar UI and MCP helper. The [packaging guide](packaging/README.md) covers MCP registration and the browser bridge. For a stable local signing identity, see [development signing](scripts/setup-dev-signing.sh). The setup uses a hidden password prompt or an explicitly supplied secret, with no default password. Existing users of the earlier signing script should follow the [credential remediation guide](docs/dev-signing-security.md).
 
 CI runs Swift tests, protocol smoke checks, packaging and native UI interactions on **macOS**, plus extension and shell checks on Ubuntu. The [verified native run](https://github.com/willamhou/beamhop/actions/runs/39360579032) passed **152 UI assertions** across four language/appearance combinations and produced the gallery above. Tests cover focus, note editing, destination menus, dismissal, selection and retry. Logged-in agent delivery, VoiceOver speech, fullscreen and multiple displays still require integration acceptance. [Verification scope and artifacts →](docs/native-ui-verification.md)
 
