@@ -122,7 +122,13 @@ enum UIRegression {
             inbox.model.configure(store: store, events: nil, onDeliver: { _, _ in })
             try show()
             inbox.show()
-            try wait("Inbox key window cancels panel") { !panel.isVisible && NSApp.keyWindow?.title == "Beamhop Inbox" }
+            // A key-window change can precede the foreground activation notification.
+            try wait("Inbox becomes foreground and cancels panel") {
+                !panel.isVisible && NSApp.keyWindow?.title == "Beamhop Inbox"
+                    && frontPID == ProcessInfo.processInfo.processIdentifier
+            }
+            panel.restoreSourceIfStillActive(captureID: cap.id)
+            pump(seconds: 0.2)
             try expect(frontPID == ProcessInfo.processInfo.processIdentifier, "Inbox keeps its own focus")
             inbox.model.selectedID = cap.id
             try expect(inbox.model.selectedResults.isEmpty, "Inbox starts with empty conclusion state")
