@@ -23,6 +23,16 @@ jobs:
         run: scripts/native-manifest-smoke.sh
       - name: Assemble Beamhop.app (ad-hoc)
         run: ./packaging/build-app.sh
+      - name: Native UI interactions and screenshots
+        run: bash scripts/native-ui-smoke.sh
+      - name: Upload native UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beamhop-native-ui-${{ github.sha }}
+          path: dist/ui-smoke
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload Beamhop.app artifact (main only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/upload-artifact@v4

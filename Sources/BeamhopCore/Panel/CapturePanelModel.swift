@@ -51,6 +51,22 @@ public final class CapturePanelModel: ObservableObject {
         selectedTarget = target
     }
 
+    /// Menu contents are lazy in SwiftUI. Keep shortcuts available while that menu is closed.
+    @discardableResult
+    public func handleShortcut(_ key: String) -> Bool {
+        guard let shortcut = PanelShortcut(rawValue: key) else { return false }
+        if shortcut.isHold {
+            guard canHold else { return false }
+            hold()
+        } else if let target = shortcut.target {
+            guard visibleTargets.contains(target) else { return false }
+            chooseTool(target)
+        } else {
+            chooseTool(nil)
+        }
+        return true
+    }
+
     /// true = the bound work's receiving app changed since the user last confirmed it.
     public var workNeedsConfirmation: Bool { boundWork?.needsConfirmation ?? false }
 

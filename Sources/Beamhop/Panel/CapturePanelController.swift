@@ -5,7 +5,7 @@ import BeamhopCore
 /// Owns the NSPanel shell for the capture panel (Week 3 spec §3.1, S5 configuration verbatim).
 /// Panel hides — never destroys — so re-shows are instant and hotkeys keep working (S5).
 final class CapturePanelController {
-    private var panel: NSPanel?
+    private(set) var panel: HandoffPanel?
     /// Guard against the confirm → orderOut → didResignKey race (plan Task 2.2): once a
     /// delivery is in flight, a resign triggered by our own hide must not run the cancel path.
     private(set) var isDelivering = false
@@ -28,6 +28,8 @@ final class CapturePanelController {
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
               onCancel: @escaping () -> Void,
               onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
+        // A new capture replaces the previous one only after its draft has been saved.
+        if isVisible && !finished { currentModel?.cancel() }
         let model = CapturePanelModel(
             capture: capture,
             initialTarget: defaultTarget,
@@ -62,7 +64,14 @@ final class CapturePanelController {
         finished = false
         isDelivering = false   // a new showing supersedes any in-flight delivery race guard
         currentModel = model
-        panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model))
+        panel?.onEscape = { [weak model] in model?.cancel() }
+        panel?.onShortcut = { [weak model] key in model?.handleShortcut(key) ?? false }
+        panel?.onReturn = { [weak model] in model?.confirm() }
+        panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model)
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(PanelSizeReader { [weak self] size in
+                DispatchQueue.main.async { self?.panel?.fitContent(size) }
+            }))
         panel?.standardWindowButton(.closeButton)?.isHidden = true
         panel?.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel?.standardWindowButton(.zoomButton)?.isHidden = true
@@ -81,9 +90,8 @@ final class CapturePanelController {
         }
         self.cancelHandler = onCancel
 
-        // nonactivating panel: explicit activation so keyboard input lands reliably (spec §3.1).
+        // Key input belongs to the panel; the source application remains active.
         panel?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func hide() {
@@ -98,8 +106,8 @@ final class CapturePanelController {
     /// controller is the only stable owner.
     private(set) var currentModel: CapturePanelModel?
 
-    private func makePanel() -> NSPanel {
-        let p = NSPanel(
+    private func makePanel() -> HandoffPanel {
+        let p = HandoffPanel(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered, defer: false)

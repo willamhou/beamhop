@@ -5,6 +5,7 @@ import BeamhopCore
 struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
     @State private var naming = false
+    @FocusState private var noteFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -97,6 +98,8 @@ struct CapturePanelView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .lineLimit(1...3)
+                .focused($noteFocused)
+                .onSubmit { model.confirm() }
                 .accessibilityLabel("Note")
 
             Divider()
@@ -118,6 +121,8 @@ struct CapturePanelView: View {
         .padding(20)
         .frame(width: 420)
         .background(.regularMaterial)
+        .onAppear { noteFocused = true }
+        .onExitCommand { model.cancel() }
         .background {
             Button("Cancel") { model.cancel() }
                 .keyboardShortcut(.cancelAction)

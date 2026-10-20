@@ -1,6 +1,22 @@
 import AppKit
 import BeamhopCore
 
+// An opt-in native UI harness for hosted Macs. It uses isolated fixtures and never
+// bootstraps hotkeys, permissions, external agent delivery, or the user's Inbox.
+if let index = CommandLine.arguments.firstIndex(of: "--ui-smoke"),
+   CommandLine.arguments.count > index + 1 {
+    let output = URL(fileURLWithPath: CommandLine.arguments[index + 1])
+    let language = CommandLine.arguments.contains("--zh") ? "zh-Hans" : "en"
+    do {
+        let passed = try NativeUISmoke.run(output: output, language: language,
+                                           dark: CommandLine.arguments.contains("--dark"))
+        exit(passed ? 0 : 1)
+    } catch {
+        fputs("[native-ui] \(error)\n", stderr)
+        exit(1)
+    }
+}
+
 // Menu-bar app entry. SwiftPM executable drives NSApplication directly (like the Week 0 S5
 // demo) — no SwiftUI App/Settings scene, so the empty-Settings blank-window issue codex
 // flagged doesn't apply here. The Xcode app target (post-Xcode-install) will use the

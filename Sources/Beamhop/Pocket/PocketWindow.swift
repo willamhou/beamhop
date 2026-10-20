@@ -4,14 +4,14 @@ import BeamhopCore
 
 /// A transient corner shelf. Opening is deliberate; capture only updates the HUD count.
 final class PocketWindowController {
-    private var panel: NSPanel?
+    private(set) var panel: HandoffPanel?
     private var resignObserver: NSObjectProtocol?
     let model = PocketModel()
 
     func show() {
         if panel?.isVisible == true { hide(); return }
         if panel == nil {
-            let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 360),
+            let p = HandoffPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 360),
                             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
                             backing: .buffered, defer: false)
             p.titleVisibility = .hidden
@@ -23,7 +23,12 @@ final class PocketWindowController {
             p.standardWindowButton(.closeButton)?.isHidden = true
             p.standardWindowButton(.miniaturizeButton)?.isHidden = true
             p.standardWindowButton(.zoomButton)?.isHidden = true
-            p.contentView = NSHostingView(rootView: PocketView(model: model) { [weak self] in self?.hide() })
+            p.onEscape = { [weak self] in self?.hide() }
+            p.contentView = NSHostingView(rootView: PocketView(model: model, onClose: { [weak self] in self?.hide() })
+                .fixedSize(horizontal: false, vertical: true)
+                .modifier(PanelSizeReader { [weak p] size in
+                    DispatchQueue.main.async { p?.fitContent(size, keepingBottom: true) }
+                }))
             resignObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didResignKeyNotification, object: p, queue: .main
             ) { [weak self] _ in self?.hide() }
