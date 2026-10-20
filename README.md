@@ -18,7 +18,7 @@ A native macOS menu-bar app for handing material from the app you are using to a
 2. **Choose a destination.** Use a receiving app directly, or recall it through an optional work name. Add a note if needed.
 3. **Hand off or hold.** Copy the material, prepare a draft for review, or press **⌘5** to hold it for later. Open the corner shelf with **⌘⇧P**, select what belongs together, and hand it off as one ordered payload.
 
-Your Inbox keeps the originals, notes, delivery history and agent results written back through MCP. A failed shelf handoff preserves the material and selection for retry.
+Your Inbox keeps the originals, notes, delivery history and agent results written back through MCP. Selected conclusions refresh while the Inbox is active; long answers can be expanded and earlier results loaded. A failed shelf handoff preserves the material and selection for retry.
 
 Beamhop handles context and handoff; reasoning and execution stay with your external tools. A work name currently remembers an **application**, not a specific conversation. Preparing a draft brings the receiver forward for review. **Copied** and **prepared** receipts do not mean an agent has received or completed the task.
 

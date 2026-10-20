@@ -15,6 +15,10 @@ final class CapturePanelController {
     /// calls a stale closure from a previous capture.
     private var cancelHandler: (() -> Void)?
     private var resignObserver: NSObjectProtocol?
+    private var sourceApp: NSRunningApplication?
+    private var captureID: String?
+    private var presentation = 0
+    private(set) var currentModel: CapturePanelModel?
 
     /// Show (or replace) the panel for a capture. `onConfirm` receives the chosen target
     /// (nil = 仅入 Inbox) and the note; `onCancel` = Esc / focus-loss path; `onHold` = 「先留着」
@@ -30,6 +34,11 @@ final class CapturePanelController {
               onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
         // A new capture replaces the previous one only after its draft has been saved.
         if isVisible && !finished { currentModel?.cancel() }
+        // Keep the running-app object rather than resolving the PID on close (PID reuse).
+        sourceApp = NSRunningApplication(processIdentifier: pid_t(capture.pid))
+        captureID = capture.id
+        presentation += 1
+        let presentation = self.presentation
         let model = CapturePanelModel(
             capture: capture,
             initialTarget: defaultTarget,
@@ -38,23 +47,30 @@ final class CapturePanelController {
             workName: workName,
             availableWorks: availableWorks,
             onConfirm: { [weak self] target, note in
-                guard let self else { return }
+                guard let self, !self.finished, self.presentation == presentation else { return }
                 self.finished = true
                 self.isDelivering = true
                 self.hide()
+                // No target activation follows these choices. Native deliveries own focus
+                // until their completion callback; do not race them by activating the source.
+                if target == nil || target == .clipboard || target == .cowork {
+                    self.restoreSourceIfStillActive(captureID: capture.id)
+                }
                 onConfirm(target, note)
             },
             onCancel: { [weak self] in
-                guard let self else { return }
+                guard let self, !self.finished, self.presentation == presentation else { return }
                 self.finished = true
                 self.hide()
+                self.restoreSourceIfStillActive(captureID: capture.id)
                 onCancel()
             },
             onHold: onHold.map { handler in
                 { [weak self] target, note in
-                    guard let self else { return }
+                    guard let self, !self.finished, self.presentation == presentation else { return }
                     self.finished = true
                     self.hide()
+                    self.restoreSourceIfStillActive(captureID: capture.id)
                     handler(target, note)
                 }
             }
@@ -70,7 +86,10 @@ final class CapturePanelController {
         panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model)
             .fixedSize(horizontal: false, vertical: true)
             .modifier(PanelSizeReader { [weak self] size in
-                DispatchQueue.main.async { self?.panel?.fitContent(size) }
+                DispatchQueue.main.async {
+                    guard let self, self.presentation == presentation, !self.finished else { return }
+                    self.panel?.fitContent(size)
+                }
             }))
         panel?.standardWindowButton(.closeButton)?.isHidden = true
         panel?.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -83,9 +102,19 @@ final class CapturePanelController {
                 forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
             ) { [weak self] _ in
                 guard let self, !self.isDelivering, !self.finished else { return }
-                self.finished = true
-                self.hide()
-                self.cancelHandler?()
+                // App activation and window-key changes arrive separately. On a rapid reopen
+                // an old resign may arrive just before this panel becomes key again. Resolve
+                // on the next main-loop turn and cancel only if it is still non-key.
+                let presentation = self.presentation
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.isDelivering, !self.finished,
+                          self.presentation == presentation,
+                          self.panel?.isKeyWindow == false else { return }
+                    self.finished = true
+                    self.hide()
+                    if let id = self.captureID { self.restoreSourceIfStillActive(captureID: id) }
+                    self.cancelHandler?()
+                }
             }
         }
         self.cancelHandler = onCancel
@@ -101,10 +130,24 @@ final class CapturePanelController {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
-    /// The model of the currently shown panel (nil between showings). AppServices reads
-    /// `model.workName` at confirm time — the model is recreated per showing, so the
-    /// controller is the only stable owner.
-    private(set) var currentModel: CapturePanelModel?
+    /// Delivery completion may arrive after another capture has opened. Never restore that
+    /// older source, steal focus from the destination, or leave the Inbox while it is in use.
+    func restoreSourceIfStillActive(captureID: String) {
+        guard self.captureID == captureID, let sourceApp else { return }
+        let hasOtherWindow = NSApp.keyWindow.map { $0.isVisible && $0 !== panel } ?? false
+        guard CaptureFocusPolicy.shouldRestore(
+            sourcePID: sourceApp.processIdentifier,
+            ownPID: ProcessInfo.processInfo.processIdentifier,
+            frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            sourceTerminated: sourceApp.isTerminated,
+            hasVisibleBeamhopWindow: isVisible || hasOtherWindow
+        ) else { return }
+        sourceApp.activate(options: [])
+    }
+
+    deinit {
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+    }
 
     private func makePanel() -> HandoffPanel {
         let p = HandoffPanel(

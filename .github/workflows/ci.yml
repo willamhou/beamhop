@@ -15,7 +15,7 @@ jobs:
           swift build 2>&1 | tee swift-build.log
       - name: Swift tests (BeamhopCore)
         run: swift test
-      - name: Self-test (28 storage checks, XCTest-free)
+      - name: Self-test (storage, handoff, focus and Inbox)
         run: swift run BeamhopSelfTest
       - name: MCP stdio smoke test (S1 framing + seeded content)
         run: scripts/mcp-smoke.sh
@@ -27,6 +27,11 @@ jobs:
         run: ./packaging/build-app.sh
       - name: Native UI interactions and screenshots
         run: bash scripts/native-ui-smoke.sh
+      - name: Native focus and Inbox write-back regression
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          "$(swift build --show-bin-path)/Beamhop" --ui-regression dist/ui-smoke/focus-inbox 2>&1 | tee dist/ui-smoke/focus-inbox.log
       - name: Upload native UI evidence
         if: always()
         uses: actions/upload-artifact@v4

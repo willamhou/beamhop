@@ -172,9 +172,16 @@ enum NativeUISmoke {
         check("Escape dismisses exactly once", !controller.isVisible && cancels == 1 && confirms == 0)
         show()
         controller.currentModel?.note = chinese ? "回头和刚才那段一起看" : "Keep this with the earlier passage"
+        let replacedModel = controller.currentModel
         show()
         check("replacing a capture saves previous draft", cancels == 2
               && savedNotes.last == (chinese ? "回头和刚才那段一起看" : "Keep this with the earlier passage"))
+        replacedModel?.confirm()
+        replacedModel?.cancel()
+        replacedModel?.hold()
+        settle()
+        check("replaced model callbacks cannot affect current capture", controller.isVisible
+              && controller.currentModel !== replacedModel && confirms == 0 && cancels == 2 && held == nil)
         controller.currentModel?.note = chinese ? "第一行交代\n第二行说明\n第三行补充" : "First line of context\nSecond line of context\nThird line of context"
         controller.currentModel?.selectedTarget = .claudeCode
         settle()

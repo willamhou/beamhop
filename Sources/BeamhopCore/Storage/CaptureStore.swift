@@ -90,6 +90,21 @@ public final class CaptureStore {
 
     // MARK: results (agent write-back, memory-mcp-decision spec 2026-10-18)
 
+    /// One query for the visible list, rather than fetching every conclusion's body per row.
+    public func resultCounts(captureIDs: [String]) throws -> [String: Int] {
+        guard !captureIDs.isEmpty else { return [:] }
+        return try db.queue.read { db in
+            let slots = databaseQuestionMarks(count: captureIDs.count)
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT origin_capture_id, COUNT(*) AS n FROM results
+                WHERE origin_capture_id IN (\(slots)) GROUP BY origin_capture_id
+                """, arguments: StatementArguments(captureIDs))
+            return Dictionary(uniqueKeysWithValues: rows.map { row in
+                (row["origin_capture_id"] as String, row["n"] as Int)
+            })
+        }
+    }
+
     public func insertResult(_ result: CaptureResult) throws {
         try db.queue.write { try result.insert($0) }
     }

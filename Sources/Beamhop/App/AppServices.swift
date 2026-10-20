@@ -135,26 +135,17 @@ final class AppServices {
     /// calls are safe from a background thread. The panel show itself happens on the main thread.
     private let signposter = OSSignposter(subsystem: "com.beamhop.app", category: "perf")
     private var targetMemory = TargetMemory()   // BeamhopCore: 默认 Claude Code，仅成功投递更新
-    /// §7-C dogfood fix: showing the panel activates Beamhop, and nothing used to reactivate the
-    /// previous app after Esc / Inbox-only confirm — so the next ⌘⇧Space captured Beamhop itself
-    /// (0ms, useless row). Recorded at capture time; restored after panel-close paths that leave
-    /// no other app in front (cancel, ⌘0 Inbox-only, delivery degraded to clipboard).
-    private var appBeforePanel: NSRunningApplication?
-
-    private static let ownBundleID = "com.beamhop.app"
+    private var captureInFlight = false       // main-thread gate; DuplicateGate is not thread-safe
 
     private func doCapture() {
         guard capture != nil, delivery != nil else {
             Notifier.error(L10n.s("Database not ready — cannot capture")); return
         }
+        guard !captureInFlight else { return }
+        captureInFlight = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self, let capture = self.capture, let delivery = self.delivery else { return }
-            // Before capture records its own frontmost, remember OUR pre-panel frontmost — but
-            // never chain a residue: if Beamhop is somehow still frontmost (previous restore
-            // missed), keep the older remembered app instead of capturing Beamhop-on-Beamhop.
-            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != Self.ownBundleID {
-                self.appBeforePanel = NSWorkspace.shared.frontmostApplication
-            }
+            defer { DispatchQueue.main.async { self.captureInFlight = false } }
             let state = self.signposter.beginInterval("capture")
             let t0 = Date()
             let outcome = capture.captureFrontmost()
@@ -213,7 +204,6 @@ final class AppServices {
                     // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost,
                     // then hand focus back so the next ⌘⇧Space captures the real work, not us.
                     Notifier.info(L10n.s("Saved to Inbox"), cap.id)
-                    self.restorePrePanelFocus()
                     return
                 }
                 // Delivery off-main (AX activation sleeps); failure paths inside DeliveryService
@@ -231,7 +221,7 @@ final class AppServices {
                                 }
                             }
                             // Clipboard keeps the source app; prepared drafts stay visible for review.
-                            self.restorePrePanelFocus()
+                            self.panel.restoreSourceIfStillActive(captureID: cap.id)
                         }
                     }
                 }
@@ -243,7 +233,6 @@ final class AppServices {
                 self.saveNote(self.panel.currentModel?.note ?? "", for: cap.id)
                 self.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
                 Notifier.info(L10n.s("Saved to Inbox"), cap.id)
-                self.restorePrePanelFocus()
             },
             onHold: { [weak self] target, note in
                 guard let self, let pocketStore else { return }
@@ -267,7 +256,6 @@ final class AppServices {
                     self.log.error("pocket hold failed: \(String(describing: error), privacy: .public)")
                     Notifier.error(L10n.s("Could not hold"), String(describing: error))
                 }
-                self.restorePrePanelFocus()
             })
         let panelMs = Int(Date().timeIntervalSince(pt0) * 1000)
         signposter.endInterval("panel_show", state, "\(panelMs)ms")
@@ -334,19 +322,6 @@ final class AppServices {
         catch { Notifier.error(L10n.s("Could not save note"), String(describing: error)) }
     }
 
-    /// §7-C: reactivate the app that was frontmost before the panel took key — best-effort, and
-    /// ONLY when Beamhop is still frontmost (never steal focus from a delivery that succeeded).
-    /// Runs on the main queue after a beat so orderOut has settled before the re-activation.
-    private func restorePrePanelFocus() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, let prev = self.appBeforePanel,
-                  prev.bundleIdentifier != Self.ownBundleID,
-                  NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Self.ownBundleID
-            else { return }
-            prev.activate(options: [.activateAllWindows])
-            self.log.info("restored focus to \(prev.bundleIdentifier ?? "?", privacy: .public)")
-        }
-    }
     /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from
     /// anywhere — the universal fallback that never depends on AX or a running target.
     private func emergencyClipboardPaste() {

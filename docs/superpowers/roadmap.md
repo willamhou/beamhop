@@ -22,7 +22,7 @@
 | Phase | Window | Status | Spec | Completed |
 |---|---|---|---|---|
 | Phase 1 — MVP | weeks 0–6 | ✅ delivered (Week 0 spike 6/6 → V2.1; Week 1 foundation; Week 2 golden path; integration peripherals; **Week 3 floating panel 2026-10-18, user-verified**) | [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) (Chinese original, archived) | 2026-10-18 |
-| Phase 1.5 — short-term patches | MVP + 2–4 weeks | 📋 planned | — | — |
+| Phase 1.5 — short-term patches | MVP + 2–4 weeks | 🚧 in progress (local metrics, zh-Hans, AX deadline, MCP registration; focus + Inbox-conclusion fixes locally verified on `codex/focus-inbox-results`, real-device acceptance pending) | [Focus/Inbox regression](../regressions/2026-10-19-focus-inbox.md) | — |
 | Phase 2.1 — cross-device Inbox | month 3–4 | 📋 planned | — | — |
 | Phase 2.2 — memory & semantic search | month 4–6 | 📋 planned | — | — |
 | Phase 2.3 — web chatbox & IDE agents | month 6–9 | 📋 planned | — | — |

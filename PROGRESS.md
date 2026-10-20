@@ -10,9 +10,11 @@
 
 ## Current follow-up: compact handoff (2026-10-20)
 
+**PR #7 conflict resolution:** integrated `main` at `2b5b32d` (PR #6). The compact nonactivating panel, corner shelf, named-work safeguards and signing-password remediation remain intact. The capture gate and self-capture rejection, presentation-scoped focus recovery, deterministic timeline ordering, and Inbox external-write refresh/pagination now share one implementation. Both sets of storage/model regressions are retained. The native focus/Inbox fixture is adapted to assert that the source app stays active while the panel owns keyboard input and runs alongside the compact-panel UI checks in CI. Hosted validation is pending for this merge; real-app integration acceptance remains separate.
+
 **Signing credential remediation:** GitGuardian found a fixed default password in the earlier development-keychain setup and packaging scripts. The current scripts require hidden interactive input or an explicitly supplied secret, do not trace/export it to child commands, and stop on explicit unlock failure. Seven isolated command-stub regression cases cover these paths. The owner approved feature-history cleanup: 23 of 25 commits were rewritten, with the final file tree unchanged. [GitGuardian on `97ea92e`](https://github.com/willamhou/beamhop/pull/7/checks?check_run_id=118436760729) scanned all 25 commits and reported **No secrets detected**. The signing regression tests and ShellCheck also passed in hosted CI. Mac-side password rotation has not been performed from this Windows session and is still required wherever the former default was used. See [remediation instructions](docs/dev-signing-security.md).
 
-Active development branch: `feat/phase15-detail-chain`. On 2026-10-20 the user directed the compact-handoff fixes from `codex/refine-capture-workflow` to be integrated here and further development to continue on this feature branch. Refine and validate it before opening a PR to `main`. The fixes originated from `4007bc0` and were integrated by fast-forward through `c5fab72`. User selected a compact shortcut panel with destinations disclosed on demand. The corner pocket remains optional.
+Active development branch: `feat/phase15-detail-chain`. On 2026-10-20 the user directed the compact-handoff fixes from `codex/refine-capture-workflow` to be integrated here and further development to continue on this feature branch. [PR #7](https://github.com/willamhou/beamhop/pull/7) is open against `main`; refine and validate it before merging. The fixes originated from `4007bc0` and were integrated by fast-forward through `c5fab72`. User selected a compact shortcut panel with destinations disclosed on demand. The corner pocket remains optional.
 
 Implemented: nonactivating keyboard-capable panels; content-driven sizing; full destination label with a native menu; explicit handling of unavailable receivers; preserved manual shelf destinations; protection against stale binding confirmations; compact destination menu and optional naming; recent named destinations; selection-based corner panel; a single combined payload per handoff; work-intent preservation (v7 migration); recovery without clearing pending selections; serialized delivery; draft protection; no automatic Kimi new chat or terminal Enter; separate copied/prepared receipts; corrected destination acknowledgment and memory. Details and Mac acceptance: [compact handoff](docs/superpowers/specs/2026-10-20-compact-handoff.md).
 
@@ -72,7 +74,7 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 cd /Users/leo/Documents/Kimi/Workspaces/beamhop
 export DEVELOPER_DIR=/Library/Developer/CommandLineTools   # needed while Xcode license is unaccepted
 swift build                 # build all targets (incl. GRDB)
-swift run BeamhopSelfTest   # 206 checks, expect ALL PASS ✅
+swift run BeamhopSelfTest   # expect ALL PASS ✅, including focus + Inbox regressions
 ./packaging/build-app.sh    # assemble dist/Beamhop.app (auto-signs "Beamhop Sign" if set up)
 open dist/Beamhop.app       # first grant only: scripts/tcc-grant-runbook.md (stable identity ⇒ no re-grant after repacks)
 ```
@@ -152,6 +154,8 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ 3-hop browser bridge end-to-end; Readability body extraction (CDP-automated)
 - ✅ **Week 3 on-device (2026-10-18, user-verified)**: panel appears on ⌘⇧Space; target shortcuts; Enter/Esc semantics; <500ms same-window dedup (silent); Kimi Work paste-into-fresh-chat; ChatGPT v26 set-value injection; Inbox-only (⌘0) keeps capture
 - ✅ Logic: 206 SelfTest checks green (incl. DuplicateGate, PanelShortcut, TargetMemory, PromptRenderer, panel model + **essay-02 receiver-change two-step gate**, raw values, **EventStore + DogfoodReport + v5 reconcile + zh-Hans strings + AXDeadline**, MCP dedup + plan-A write-back, **TimelineBuilder detail chain**, **PocketStore + WorkStore v6 migrations**)
+- ✅ Historical PR #6 logic: SelfTest green, including focus/self-capture, Inbox external-write/selection/pagination/error and deterministic timeline coverage; XCTest mirror added in `FocusInboxRegressionTests.swift`.
+- ✅ Historical PR #6 native fixture: 20 consecutive panel open/cancel cycles; self capture creates no DB row; save/clipboard returns focus; click-away and delivery retain destination focus; late completion does not affect a new panel; Inbox polls two agents' write-backs. Uses temporary fixture apps/database only.
 - ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
@@ -198,11 +202,14 @@ From Week 0 spikes + 4 codex review rounds + 2026-10 on-device debugging, all en
 ## 7. Next steps (dependency-ordered)
 
 **A. Unblock formal engineering (user action, ~2 min)**
-1. ~~`sudo xcodebuild -license accept`~~ — stale: `swift test` already works locally via the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`); CI runs both suites on macos-15.
+1. XCTest requires full Xcode on each Mac. The original development Mac has CLT only; another machine’s successful test run does not add that framework. CI runs both suites on macos-15. Windows uses hosted validation.
 2. Developer ID signing for `dist/Beamhop.app` remains the public-release gate (paid Apple account).
 3. **One-time Accessibility grant** (screen must be unlocked; everything else automated): follow `scripts/tcc-grant-runbook.md` — after this, repacks no longer drop the grant.
 
 **B. Perf & acceptance closure (Week 3 leftovers)**
+- ✅ Focus restoration and self-capture fixes + native fixture regression (`codex/focus-inbox-results`). Inbox conclusions are now actually loaded/rendered by the UI; earlier MCP write-back acceptance established storage/protocol behavior only.
+- ⬜ Re-test real-app capture → panel → cancel/delivery on a fresh `.app`, especially fullscreen/Stage Manager/multiple displays with the nonactivating compact panel.
+- ⬜ Re-measure real-source hotkey→panel latency. The original 211ms session mostly captured Beamhop itself; `panel_ms` still times only `showPanel`, not the preceding capture. Do not use it as a complete real-source latency gate.
 - ✅ 20-press P95 done 2026-10-18 (211ms, results in §8) — method deviation: info-level os_log is not persisted on this Mac; used screen-diff + DB columns instead of the §3 grep.
 - Ongoing tracking is automated: run `scripts/dogfood-metrics.sh` weekly during the dogfood window (panel_ms now also durable in `events`).
 - ✅ §7-C focus-stealing fix landed 2026-10-19 (restore pre-panel frontmost on Esc/⌘0/clipboard-degrade).
@@ -241,7 +248,7 @@ User-verified this session:
 Perf P95: ✅ **2026-10-18, 20-press automated session (synthetic ⌘⇧Space via CGEventPost; panel visibility detected by screencapture crop-diff; capture_ms read from the DB `capture_duration_ms` column)**. Method deviation: this Mac does NOT persist info-level os_log messages (`log show` only ever shows errors from Beamhop, and `log stream` captures nothing) — the spec §3 grep method is unusable here, so panel latency was measured as press→panel-visible-on-screen.
 - press→panel-visible: 18/20 valid samples (2 synthetic presses were dropped by the OS), min 179 / median 195 / **P95 211 / max 211 ms** — end-to-end is already under the 300ms panel_ms budget, and in-app panel_ms is only a fraction of this number. ✅
 - capture_ms (session): P95 = 6ms, but 17/20 presses captured Beamhop itself (0ms AX — see focus-stealing finding below), so this is the optimistic floor. Real-app reference from today's organic captures: Chrome 122–155ms, Kimi 3–55ms. Worst realistic end-to-end ≈ 155 + ~150 ≈ 300ms — right at budget; fine for now, re-measure with Chrome frontmost if it ever feels slow.
-- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). ~~Candidate fix: app-activate the pre-capture frontmost app on panel close (or exclude self in CaptureService). Logged in §7-C.~~ **Fixed 2026-10-19** (`restorePrePanelFocus` in AppServices).
+- Dogfood finding: after the panel closes (Esc/deliver), frontmost stays Beamhop — the next capture grabs Beamhop itself (useless 0ms rows in the log). **Fixed in the 2026-10-19 patch**: restore source conditionally, preserve destination/user focus, reject own PID/bundle before reading or inserting. Native fixture regression passed; real-source perf sampling remains pending.
 
 Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_desktop versions_tested += 26.1007.71326 (dual bundle id, AXEditable gone, composer depth ~30, set-value OK); kimi_work added (paste-injection mechanism, new-chat button desc).
 

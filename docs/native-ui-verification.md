@@ -4,10 +4,11 @@ Beamhop's feature branch runs its production AppKit/SwiftUI views on GitHub's `m
 
 ## Run and inspect
 
-Push to `feat/phase15-detail-chain`. The CI workflow builds and tests Swift, assembles the app, and runs `scripts/native-ui-smoke.sh` against the packaged binary. The same script can run on a Mac:
+Push to `feat/phase15-detail-chain`. The CI workflow builds and tests Swift, assembles the app, and runs `scripts/native-ui-smoke.sh` against the packaged binary. It also runs the debug `--ui-regression` harness for repeated focus transitions and Inbox writes from a separate MCP process. The same checks can run on a Mac:
 
 ```sh
 bash scripts/native-ui-smoke.sh dist/Beamhop.app dist/ui-smoke
+"$(swift build --show-bin-path)/Beamhop" --ui-regression dist/ui-smoke/focus-inbox
 ```
 
 CI retains three artifacts:
@@ -24,12 +25,14 @@ Each case runs in English and Simplified Chinese, in light and dark appearance:
 
 - The capture panel stays nonactivating, receives keyboard focus and initially focuses the note editor. Text entered into that native editor updates the model.
 - Destination shortcuts work before opening the menu. Unavailable shortcuts are ignored. Opening and choosing a native menu item preserves the panel.
-- Escape closes once. Confirming and holding do not also cancel. Replacing a capture saves the previous note. Losing key-window status takes the cancellation path.
+- Escape closes once. Confirming and holding do not also cancel. Replacing a capture saves the previous note; callbacks from the replaced model cannot confirm, cancel or hold the new capture. Losing key-window status takes the cancellation path.
 - Long notes and confirmation/error text fit the actual panel. Exact shelf positioning across multiple displays is still part of integration acceptance.
 - A subset of held materials survives closing/reopening and failure. A successful handoff removes only those selected rows. Source text and notes remain recoverable.
 - Production views are rendered to PNGs from their `NSHostingView`, at actual size. Review these visually in addition to checking assertions: a valid layout can still hide information.
 
 Core tests separately cover unavailable receivers, explicit destination choices, work isolation, delayed confirmation receipts, migrations and ordered payloads. These tests run before the UI harness.
+
+The focus/Inbox harness adds 20 consecutive open/cancel cycles, source nonactivation with panel keyboard ownership, self-capture rejection, destination/Inbox focus preservation, and live refresh after an MCP subprocess writes a conclusion. Its temporary source and destination apps contain no user data. The fixture's Inbox PNG and log are included in the native UI artifact.
 
 A permanent copy of the reviewed PNGs and reports is available in the [native macOS gallery](https://willamhou.github.io/beamhop/native-ui/) on the separate `gh-pages` branch. The gallery identifies the tested revision; it is not a live view of the latest app build.
 
