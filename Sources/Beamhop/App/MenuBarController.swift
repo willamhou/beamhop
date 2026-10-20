@@ -9,15 +9,18 @@ final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
     private let onCapture: () -> Void
     private let onInbox: () -> Void
+    private let onPocket: () -> Void
     private let onDiagnostics: () -> Void
     private let onCompatibility: () -> Void
 
     init(onCapture: @escaping () -> Void,
          onInbox: @escaping () -> Void,
+         onPocket: @escaping () -> Void,
          onDiagnostics: @escaping () -> Void,
          onCompatibility: @escaping () -> Void) {
         self.onCapture = onCapture
         self.onInbox = onInbox
+        self.onPocket = onPocket
         self.onDiagnostics = onDiagnostics
         self.onCompatibility = onCompatibility
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -31,6 +34,7 @@ final class MenuBarController: NSObject {
         let menu = NSMenu()
         menu.addItem(item(L10n.s("Capture frontmost  ⌘⇧Space"), #selector(capture)))
         menu.addItem(item(L10n.s("Inbox  ⌘⇧I"), #selector(inbox)))
+        menu.addItem(item(L10n.s("Pocket  ⌘⇧P"), #selector(pocket)))
         menu.addItem(.separator())
         menu.addItem(item(L10n.s("Diagnostics…"), #selector(diagnostics)))
         menu.addItem(item(L10n.s("Compatibility Matrix…"), #selector(compatibility)))
@@ -111,6 +115,7 @@ final class MenuBarController: NSObject {
 
     @objc private func capture() { onCapture() }
     @objc private func inbox() { onInbox() }
+    @objc private func pocket() { onPocket() }
     @objc private func diagnostics() { onDiagnostics() }
     @objc private func compatibility() { onCompatibility() }
     @objc private func quit() { NSApp.terminate(nil) }

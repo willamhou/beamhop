@@ -2,6 +2,8 @@
 
 Date: 2026-10-19. Base: `main` at `1bb64e1`. Branch: `codex/focus-inbox-results`. Validation below is local; real-device acceptance and merge are still pending.
 
+**Integration update, 2026-10-20:** PR #6 merged this patch into `main` at `2b5b32d`. PR #7 integrates it with the compact handoff and corner shelf. The panel now remains nonactivating while taking keyboard input; the old activating-window behavior and local results below are historical. Presentation guards, self-capture rejection and Inbox refresh remain, and CI runs the adapted fixture alongside the compact-panel checks. See [current verification](../native-ui-verification.md) for the current workflow and evidence boundaries.
+
 ## Behavior
 
 - Capture rejects its own PID (SwiftPM as well as bundled app) or `com.beamhop.app` before AX reads and DB inserts.

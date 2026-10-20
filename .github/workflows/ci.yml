@@ -10,10 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build all Swift products
-        run: swift build
+        run: |
+          set -o pipefail
+          swift build 2>&1 | tee swift-build.log
       - name: Swift tests (BeamhopCore)
         run: swift test
-      - name: Self-test (28 storage checks, XCTest-free)
+      - name: Self-test (storage, handoff, focus and Inbox)
         run: swift run BeamhopSelfTest
       - name: MCP stdio smoke test (S1 framing + seeded content)
         run: scripts/mcp-smoke.sh
@@ -23,12 +25,38 @@ jobs:
         run: scripts/native-manifest-smoke.sh
       - name: Assemble Beamhop.app (ad-hoc)
         run: ./packaging/build-app.sh
-      - name: Upload Beamhop.app artifact (main only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Native UI interactions and screenshots
+        run: bash scripts/native-ui-smoke.sh
+      - name: Native focus and Inbox write-back regression
+        timeout-minutes: 3
+        run: |
+          set -o pipefail
+          "$(swift build --show-bin-path)/Beamhop" --ui-regression dist/ui-smoke/focus-inbox 2>&1 | tee dist/ui-smoke/focus-inbox.log
+      - name: Upload native UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beamhop-native-ui-${{ github.sha }}
+          path: dist/ui-smoke
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beamhop-build-log-${{ github.sha }}
+          path: swift-build.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Archive Beamhop.app with executable permissions
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
+        run: ditto -c -k --sequesterRsrc --keepParent dist/Beamhop.app dist/Beamhop-macOS.zip
+      - name: Upload Beamhop.app artifact
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
         uses: actions/upload-artifact@v4
         with:
           name: Beamhop-app-${{ github.sha }}
-          path: dist/Beamhop.app
+          path: dist/Beamhop-macOS.zip
           if-no-files-found: error
           retention-days: 30
 
@@ -51,6 +79,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Development signing credential regression checks
+        run: python3 scripts/dev-signing-smoke.py
       - name: ShellCheck all shell scripts
         run: |
           find scripts host packaging cowork-extension -name '*.sh' -print0 | xargs -0 shellcheck

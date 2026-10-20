@@ -5,7 +5,7 @@ import BeamhopCore
 /// Owns the NSPanel shell for the capture panel (Week 3 spec §3.1, S5 configuration verbatim).
 /// Panel hides — never destroys — so re-shows are instant and hotkeys keep working (S5).
 final class CapturePanelController {
-    private var panel: NSPanel?
+    private(set) var panel: HandoffPanel?
     /// Guard against the confirm → orderOut → didResignKey race (plan Task 2.2): once a
     /// delivery is in flight, a resign triggered by our own hide must not run the cancel path.
     private(set) var isDelivering = false
@@ -21,11 +21,19 @@ final class CapturePanelController {
     private(set) var currentModel: CapturePanelModel?
 
     /// Show (or replace) the panel for a capture. `onConfirm` receives the chosen target
-    /// (nil = 仅入 Inbox) and the note; `onCancel` = Esc / focus-loss path.
+    /// (nil = 仅入 Inbox) and the note; `onCancel` = Esc / focus-loss path; `onHold` = 「先留着」
+    /// (essay 01) — park in the pocket instead of delivering.
     func show(capture: Capture,
               defaultTarget: DeliveryTarget?,
+              visibleTargets: [DeliveryTarget] = DeliveryTarget.allCases,
+              boundWork: Work? = nil,
+              workName: String = "",
+              availableWorks: [Work] = [],
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
-              onCancel: @escaping () -> Void) {
+              onCancel: @escaping () -> Void,
+              onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
+        // A new capture replaces the previous one only after its draft has been saved.
+        if isVisible && !finished { currentModel?.cancel() }
         // Keep the running-app object rather than resolving the PID on close (PID reuse).
         sourceApp = NSRunningApplication(processIdentifier: pid_t(capture.pid))
         captureID = capture.id
@@ -34,6 +42,10 @@ final class CapturePanelController {
         let model = CapturePanelModel(
             capture: capture,
             initialTarget: defaultTarget,
+            visibleTargets: visibleTargets,
+            boundWork: boundWork,
+            workName: workName,
+            availableWorks: availableWorks,
             onConfirm: { [weak self] target, note in
                 guard let self, !self.finished, self.presentation == presentation else { return }
                 self.finished = true
@@ -52,6 +64,15 @@ final class CapturePanelController {
                 self.hide()
                 self.restoreSourceIfStillActive(captureID: capture.id)
                 onCancel()
+            },
+            onHold: onHold.map { handler in
+                { [weak self] target, note in
+                    guard let self, !self.finished, self.presentation == presentation else { return }
+                    self.finished = true
+                    self.hide()
+                    self.restoreSourceIfStillActive(captureID: capture.id)
+                    handler(target, note)
+                }
             }
         )
 
@@ -59,7 +80,17 @@ final class CapturePanelController {
         finished = false
         isDelivering = false   // a new showing supersedes any in-flight delivery race guard
         currentModel = model
-        panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model))
+        panel?.onEscape = { [weak model] in model?.cancel() }
+        panel?.onShortcut = { [weak model] key in model?.handleShortcut(key) ?? false }
+        panel?.onReturn = { [weak model] in model?.confirm() }
+        panel?.contentView = NSHostingView(rootView: CapturePanelView(model: model)
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(PanelSizeReader { [weak self] size in
+                DispatchQueue.main.async {
+                    guard let self, self.presentation == presentation, !self.finished else { return }
+                    self.panel?.fitContent(size)
+                }
+            }))
         panel?.standardWindowButton(.closeButton)?.isHidden = true
         panel?.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel?.standardWindowButton(.zoomButton)?.isHidden = true
@@ -88,9 +119,7 @@ final class CapturePanelController {
         }
         self.cancelHandler = onCancel
 
-        // This panel deliberately activates Beamhop for keyboard input. Combining explicit
-        // activation with .nonactivatingPanel left stale key-focus transitions on re-open.
-        NSApp.activate(ignoringOtherApps: true)
+        // Key input belongs to the panel; the source application remains active.
         panel?.makeKeyAndOrderFront(nil)
     }
 
@@ -105,7 +134,11 @@ final class CapturePanelController {
     /// older source, steal focus from the destination, or leave the Inbox while it is in use.
     func restoreSourceIfStillActive(captureID: String) {
         guard self.captureID == captureID, let sourceApp else { return }
-        let hasOtherWindow = NSApp.keyWindow.map { $0.isVisible && $0 !== panel } ?? false
+        // A document window can already be opening while AppKit still reports the outgoing
+        // panel (or nil) as key. Do not let source restoration overtake that activation.
+        let hasOtherWindow = NSApp.windows.contains {
+            $0 !== panel && $0.isVisible && ($0.canBecomeMain || $0.isKeyWindow)
+        }
         guard CaptureFocusPolicy.shouldRestore(
             sourcePID: sourceApp.processIdentifier,
             ownPID: ProcessInfo.processInfo.processIdentifier,
@@ -120,10 +153,10 @@ final class CapturePanelController {
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
     }
 
-    private func makePanel() -> NSPanel {
-        let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 340),
-            styleMask: [.titled, .fullSizeContentView, .resizable],
+    private func makePanel() -> HandoffPanel {
+        let p = HandoffPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered, defer: false)
         p.level = .floating                                    // above fullscreen apps (S5)
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]

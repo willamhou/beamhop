@@ -24,8 +24,10 @@ final class InboxWindowController: NSObject, NSWindowDelegate {
         model.logOpened()
         model.reload()
         window?.contentView = NSHostingView(rootView: InboxView(model: model))
+        // Opening the Inbox is an explicit application switch. A nonactivating capture
+        // panel can make NSApp appear active while another process remains foreground.
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -132,12 +134,10 @@ private struct CaptureRow: View {
             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
 
             if let latest {
-                Label(latest.status == .success
-                      ? "Delivered \(latest.target.rawValue)"
-                      : "Delivery failed: \(latest.errorMessage ?? "unknown reason")",
-                      systemImage: latest.status == .success ? "checkmark.circle" : "exclamationmark.circle")
+                Label("\(latest.status.displayName) · \(latest.target.displayName)",
+                      systemImage: latest.status.isSuccessful ? "checkmark.circle" : "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundStyle(latest.status == .success ? Color.green : Color.orange)
+                    .foregroundStyle(latest.status.isSuccessful ? Color.green : Color.orange)
             } else {
                 Text("Not delivered").font(.caption).foregroundStyle(.tertiary)
             }
@@ -202,22 +202,22 @@ private struct CaptureDetail: View {
                         ForEach(history, id: \.stableID) { entry in
                             switch entry {
                             case .delivery(let d):
-                            HStack(alignment: .top) {
-                                Image(systemName: d.status == .success
-                                      ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .foregroundStyle(d.status == .success ? Color.green : Color.orange)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(d.target.rawValue) · \(d.status.rawValue)")
-                                        .font(.callout)
-                                    if let err = d.errorMessage {
-                                        Text(err).font(.caption).foregroundStyle(.secondary)
+                                HStack(alignment: .top) {
+                                    Image(systemName: d.status.isSuccessful
+                                          ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        .foregroundStyle(d.status.isSuccessful ? Color.green : Color.orange)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(d.target.displayName) · \(d.status.displayName)")
+                                            .font(.callout)
+                                        if let err = d.errorMessage {
+                                            Text(err).font(.caption).foregroundStyle(.secondary)
+                                        }
                                     }
+                                    Spacer()
+                                    Text(Date(timeIntervalSince1970: Double(d.deliveredAt) / 1000),
+                                         format: .relative(presentation: .named))
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
-                                Spacer()
-                                Text(Date(timeIntervalSince1970: Double(d.deliveredAt) / 1000),
-                                     format: .relative(presentation: .named))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
                             case .result(let result):
                                 AgentConclusionView(result: result)
                             }

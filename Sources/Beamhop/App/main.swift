@@ -1,6 +1,22 @@
 import AppKit
 import BeamhopCore
 
+// An opt-in native UI harness for hosted Macs. It uses isolated fixtures and never
+// bootstraps hotkeys, permissions, external agent delivery, or the user's Inbox.
+if let index = CommandLine.arguments.firstIndex(of: "--ui-smoke"),
+   CommandLine.arguments.count > index + 1 {
+    let output = URL(fileURLWithPath: CommandLine.arguments[index + 1])
+    let language = CommandLine.arguments.contains("--zh") ? "zh-Hans" : "en"
+    do {
+        let passed = try NativeUISmoke.run(output: output, language: language,
+                                           dark: CommandLine.arguments.contains("--dark"))
+        exit(passed ? 0 : 1)
+    } catch {
+        fputs("[native-ui] \(error)\n", stderr)
+        exit(1)
+    }
+}
+
 #if DEBUG
 // Isolated fixtures only: no real DB, hotkeys, MCP registration, paste or synthetic key events.
 if CommandLine.arguments.contains("--focus-fixture") {

@@ -35,19 +35,43 @@ final class Week3FeatureTests: XCTestCase {
     func testPanelShortcutMapping() {
         XCTAssertEqual(PanelShortcut.claudeCode.target, .claudeCode)
         XCTAssertEqual(PanelShortcut.chatgptDesktop.target, .chatgptDesktop)
-        XCTAssertEqual(PanelShortcut.cowork.target, .cowork)
+        // 2026-10-19 UI pass: ⌘3 is clipboard, not the fake "Cowork → clipboard"
+        XCTAssertEqual(PanelShortcut.clipboard.target, .clipboard)
         XCTAssertEqual(PanelShortcut.kimiWork.target, .kimiWork)
         XCTAssertNil(PanelShortcut.inboxOnly.target)
-        XCTAssertEqual(PanelShortcut.allCases.count, 5)
-        XCTAssertEqual(Set(PanelShortcut.allCases.map(\.rawValue)), Set(["0", "1", "2", "3", "4"]))
+        // essay 01: ⌘5 「先留着」 is a sixth shortcut (nil target like inbox-only, isHold)
+        XCTAssertEqual(PanelShortcut.hold.rawValue, "5")
+        XCTAssertTrue(PanelShortcut.hold.isHold)
+        XCTAssertEqual(PanelShortcut.allCases.count, 6)
+        XCTAssertEqual(Set(PanelShortcut.allCases.map(\.rawValue)), Set(["0", "1", "2", "3", "4", "5"]))
         XCTAssertEqual(PanelShortcut.kimiWork.badge, "⌘4")
     }
 
     func testEveryDeliverableTargetHasShortcut() {
         let mapped = Set(PanelShortcut.allCases.compactMap(\.target))
-        for t in DeliveryTarget.allCases where t != .clipboard {
+        // .cowork is the only exception: S2 integration doesn't exist yet, so the
+        // panel must not pretend it can deliver there.
+        for t in DeliveryTarget.allCases where t != .cowork {
             XCTAssertTrue(mapped.contains(t), "target \(t.rawValue) has no panel shortcut")
         }
+    }
+
+    // MARK: TargetAvailability (only REAL destinations on the panel — no fake choices)
+
+    func testTargetAvailabilityResolveAndFallback() {
+        let all = TargetAvailability.resolve(hasClaudeCLI: true, hasChatGPTApp: true, hasKimiApp: true)
+        XCTAssertEqual(all, [.claudeCode, .chatgptDesktop, .kimiWork, .clipboard])
+        XCTAssertEqual(TargetAvailability.resolve(hasClaudeCLI: false, hasChatGPTApp: false, hasKimiApp: false),
+                         [.clipboard])
+        XCTAssertEqual(TargetAvailability.usable(.kimiWork, among: all), .kimiWork)
+        XCTAssertNil(TargetAvailability.usable(.kimiWork, among: [.chatgptDesktop, .clipboard]))
+        XCTAssertNil(TargetAvailability.usable(nil, among: all))
+        // the model applies the same fallback to its initial target
+        let m = CapturePanelModel(capture: sampleCapture(), initialTarget: .cowork,
+                                  visibleTargets: [.claudeCode, .clipboard],
+                                  onConfirm: { _, _ in }, onCancel: {})
+        XCTAssertNil(m.selectedTarget)
+        XCTAssertFalse(m.canConfirm)
     }
 
     // MARK: TargetMemory (panel pre-selects last successful target)
@@ -124,7 +148,7 @@ final class Week3FeatureTests: XCTestCase {
         let m = panelModel(capture: cap)
         XCTAssertEqual(m.summaryLine, "Kimi · Kimi Work · 20 chars")
         XCTAssertEqual(m.previewText, String(repeating: "字", count: 25))
-        XCTAssertEqual(m.confirmLabel, "Deliver (Kimi Work)")
+        XCTAssertEqual(m.confirmLabel, "Fill & review")
     }
 
     func testPanelConfirmCarriesTargetAndNote() {
@@ -159,6 +183,32 @@ final class Week3FeatureTests: XCTestCase {
         XCTAssertEqual(m.summaryLine, "A")
         XCTAssertEqual(m.targetLabel(.cowork), "Cowork → clipboard")
         XCTAssertEqual(m.targetLabel(.clipboard), "Clipboard")
+    }
+
+    // MARK: Essay 02 — work / receiving-session two-layer destination + rebind gate
+
+    func testPanelReceiverChangeRequiresAck() {
+        let cap = sampleCapture()
+        // bound == confirmed: the stored work has NO pending rebind…
+        let work = Work(name: "焦点行为检查", boundTarget: .claudeCode, confirmedTarget: .claudeCode)
+        var fired: [(DeliveryTarget?, String)] = []
+        let m = CapturePanelModel(capture: cap, initialTarget: .chatgptDesktop, boundWork: work,
+                                  onConfirm: { t, n in fired.append((t, n)) }, onCancel: {})
+        // …but picking a DIFFERENT receiver in-panel IS a rebind → two-step gate
+        XCTAssertFalse(m.workNeedsConfirmation)
+        XCTAssertTrue(m.receiverChanged)
+        XCTAssertTrue(m.confirmLabel.contains("Use "))
+        XCTAssertTrue(m.destinationSubtitle?.contains("Receiving app changed") == true)
+        m.confirm()
+        XCTAssertTrue(fired.isEmpty, "first confirm only acknowledges the new address")
+        m.confirm()
+        XCTAssertEqual(fired.count, 1)
+        XCTAssertEqual(fired[0].0, .chatgptDesktop)
+
+        // unchanged receiver → no gate (mirror of SelfTest m5)
+        let m2 = CapturePanelModel(capture: cap, initialTarget: .claudeCode, boundWork: work,
+                                   onConfirm: { _, _ in }, onCancel: {})
+        XCTAssertFalse(m2.receiverChanged)
     }
 
     // MARK: DeliveryTarget raw values

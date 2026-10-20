@@ -51,23 +51,21 @@ enum UIRegression {
             let panel = CapturePanelController()
             var cancelCount = 0
             func show(_ capture: Capture? = nil, target: DeliveryTarget? = nil) throws {
-                // AppKit activation is asynchronous. Do not queue a second source activation
-                // after a cancel has already requested it: that late request can overtake the
-                // next panel's activation and would not model a user's next hotkey press.
+                // The source remains active while the nonactivating panel takes keyboard
+                // input. Wait for any previous activation before opening the next panel.
                 if frontPID != source.processIdentifier { source.activate(options: []) }
                 try wait("source activates") { frontPID == source.processIdentifier && !NSApp.isActive }
                 panel.show(capture: capture ?? cap, defaultTarget: target, onConfirm: { _, _ in },
                            onCancel: { cancelCount += 1 })
-                try wait("panel owns focus") {
-                    frontPID == ProcessInfo.processInfo.processIdentifier && NSApp.isActive
-                        && panel.isVisible && NSApp.keyWindow?.isKeyWindow == true
+                // NSApp.isActive can become true when a nonactivating panel takes key input.
+                // NSWorkspace's foreground PID is the source-activation contract.
+                try wait("panel owns keyboard while source stays active") {
+                    frontPID == source.processIdentifier
+                        && panel.isVisible && panel.panel?.isKeyWindow == true
                 }
             }
 
             try show()
-            if case .rejected = CaptureService(store: store).captureFrontmost() {
-                try expect(try store.count() == 1, "self capture does not create a row")
-            } else { throw Failure(description: "self-capture guard did not reject the app") }
             panel.currentModel?.cancel()
             try wait("Esc restores the source") { frontPID == source.processIdentifier && !panel.isVisible }
             try expect(cancelCount == 1, "cancel callback fires exactly once")
@@ -107,7 +105,7 @@ enum UIRegression {
             try show(newer)
             panel.restoreSourceIfStillActive(captureID: cap.id)
             pump(seconds: 0.2)
-            try expect(panel.isVisible && frontPID == ProcessInfo.processInfo.processIdentifier,
+            try expect(panel.isVisible && panel.panel?.isKeyWindow == true && frontPID == source.processIdentifier,
                        "late old delivery cannot dismiss a newer panel")
             panel.currentModel?.cancel()
 
@@ -115,8 +113,19 @@ enum UIRegression {
             inbox.model.configure(store: store, events: nil, onDeliver: { _, _ in })
             try show()
             inbox.show()
-            try wait("Inbox key window cancels panel") { !panel.isVisible && NSApp.keyWindow?.title == "Beamhop Inbox" }
+            // A key-window change can precede the foreground activation notification.
+            try wait("Inbox becomes foreground and cancels panel") {
+                !panel.isVisible && NSApp.keyWindow?.title == "Beamhop Inbox"
+                    && frontPID == ProcessInfo.processInfo.processIdentifier
+            }
+            panel.restoreSourceIfStillActive(captureID: cap.id)
+            pump(seconds: 0.2)
             try expect(frontPID == ProcessInfo.processInfo.processIdentifier, "Inbox keeps its own focus")
+            // Test self-capture from the real foreground Inbox. There is no need to activate
+            // a windowless accessory app while the fixture processes are still launching.
+            if case .rejected = CaptureService(store: store).captureFrontmost() {
+                try expect(try store.count() == 1, "self capture does not create a row")
+            } else { throw Failure(description: "self-capture guard did not reject the app") }
             inbox.model.selectedID = cap.id
             try expect(inbox.model.selectedResults.isEmpty, "Inbox starts with empty conclusion state")
             try saveViaMCP(path: path, captureID: cap.id)
@@ -207,8 +216,9 @@ enum UIRegression {
     }
 
     private static func waitForApp(_ process: Process) throws -> NSRunningApplication {
-        try wait("fixture app launches") {
+        try wait("fixture app finishes launching and activates") {
             NSRunningApplication(processIdentifier: process.processIdentifier)?.isFinishedLaunching == true
+                && frontPID == process.processIdentifier
         }
         guard let app = NSRunningApplication(processIdentifier: process.processIdentifier) else {
             throw Failure(description: "fixture app not registered")

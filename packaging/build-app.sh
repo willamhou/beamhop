@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
+# Keep credentials out of shell traces and child-process environments.
+set +x
 set -euo pipefail
+signing_password="${BEAMHOP_KEYCHAIN_PASSWORD:-}"
+unset BEAMHOP_KEYCHAIN_PASSWORD
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 output_dir="$repo_root/dist"
@@ -47,10 +51,37 @@ fi
 cp -R "$resource_bundle" "$contents/Resources/$(basename "$resource_bundle")"
 
 plutil -lint "$contents/Info.plist"
+
+# Stable dev signing (scripts/setup-dev-signing.sh): when the dedicated keychain exists,
+# prefer the self-signed "Beamhop Sign" identity over ad-hoc — TCC then anchors the grant
+# to the certificate and survives repacks (ad-hoc cdhash changes drop it every time).
+dev_keychain="$HOME/Library/Keychains/beamhop-sign.keychain-db"
+if [[ -z "${BEAMHOP_CODESIGN_IDENTITY:-}" && -f "$dev_keychain" ]] \
+    && security find-certificate -c "Beamhop Sign" "$dev_keychain" >/dev/null 2>&1; then
+  BEAMHOP_CODESIGN_IDENTITY="Beamhop Sign"
+  BEAMHOP_CODESIGN_KEYCHAIN="$dev_keychain"
+  echo "dev signing: using 'Beamhop Sign' from $dev_keychain"
+fi
+
+codesign_args=(--force --deep --options runtime)
 if [[ -n "${BEAMHOP_CODESIGN_IDENTITY:-}" ]]; then
-  codesign --force --deep --options runtime --sign "$BEAMHOP_CODESIGN_IDENTITY" "$staging/Beamhop.app"
+  if [[ -n "${BEAMHOP_CODESIGN_KEYCHAIN:-}" ]]; then
+    # self-signed: no notarization-timestamp service; --timestamp=none keeps signing offline
+    # Without a supplied password, use a keychain already unlocked by its owner.
+    if [[ -n "$signing_password" ]] && ! security unlock-keychain -p "$signing_password" "$BEAMHOP_CODESIGN_KEYCHAIN"; then
+      echo "Could not unlock the signing keychain; check the supplied password." >&2
+      exit 5
+    fi
+    codesign_args+=(--keychain "$BEAMHOP_CODESIGN_KEYCHAIN" --timestamp=none)
+  fi
+  unset signing_password
+  if ! codesign "${codesign_args[@]}" --sign "$BEAMHOP_CODESIGN_IDENTITY" "$staging/Beamhop.app"; then
+    echo "Signing failed. Unlock the keychain in Keychain Access or supply BEAMHOP_KEYCHAIN_PASSWORD through a secret provider." >&2
+    exit 5
+  fi
 else
-  codesign --force --deep --sign - "$staging/Beamhop.app"
+  unset signing_password
+  codesign "${codesign_args[@]}" --sign - "$staging/Beamhop.app"
 fi
 
 mkdir -p "$output_dir"

@@ -20,6 +20,11 @@ public final class EventStore {
         public static let captureViewed = "capture_viewed"
         public static let captureSoftDeleted = "capture_soft_deleted"
         public static let inboxRedeliver = "inbox_redeliver"
+        // 「先留着」pocket events (2026-10-19 product essays)
+        public static let pocketHold = "pocket_hold"
+        public static let pocketBatch = "pocket_batch"
+        public static let pocketItemDelivered = "pocket_item_delivered"
+        public static let pocketItemFailed = "pocket_item_failed"
     }
 
     struct Row: Codable, FetchableRecord, MutablePersistableRecord {
