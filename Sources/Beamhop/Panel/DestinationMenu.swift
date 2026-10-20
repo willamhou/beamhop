@@ -16,7 +16,7 @@ final class DestinationMenuPresenter: NSObject {
         actions = []
         func add(_ title: String, selected: Bool = false, enabled: Bool = true,
                  shortcut: String = "", action: @escaping () -> Void) {
-            let item = NSMenuItem(title: title, action: #selector(perform(_:)), keyEquivalent: shortcut)
+            let item = NSMenuItem(title: title, action: #selector(chooseDestination(_:)), keyEquivalent: shortcut)
             item.target = self
             item.tag = actions.count
             item.isEnabled = enabled
@@ -48,7 +48,7 @@ final class DestinationMenuPresenter: NSObject {
         activeMenu = nil
     }
 
-    @objc private func perform(_ sender: NSMenuItem) {
+    @objc private func chooseDestination(_ sender: NSMenuItem) {
         guard actions.indices.contains(sender.tag) else { return }
         actions[sender.tag]()
     }
