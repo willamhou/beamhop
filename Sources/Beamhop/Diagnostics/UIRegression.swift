@@ -57,8 +57,10 @@ enum UIRegression {
                 try wait("source activates") { frontPID == source.processIdentifier && !NSApp.isActive }
                 panel.show(capture: capture ?? cap, defaultTarget: target, onConfirm: { _, _ in },
                            onCancel: { cancelCount += 1 })
+                // NSApp.isActive can become true when a nonactivating panel takes key input.
+                // NSWorkspace's foreground PID is the source-activation contract.
                 try wait("panel owns keyboard while source stays active") {
-                    frontPID == source.processIdentifier && !NSApp.isActive
+                    frontPID == source.processIdentifier
                         && panel.isVisible && panel.panel?.isKeyWindow == true
                 }
             }
