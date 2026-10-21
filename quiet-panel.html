@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>先响应，再理解 · Beamhop 交互随笔 03</title>
+<meta name="description" content="一个无需模型的小浮层：提示词直接输入，本地检索与推荐，相关经验按需展开。">
+<meta property="og:type" content="article"><meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="先响应，再理解 · Beamhop">
+<meta property="og:url" content="https://willamhou.github.io/beamhop/quiet-panel.html">
+<link rel="canonical" href="https://willamhou.github.io/beamhop/quiet-panel.html">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./quiet-panel.css">
+<link rel="stylesheet" href="./site-nav.css">
+</head>
+<body>
+<header class="site-header"><a class="site-brand" href="./index.html">Beamhop</a><nav class="site-primary" aria-label="站点导航"><a href="./index.html">首页</a><a href="./index.html#essays" aria-current="page">交互随笔</a><a href="./native-ui/index.zh.html">原生界面</a></nav><nav class="site-language" aria-label="Language"><a href="./quiet-panel.html" lang="zh-CN" hreflang="zh-CN" aria-current="true">中文</a><span aria-hidden="true">/</span><a href="./quiet-panel.en.html" lang="en" hreflang="en">English</a></nav></header><nav class="site-essays" aria-label="随笔目录"><a href="./handoff.html">01 · 让信息过去</a><a href="./work-in-hand.html">02 · 事情可以分岔</a><a href="./quiet-panel.html" aria-current="page">03 · 先响应，再理解</a><a href="./product-notes.html">产品讨论</a></nav>
+<main>
+<article>
+<div class="essay-body essay-intro"><p class="eyebrow">交互随笔 03 · 设计探索</p><h1>先响应，<br>再理解。</h1><p class="lead">一个顺手的工具，不能让你站在门口等它想明白。</p><p>选中一段话，唤起 Beamhop。材料已经在手里，去处看得见，想交代什么，直接写。至于它还能联想到什么，可以稍后再看。</p></div>
+<section class="demo-section" aria-label="轻量浮层交互预演">
+<div class="demo-heading"><span>试一试 · 所有资料与连接均为模拟</span><label>本地索引<select id="suggestion-speed"><option value="cached">已就绪</option><option value="slow">后台更新中</option><option value="none">暂无相关记录</option></select></label></div>
+<div class="demo-source"><span>邮件 · 客户 A</span><button type="button" id="capture-selection">业务数据不能离开公司内网。</button><button type="button" id="resume-work">接着做…</button></div>
+<div class="panel-stage">
+<section id="quick-panel" class="quick-panel" aria-label="Beamhop 捕获浮层">
+<div class="material-row"><button type="button" id="show-material" class="material-button" aria-expanded="false"><span>邮件 · 客户 A</span><span class="material-excerpt">业务数据不能离开公司内网。</span></button><span class="suggestion-slot"><button type="button" id="show-reference" aria-expanded="false" hidden>相关经验 · 1</button></span></div>
+<label for="quick-prompt" class="prompt-label">提示词 <span>可选</span></label><textarea id="quick-prompt" rows="1" maxlength="1500" placeholder="希望怎么处理这段材料？"></textarea>
+<div class="quick-footer"><label class="sr-only" for="quick-target">交给哪件工作</label><select id="quick-target"><option value="client">客户 A · 部署方案</option><option value="product">项目 B · 部署试点</option></select><button type="button" id="hold">先留着</button><button type="button" id="prepare" class="default-action">填入并查看 <kbd>⌘↵</kbd></button></div>
+</section>
+<div class="demo-feedback" role="status" aria-live="polite"><span id="feedback"></span><button type="button" id="reopen" hidden>继续刚才的输入</button><button type="button" id="undo-link" hidden>撤销关联</button></div>
+<section class="detail-panel" id="detail-panel" aria-label="展开的材料详情" hidden></section>
+</div>
+<div class="demo-options"><label><input type="checkbox" id="receiver-unavailable">接收端暂不可用</label><button type="button" id="reset-demo">重新体验</button></div>
+<p class="demo-caption">把本地索引切到“后台更新中”，同时输入提示词。你仍然可以选择去处、暂存或填入。晚到的结果只增加入口；这里没有模型调用，等待仅用于演示，不能视为原生速度测试。</p>
+</section>
+<section class="essay-body"><h2>把空间还给正在做的事。</h2><p>上一版把来源、工作说明、关联理由、参考、输入和动作都摊在面前。每一块都有理由，放在一起却像一张表单。这里借鉴 Spotlight 和 Raycast 的，是一眼认出输入和动作的密度。</p><p>首屏只留下来源摘要、提示词和去处。原文与关联依据点开再看；跨项目经验只占一个小入口。提示词可以换行，长的工作名称也有完整的展开选项。紧凑不靠裁掉内容。</p><p>真正的 Mac 实现继续使用系统面板、文本输入、菜单和标准按钮。采用新系统外观时，优先使用系统提供的控件与材质；旧系统、减少透明度和增强对比度下，也要保持可读。这里展示的是网页预演，不能替代真实 NSPanel 的验证。</p></section>
+<section class="essay-body"><h2>经验来自记录，不需要模型供应商。</h2><p>“项目 B 的部署经验”应该来自你允许 Beamhop 使用的记录，保留出处、时间和适用条件。找出这份记录，不必先让模型生成一个答案，也不必让用户配置 API key。</p><p>第一版拟用一套本地推荐流程：全文检索找内容，客户名、项目标识和文档引用找关系，再结合已确认的去处和近期使用记录排序。已确认的选择始终优先；没有可靠命中时，直接提供最近去处，不编造关联。</p><p>例如，客户邮件可通过客户标识关联 A 的部署方案；方案里已有的“内网部署”条目与 B 的试点记录发生命中，或者两者引用同一份部署规范，才出现跨项目参考。理由直接显示这份证据，不需要模型另写解释。这些是拟议规则；本页使用固定样例，没有实现通用推荐引擎。</p></section>
+<section class="essay-body"><h2>推荐可以小，依据要清楚。</h2><ol class="response-order"><li><strong>先检索。</strong>用本地倒排索引和全文检索找候选。中文要处理分词或字词片段匹配；对人名、客户名、路径和文档编号，保留精确匹配。</li><li><strong>沿已有关系找一步。</strong>沿文档引用、明确关联和共同来源找相邻记录。只走有限的关系，避免因为“都在同一个大项目”就推荐所有内容。对内容重复的记录去重。</li><li><strong>按证据排序。</strong>区分同一客户、同一约束、共同引用和只是最近打开过。先用可解释的规则或排序融合；将用户主动纠正用来调整当前范围，避免一次选择变成永久偏好。</li></ol><p>这可以用普通索引、图的邻接表和小型排序程序完成，不需要生成模型，也不必先上向量模型。固定分类器适合辨认“问题”“限制条件”等稳定类型，却不能独自解决不断新增的项目归属。若真实材料暴露出同义表达或隐含联系的明显缺口，再比较词典、语义索引、小模型等办法的收益和成本。</p><p>匹配到相同词语或共同引用，只能说明值得查看。旧经验是否适用，仍要保留原文条件；系统不能把“相关”包装成“已证明可行”。</p></section>
+<section class="essay-body"><h2>弹出与推荐，是两条独立的路径。</h2><p>浮层先显示选区、提示词和已确认去处，不等待检索。索引随着工作记录变化增量更新；唤起时只查询已有索引。首次建立索引或后台更新期间，输入和基本交接照常可用。</p><p>晚到的结果只能补充入口，不能换目标、改写提示词、抢焦点或推走按钮。收起后，旧请求就作废；再次唤起也不能把上次选区的结果混进来。</p><p>这些是需要在原生应用实现的要求，还不是速度测试结果。要分别测“按下快捷键到能打字”和“候选出现”的时间，覆盖冷启动、长时间闲置、中文材料、较大索引及不同 Mac。即使不用模型，也不能免掉性能验证。</p></section>
+<section class="essay-body"><h2>Apple 本地 AI：能用，但先不依赖。</h2><p>Foundation Models 的端侧模型支持分类、摘要、提取实体和短文本判断。端侧推理可离线进行，无需用户填写云端 API key。macOS 26 起提供相应接口，但设备、地区、语言、Apple Intelligence 开关和模型下载状态都会影响可用性。</p><p>Apple 文档也提醒，端侧生成可能需要几秒；当前支持说明仍列有中国大陆相关限制。较新框架还支持其他模型路径，所以“用了 Foundation Models”并不自动等于全程离线。</p><p>这说明它是可评估的技术，不说明 Beamhop 必须用它。第一版先验证不依赖模型的本地推荐。Natural Language、Create ML 或 Core ML 可以作为后续工具候选，只有解决已观察到的问题时才引入，不能因为系统提供了 AI 就给用户增加一段等待。</p></section>
+<footer class="essay-body essay-end"><h2>先让手上这一下成立。</h2><p>验收时不配置模型、不连接网络，仍要能输入、找已有去处并完成本地准备；外部工具不可用时保留材料。把建议延后返回，也不能打断已开始的动作。借用 B 的经验时，原文和适用条件都能检查。</p><p>这是新的产品方向预演。现有原生应用的工作名称仍主要绑定应用，精确会话寻址、自动关联和后台分析并未由本页实现。“填入”也不代表接收方已发送、执行或完成。</p><details class="source-list"><summary>技术依据与实现边界 · 2026 年 10 月核对</summary><ul><li><a href="https://www.sqlite.org/fts5.html">SQLite FTS5</a>——本地全文索引及排序。</li><li><a href="https://developer.apple.com/videos/play/wwdc2025/286/">Apple：Meet the Foundation Models framework</a>——端侧与离线能力。</li><li><a href="https://developer.apple.com/documentation/foundationmodels/generating-content-and-performing-tasks-with-foundation-models">Apple：生成内容与执行任务</a>——适合的任务、可用性和响应时间。</li><li><a href="https://developer.apple.com/documentation/naturallanguage/nlembedding">Natural Language：NLEmbedding</a>；<a href="https://developer.apple.com/documentation/createml/mltextclassifier">Create ML：MLTextClassifier</a>——后续可评估的工具，不是第一版依赖。</li><li><a href="https://support.apple.com/en-us/121115">Apple Intelligence 支持条件</a>——以实时可用性为准。</li><li><a href="https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass">Apple：Adopting Liquid Glass</a>——优先采用标准控件，并测试系统外观和性能。</li></ul></details></footer>
+</article>
+</main>
+<script src="./quiet-panel.js"></script>
+</body></html>

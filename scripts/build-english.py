@@ -5,7 +5,7 @@ import json
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGES = ("index", "work-in-hand", "product-notes")
+PAGES = ("handoff", "work-in-hand", "quiet-panel", "product-notes", "index")
 
 
 def language_nav(page, english=False):
@@ -23,6 +23,8 @@ def language_nav(page, english=False):
 def build(page):
     source = (ROOT / f"{page}.html").read_text(encoding="utf-8")
     source = re.sub(r'<nav class="language-switch".*?</nav>', '', source, flags=re.S)
+    source = re.sub(r'<header\b[^>]*>.*?</header>', '<header></header>', source, count=1, flags=re.S)
+    source = re.sub(r'<nav class="site-essays".*?</nav>', '', source, flags=re.S)
     translations = json.loads((ROOT / "translations" / f"{page}.en.json").read_text(encoding="utf-8"))
     pattern = re.compile('|'.join(re.escape(key) for key in sorted(translations, key=len, reverse=True)))
     result = pattern.sub(lambda match: translations[match.group()], source)
@@ -41,5 +43,5 @@ def build(page):
 
 
 if __name__ == "__main__":
-    for page in PAGES[:2]:
+    for page in ("index", "handoff", "work-in-hand", "quiet-panel"):
         build(page)

@@ -1,32 +1,26 @@
-# Beamhop product essays and notes
+# Beamhop website and interactive essays
 
 [中文](./README.md) · English
 
-Two interactive essays and notes from the product discussion. They explore sending material from the current app to an existing agent session while keeping the reader’s place and train of thought.
+This is Beamhop’s static `gh-pages` website. The native application lives on [`main`](https://github.com/willamhou/beamhop/tree/main).
 
-- [Native macOS screenshots](./native-ui/): production AppKit / SwiftUI views, English/Chinese light/dark appearances, and the corresponding verification reports.
-- [Essay 01 · Send the information. Stay where you are.](./index.en.html): finding a destination for the first time, sending from the source app, and keeping a shelf available when needed.
-- [Essay 02 · Work can branch. Keep your train of thought.](./work-in-hand.en.html): select passages in the article, send beside the selection, and save in a corner shelf that retains selections and notes when collapsed.
-- [Product notes · Get the handoff right.](./product-notes.en.html): ideas, product boundaries, design recommendations, and hypotheses to test. The [Markdown source](./product-notes.en.md) is also available.
+- [Home](./index.en.html): one entry point for the current app, native interface and design explorations.
+- [Essay 03 · Respond, then understand](./quiet-panel.en.html): a lighter panel, direct prompt input and local recommendations without model dependencies.
+- [Essay 02 · When work branches](./work-in-hand.en.html): handoff beside a selection and a corner shelf opened only when needed.
+- [Essay 01 · Send the information](./handoff.en.html): recognize a destination and reduce repeated searching.
+- [Product notes](./product-notes.en.html): decisions, evidence and hypotheses to test.
+- [Native interface](./native-ui/index.html): actual AppKit / SwiftUI screenshots using fixture data.
 
-This is a separate `gh-pages` branch for static publishing. The Beamhop application lives on [`main`](https://github.com/willamhou/beamhop/tree/main).
+Navigation returns to the homepage in the same language, and language links open the matching article. Legacy `index.en.html#finding`, `#sending`, `#delivery-log` and `#pocket` links forward to the original essay at its new address. The homepage’s `#essays` stays on the index.
 
-## Reading and maintenance
+## Maintenance
 
-Open an HTML file in a browser; no installation or build is required to read it. The pages load no remote scripts, fonts, or analytics. A local static server gives the browser clipboard feature a more complete environment.
+Pages load no remote scripts, fonts or analytics and can be read directly as HTML. Material, suggestions, sessions and receipts in the interactions are simulated; nothing is sent to external tools. Essay 03’s delay demonstrates background indexing, not a model call or measured performance. Its recommendations are fixed examples. Reloading resets the current page’s simulated state.
 
-Use the language links in each page header to open the same article in Chinese or English. Series links stay in the chosen language. Opening another language reloads that version and resets the simulated interaction; it does not send anything.
+Chinese sources are `index.html`, `handoff.html`, `work-in-hand.html` and `quiet-panel.html`. English translations live in `translations/*.en.json`; do not edit generated English pages directly. Discussion sources are `product-notes.md` and `product-notes.en.md`. Essay 03 uses `quiet-panel.js` and `quiet-panel.css`; dynamic copy is in the script’s bilingual dictionary.
 
-The Chinese essays keep their prose, styles, and interactions in `index.html` and `work-in-hand.html`. Their reviewed English translations are in `translations/*.en.json`; `python scripts/build-english.py` generates the matching English HTML. Do not edit generated English pages directly.
+After editing, run `python scripts/build-site.py` to rebuild discussion pages, English pages and shared navigation in order. `scripts/site_nav.py` is the single source for navigation; `site-nav.css` provides its styles. Generated output is committed, so readers do not need a build step.
 
-The discussion sources are `product-notes.md` and `product-notes.en.md`. Run `python scripts/render-notes.py` to update both HTML versions, then run `python scripts/build-english.py` to update the English essays. The discussion pages reuse the first essay’s styles. Both scripts use only the Python standard library. Generated pages are committed, so readers need not run them.
+Before publishing, verify language links, legacy bookmarks, static resources, simulated handoff and recovery, narrow layouts and light/dark appearances. Report a deployment as live only after the site returns the new content. See [AGENTS.md](./AGENTS.md) for detailed constraints.
 
-All sessions, material, model suggestions, connection states, and receipts are simulated. The pages do not connect to real agents or send material to external tools. Demo state lasts only in the current page and resets on reload.
-
-See [AGENTS.md](./AGENTS.md) for editing, translation, and verification instructions.
-
-## Publishing status
-
-The public site is [Beamhop Pages](https://willamhou.github.io/beamhop/index.en.html). It publishes the root of `gh-pages`; `.nojekyll` serves the static files directly.
-
-`native-ui/` contains 20 native PNGs and four reports from `fde3a97` on macOS 15.7.9 (152 checks passed). Unlike the essay interactions, these show the production views. The gallery identifies verified behavior and remaining integration acceptance. Keep the revision, reports and coverage in sync when updating screenshots.
+Public site: [willamhou.github.io/beamhop](https://willamhou.github.io/beamhop/index.en.html). New design explorations do not imply that the native app already implements these capabilities.

@@ -4,7 +4,7 @@ Beamhop product discussion and decisions · October 19, 2026
 
 Someone finds evidence on a web page, thinks of work already underway, sends it over, and keeps reading. If that action feels easy enough, Beamhop has a reason to exist.
 
-These notes collect the ideas, corrections, and product suggestions from this conversation. They retain the force of the judgments made in the discussion while distinguishing agreed product boundaries from design hypotheses that still need testing. The two interactive essays are [“Send the information. Stay where you are.”](./index.en.html) and [“Work can branch. Keep your train of thought.”](./work-in-hand.en.html).
+These notes collect the ideas, corrections, and product suggestions from this conversation. They retain the force of the judgments made in the discussion while distinguishing agreed product boundaries from design hypotheses that still need testing. The two interactive essays are [“Send the information. Stay where you are.”](./handoff.en.html) and [“Work can branch. Keep your train of thought.”](./work-in-hand.en.html).
 
 ## Start with one handoff
 

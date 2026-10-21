@@ -40,11 +40,11 @@ def main(english=False):
     blocks = source.read_text(encoding="utf-8").strip().split("\n\n")
     title = blocks[0].removeprefix("# ")
     subtitle = blocks[1]
-    index = (ROOT / "index.html").read_text(encoding="utf-8")
+    index = (ROOT / "handoff.html").read_text(encoding="utf-8")
     style = re.search(r"<style>(.*?)</style>", index, re.S).group(1)
     nav = (
         '<nav class="site-series" aria-label="产品随笔导航">'
-        '<a href="./index.html">随笔 01</a>'
+        '<a href="./handoff.html">随笔 01</a>'
         '<a href="./work-in-hand.html">随笔 02</a>'
         '<a href="./product-notes.html" aria-current="page">产品讨论</a><a href="./native-ui/index.zh.html">原生截图</a></nav>'
     )
@@ -97,7 +97,7 @@ def main(english=False):
         for original, translated in translations.items():
             html = html.replace(original, translated)
         html = html.replace('lang="zh-CN"', 'lang="en"').replace('content="zh_CN"', 'content="en_US"')
-        for page in ("index", "work-in-hand", "product-notes"):
+        for page in ("index", "handoff", "work-in-hand", "product-notes"):
             html = html.replace(f'href="./{page}.html"', f'href="./{page}.en.html"')
         html = html.replace('product-notes.md"', 'product-notes.en.md"')
         html = html.replace('https://willamhou.github.io/beamhop/product-notes.html', 'https://willamhou.github.io/beamhop/product-notes.en.html')

@@ -1,32 +1,26 @@
-# Beamhop 产品随笔与讨论
+# Beamhop 网站与交互随笔
 
 [中文](./README.md) · [English](./README.en.md)
 
-两篇可以动手读的文章，以及本次产品讨论的整理。讨论如何把当前应用里的材料顺手交给已有的 agent 工作，同时保住阅读位置和思路。
+本分支是 Beamhop 的 `gh-pages` 静态网站。原生应用代码位于 [`main`](https://github.com/willamhou/beamhop/tree/main)。
 
-- [原生 macOS 截图](./native-ui/index.zh.html)：实际 AppKit / SwiftUI 界面，中英文、明暗外观，以及对应的验证报告。
-- [随笔 01 · 让信息过去，人留在这里](./index.html)：第一次找去处、原地发送，以及需要时才出现的剪板。
-- [随笔 02 · 事情可以分岔，思路不必散掉](./work-in-hand.html)：在文章里点选材料，选区旁直接发送，右下角按需暂存；收起后保留选择和交代。
-- [产品讨论 · 先把那一下做对](./product-notes.html)：启发、产品边界、设计建议和待验证的假设。也可以直接阅读 [Markdown 原稿](./product-notes.md)。
+- [首页](./index.html)：当前应用、原生界面与设计探索的统一入口。
+- [随笔 03 · 先响应，再理解](./quiet-panel.html)：更轻的浮层、直接输入提示词、不依赖模型的本地推荐方向。
+- [随笔 02 · 事情可以分岔](./work-in-hand.html)：选区旁交接与按需展开的角落暂存架。
+- [随笔 01 · 让信息过去](./handoff.html)：识别去处与减少重复寻找。
+- [产品讨论](./product-notes.html)：取舍、依据与待验证假设。
+- [原生界面](./native-ui/index.zh.html)：真实 AppKit / SwiftUI 截图，使用示例数据。
 
-本分支是独立的 `gh-pages` 静态发布分支，不包含 Beamhop 主应用代码。主应用位于 [`main`](https://github.com/willamhou/beamhop/tree/main)。
+网站导航统一回到同语言首页，语言切换打开对应文章。原 `index.html#finding`、`#sending`、`#delivery-log`、`#pocket` 的链接会转到原文章的新地址。首页 `#essays` 保持在目录。
 
-## 阅读与维护
+## 维护
 
-用浏览器打开 HTML 文件即可阅读，无需安装依赖或构建。页面不加载远程脚本、字体或分析服务。通过本地静态服务器阅读，可以获得更完整的浏览器剪贴板体验。
+页面不加载远程脚本、字体或分析服务，打开 HTML 即可阅读。交互中的资料、建议、会话和回执均为模拟，不向外部工具发送内容。随笔 03 的等待用于演示后台索引更新，不是模型调用或性能实测；其推荐记录是固定样例。页面刷新会重置本页模拟状态。
 
-每篇页面的页眉都可以切换中文和英文，文章导航会保持所选语言。切换语言会打开对应版本，并重置本页模拟交互；不会发送任何材料。
+中文源是 `index.html`、`handoff.html`、`work-in-hand.html` 和 `quiet-panel.html`。英文译文在 `translations/*.en.json`；不要直接修改生成的英文页面。讨论源是 `product-notes.md` 与 `product-notes.en.md`。随笔 03 的交互和样式在 `quiet-panel.js`、`quiet-panel.css`，动态文案在该脚本的双语词典中。
 
-中文随笔的正文、样式和交互分别在 `index.html` 和 `work-in-hand.html` 内。英文译稿在 `translations/*.en.json`，运行 `python scripts/build-english.py` 生成对应英文页面；不要直接修改生成的英文 HTML。
+修改后运行 `python scripts/build-site.py`，依次重建讨论页面、英文页面与统一导航。导航的唯一来源是 `scripts/site_nav.py`，公用样式为 `site-nav.css`。生成结果已提交，访问网站不需要构建步骤。
 
-讨论稿的中英文源文件分别是 `product-notes.md` 和 `product-notes.en.md`。修改后先运行 `python scripts/render-notes.py`，更新两种语言的讨论页面，再运行 `python scripts/build-english.py` 更新英文随笔。讨论页面沿用第一篇随笔的样式。两个脚本都只使用 Python 标准库；生成的 HTML 已提交，阅读时不需要运行脚本。
+发布前核对中英文互链、旧书签、静态资源、模拟交接与失败恢复，并检查窄屏和浅深色外观。只有网站实际返回新内容，才能报告已上线。详细约束见 [AGENTS.md](./AGENTS.md)。
 
-文字编辑、翻译和检查的方法见 [AGENTS.md](./AGENTS.md)。
-
-所有会话、材料、模型建议、连接状态和回执均为演示数据。页面不会连接真实 agent，也不会向外部工具发送材料。交互状态只保留在当前页面，刷新后重置。
-
-## 发布状态
-
-公开站点：[Beamhop Pages](https://willamhou.github.io/beamhop/)。站点从 `gh-pages` 根目录发布，`.nojekyll` 用于直接提供静态文件。
-
-`native-ui/` 保存 `fde3a97` 在 macOS 15.7.9 上生成的 20 张原生 PNG 和四份检查报告（共 152 项通过）。它与文章中的模拟交互不同；页面分别说明已验证行为和仍待完成的集成验收。更新截图时应同步版本、报告与验证范围。
+公开地址：[willamhou.github.io/beamhop](https://willamhou.github.io/beamhop/)。新设计探索不表示原生应用已经实现了这些能力。
