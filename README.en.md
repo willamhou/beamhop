@@ -5,7 +5,7 @@
 This is Beamhop’s static `gh-pages` website. The native application lives on [`main`](https://github.com/willamhou/beamhop/tree/main).
 
 - [Home](./index.en.html): one entry point for the current app, native interface and design explorations.
-- [Essay 03 · Respond, then understand](./quiet-panel.en.html): a lighter panel, direct prompt input and local recommendations without model dependencies.
+- [Essay 03 · Respond, then understand](./quiet-panel.en.html): a compact panel, mixed material, explicit instructions, multiple receiving apps and local recommendations without model dependencies.
 - [Essay 02 · When work branches](./work-in-hand.en.html): handoff beside a selection and a corner shelf opened only when needed.
 - [Essay 01 · Send the information](./handoff.en.html): recognize a destination and reduce repeated searching.
 - [Product notes](./product-notes.en.html): decisions, evidence and hypotheses to test.
@@ -15,7 +15,7 @@ Navigation returns to the homepage in the same language, and language links open
 
 ## Maintenance
 
-Pages load no remote scripts, fonts or analytics and can be read directly as HTML. Material, suggestions, sessions and receipts in the interactions are simulated; nothing is sent to external tools. Essay 03’s delay demonstrates background indexing, not a model call or measured performance. Its recommendations are fixed examples. Reloading resets the current page’s simulated state.
+Pages load no remote scripts, fonts or analytics and can be read directly as HTML. Preset material, suggestions, sessions, receiver capabilities and receipts are simulated; nothing is sent to external tools. Essay 03 accepts files selected or dropped into the page, and pasted images, without uploading them. Its manual-copy path only attempts to write to the clipboard after a user clicks. Essay 03’s delay demonstrates background indexing, not a model call or measured performance. Its recommendations are fixed examples. Reloading resets the current page’s state, including local material, held batches and handoff records. Background handoff, draft preparation, copy and unsupported attachments are separate example paths, not claims about those apps’ interfaces.
 
 Chinese sources are `index.html`, `handoff.html`, `work-in-hand.html` and `quiet-panel.html`. English translations live in `translations/*.en.json`; do not edit generated English pages directly. Discussion sources are `product-notes.md` and `product-notes.en.md`. Essay 03 uses `quiet-panel.js` and `quiet-panel.css`; dynamic copy is in the script’s bilingual dictionary.
 
