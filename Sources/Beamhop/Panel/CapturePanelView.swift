@@ -20,8 +20,17 @@ struct CapturePanelView: View {
                     Spacer()
                     Text("Optional · materials only if empty").foregroundStyle(.secondary)
                 }.font(.caption)
-                TextField("Compare these materials and update the plan…", text: $model.note, axis: .vertical)
-                    .textFieldStyle(.plain).font(.system(size: 16)).lineLimit(2...5)
+                TextEditor(text: $model.note)
+                    .font(.system(size: 16)).scrollContentBackground(.hidden)
+                    .frame(height: min(112, max(50, CGFloat(model.note.components(separatedBy: "\n").count) * 23)))
+                    .overlay(alignment: .topLeading) {
+                        if model.note.isEmpty {
+                            Text("Compare these materials and update the plan…")
+                                .font(.system(size: 16)).foregroundStyle(.tertiary)
+                                .padding(.leading, 5).padding(.top, 1)
+                                .allowsHitTesting(false).accessibilityHidden(true)
+                        }
+                    }
                     .focused($promptFocused).accessibilityLabel("Instructions for the agent")
                     .accessibilityIdentifier("capture.instruction")
                 if model.snapshot.hasNativeCommand {
@@ -43,8 +52,16 @@ struct CapturePanelView: View {
                         ForEach($model.materials) { $material in materialRow($material) }
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: "plus").foregroundStyle(.secondary).padding(.top, 3)
-                            TextField("Type or paste more material…", text: $model.additionalText, axis: .vertical)
-                                .textFieldStyle(.plain).lineLimit(1...5)
+                            TextEditor(text: $model.additionalText)
+                                .scrollContentBackground(.hidden).font(.system(size: 13))
+                                .frame(height: min(100, max(28, CGFloat(model.additionalText.components(separatedBy: "\n").count) * 19)))
+                                .overlay(alignment: .topLeading) {
+                                    if model.additionalText.isEmpty {
+                                        Text("Type or paste more material…").foregroundStyle(.tertiary)
+                                            .padding(.leading, 5).allowsHitTesting(false).accessibilityHidden(true)
+                                    }
+                                }
+                                .accessibilityLabel("Additional material")
                                 .accessibilityIdentifier("capture.add-text")
                         }.font(.system(size: 13))
                     }.padding(.vertical, 3)
@@ -143,8 +160,10 @@ struct CapturePanelView: View {
                     .buttonStyle(.plain).accessibilityLabel(L10n.f("Remove %@", material.name))
             }.font(.caption2).foregroundStyle(.secondary)
             if material.kind == .text {
-                TextField("Material text", text: binding.text, axis: .vertical)
-                    .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(2...8)
+                TextEditor(text: binding.text)
+                    .scrollContentBackground(.hidden).font(.system(size: 13))
+                    .frame(height: min(140, max(42, CGFloat(material.text.components(separatedBy: "\n").count) * 19)))
+                    .accessibilityLabel("Material text")
                     .accessibilityIdentifier("capture.material.\(material.id)")
             } else {
                 Text(ByteCountFormatter.string(fromByteCount: material.byteCount ?? 0, countStyle: .file))
