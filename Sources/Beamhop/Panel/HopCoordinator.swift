@@ -10,6 +10,8 @@ final class HopCoordinator {
     private let hud: PocketHUDController
     private let delivery: DeliveryService
     private let captures: CaptureStore
+    /// Import ownership follows the draft across panel dismiss/reopen, not a view instance.
+    private var pendingImports: [String: Int] = [:]
 
     init(database: Database, panel: CapturePanelController, pocket: PocketWindowController,
          hud: PocketHUDController, delivery: DeliveryService, captures: CaptureStore, legacy: PocketStore) throws {
@@ -79,6 +81,7 @@ final class HopCoordinator {
                    configure: { [weak self] model in
             guard let self else { return }
             model.usesProjectContext = true
+            model.pendingImportCount = self.pendingImports[model.snapshot.id] ?? 0
             model.savedRoutes = self.library.state.routes
             model.projects = self.library.state.projects
             model.onDraftChange = { [weak self, weak model] draft in
@@ -213,7 +216,8 @@ final class HopCoordinator {
 
     private func importFiles(_ urls: [URL], into model: CapturePanelModel) {
         let draft = model.snapshot
-        model.pendingImportCount += 1
+        pendingImports[draft.id, default: 0] += 1
+        model.pendingImportCount = pendingImports[draft.id] ?? 0
         let directory = AppPaths.supportDir.appendingPathComponent("hop-attachments", isDirectory: true)
         DispatchQueue.global(qos: .userInitiated).async { [weak self, weak model] in
             var imported: [HopMaterial] = []
@@ -236,9 +240,12 @@ final class HopCoordinator {
             let added = imported, message = failure
             DispatchQueue.main.async {
                 guard let self else { return }
-                defer { model?.pendingImportCount = max(0, (model?.pendingImportCount ?? 1) - 1) }
-                if let model, self.panel.isVisible, self.panel.currentModel === model {
-                    model.materials += added; model.draftError = message
+                let remaining = max(0, (self.pendingImports[draft.id] ?? 1) - 1)
+                self.pendingImports[draft.id] = remaining == 0 ? nil : remaining
+                model?.pendingImportCount = remaining
+                if let current = self.panel.currentModel, self.panel.isVisible, current.snapshot.id == draft.id {
+                    current.materials += added; current.draftError = message
+                    current.pendingImportCount = remaining
                 } else if !added.isEmpty {
                     let stillActive = self.library.state.active?.id == draft.id
                     var saved = (stillActive ? self.library.state.active : self.library.state.pocket.first { $0.id == draft.id })
