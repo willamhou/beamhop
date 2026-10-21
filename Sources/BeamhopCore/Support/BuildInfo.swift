@@ -72,9 +72,8 @@ public struct BuildInfo: Codable, Equatable, Sendable {
     public var shortCommit: String { commit == "unknown" ? "unknown" : String(commit.prefix(7)) }
     public var sourceLabel: String {
         switch sourceDirty {
-        case true: return L10n.s("Local changes")
-        case false: return L10n.s("Clean build inputs")
-        case nil: return L10n.s("Source state unavailable")
+        case .some(let dirty): return L10n.s(dirty ? "Local changes" : "Clean build inputs")
+        case .none: return L10n.s("Source state unavailable")
         }
     }
     public var summary: String { "\(appVersion) (\(buildNumber)) · \(shortCommit) · \(sourceLabel)" }

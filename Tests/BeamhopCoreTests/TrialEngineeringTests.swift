@@ -37,6 +37,9 @@ final class TrialEngineeringTests: XCTestCase {
         XCTAssertTrue(info.summary.contains("0.1.0 (7)"))
         XCTAssertNil(BuildInfo().sourceDirty)
         XCTAssertEqual(BuildInfo().shortCommit, "unknown")
+        XCTAssertEqual(BuildInfo(sourceDirty: true).sourceLabel, L10n.s("Local changes"))
+        XCTAssertEqual(BuildInfo(sourceDirty: false).sourceLabel, L10n.s("Clean build inputs"))
+        XCTAssertEqual(BuildInfo().sourceLabel, L10n.s("Source state unavailable"))
     }
 
     func testReportHasOnlyAllowlistedKeysAndStableUniqueChecks() throws {

@@ -885,6 +885,9 @@ do {
         check(try JSONDecoder().decode(BuildInfo.self, from: JSONEncoder().encode(build)) == build, "provenance round-trips")
         check(build.shortCommit == "aaaaaaa" && build.summary.contains("0.1.0 (7)"), "version and commit display")
         check(BuildInfo().sourceDirty == nil && BuildInfo().shortCommit == "unknown", "missing provenance is unknown, not clean")
+        check(BuildInfo(sourceDirty: true).sourceLabel == L10n.s("Local changes"), "dirty source label")
+        check(BuildInfo(sourceDirty: false).sourceLabel == L10n.s("Clean build inputs"), "clean source label")
+        check(BuildInfo().sourceLabel == L10n.s("Source state unavailable"), "unknown source label")
         let unsafe = """
         {"schema_version":1,"app_version":"0.1.0","build_number":"1","build_id":"/Users/private/token",
         "commit":"secret@example.com","source_dirty":true,"source_fingerprint":"https://private.invalid",
