@@ -78,6 +78,7 @@ final class HopCoordinator {
                    visibleTargets: TargetDetector.availableTargets(), draft: draft,
                    configure: { [weak self] model in
             guard let self else { return }
+            model.usesProjectContext = true
             model.savedRoutes = self.library.state.routes
             model.projects = self.library.state.projects
             model.onDraftChange = { [weak self, weak model] draft in

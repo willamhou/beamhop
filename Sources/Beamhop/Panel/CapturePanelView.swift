@@ -7,6 +7,7 @@ struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
     @State private var destinationMenu = DestinationMenuPresenter()
     @State private var originals: Set<String> = []
+    @State private var imagePreviews: Set<String> = []
     @State private var projectName = ""
     @State private var newTarget: DeliveryTarget = .clipboard
     @FocusState private var promptFocused: Bool
@@ -47,7 +48,7 @@ struct CapturePanelView: View {
                                 .accessibilityIdentifier("capture.add-text")
                         }.font(.system(size: 13))
                     }.padding(.vertical, 3)
-                }.frame(height: min(220, CGFloat(max(1, model.materials.count)) * 76 + 32))
+                }.frame(height: min(220, CGFloat(max(1, model.materials.count)) * 62 + 32))
             }.padding(16)
             if model.isCreating { creation }
             Divider()
@@ -60,7 +61,7 @@ struct CapturePanelView: View {
                         HStack(spacing: 7) {
                             Image(systemName: "arrow.up.forward.app").foregroundStyle(Color.accentColor)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text((model.selectedTarget ?? model.unavailableTarget)?.displayName ?? L10n.s("Inbox"))
+                                Text((model.selectedTarget ?? model.unavailableTarget)?.displayName ?? L10n.s("Local draft"))
                                     .font(.system(size: 13, weight: .medium))
                                 Text([model.workName, model.snapshot.route.sessionLabel].filter { !$0.isEmpty }.joined(separator: " · "))
                                     .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
@@ -129,7 +130,14 @@ struct CapturePanelView: View {
                         if !originals.insert(material.id).inserted { originals.remove(material.id) }
                     }.buttonStyle(.plain)
                 } else if let path = material.localPath {
-                    Button("Preview") { NSWorkspace.shared.open(URL(fileURLWithPath: path)) }.buttonStyle(.plain)
+                    if material.kind == .image {
+                        Button("Preview") {
+                            if !imagePreviews.insert(material.id).inserted { imagePreviews.remove(material.id) }
+                        }.buttonStyle(.plain)
+                    } else {
+                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+                            .buttonStyle(.plain)
+                    }
                 }
                 Button { model.materials.removeAll { $0.id == material.id } } label: { Image(systemName: "xmark") }
                     .buttonStyle(.plain).accessibilityLabel(L10n.f("Remove %@", material.name))
@@ -141,6 +149,9 @@ struct CapturePanelView: View {
             } else {
                 Text(ByteCountFormatter.string(fromByteCount: material.byteCount ?? 0, countStyle: .file))
                     .font(.caption2).foregroundStyle(.secondary)
+                if imagePreviews.contains(material.id), let path = material.localPath, let image = NSImage(contentsOfFile: path) {
+                    Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 180)
+                }
             }
             if originals.contains(material.id), let original = material.originalText {
                 VStack(alignment: .leading, spacing: 4) {

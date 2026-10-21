@@ -30,6 +30,8 @@ public final class CapturePanelModel: ObservableObject {
     @Published public var projects: [String] = []
     @Published public var isCreating = false
     public var creatingProject = false
+    /// Legacy named-work fixtures retain rebind behavior; production projects are context.
+    public var usesProjectContext = false
     @Published public var additionalText = "" { didSet { draftChanged() } }
     private let additionalID = UUID().uuidString
     public var onDraftChange: ((HopDraft) -> Void)?
@@ -74,7 +76,8 @@ public final class CapturePanelModel: ObservableObject {
     }
     @Published public private(set) var unavailableTarget: DeliveryTarget?
     public var canConfirm: Bool {
-        !isCreating && draftError == nil && (selectedTarget == nil || snapshot.attachments.isEmpty)
+        !isCreating && draftError == nil && snapshot.hasContent
+            && (selectedTarget == nil || session == .newInApp || snapshot.attachments.isEmpty)
             && unavailableTarget == nil && (selectedTarget.map { visibleTargets.contains($0) } ?? true)
     }
     /// Optional named-destination binding (essay 02). Empty = plain tool-level routing.
@@ -106,7 +109,8 @@ public final class CapturePanelModel: ObservableObject {
     }
 
     public func chooseTool(_ target: DeliveryTarget?) {
-        workName = ""
+        if !usesProjectContext { workName = "" }
+        session = .currentWindow
         selectedTarget = target
         unavailableTarget = target.flatMap { visibleTargets.contains($0) ? nil : $0 }
     }
@@ -252,7 +256,7 @@ public final class CapturePanelModel: ObservableObject {
         if receiverChanged && !rebindAcknowledged {
             return L10n.f("Use %@ for this work", targetLabel(selectedTarget!))
         }
-        guard let selectedTarget else { return L10n.s("Save to Inbox only") }
+        guard let selectedTarget else { return L10n.s(usesProjectContext ? "Save local draft" : "Save to Inbox only") }
         if session == .newInApp { return L10n.f("Create session in %@", selectedTarget.displayName) }
         return selectedTarget.handoffAction
     }

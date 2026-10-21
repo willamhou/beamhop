@@ -30,6 +30,12 @@ final class HopDraftTests: XCTestCase {
         model.chooseRoute(.init(target: .kimiWork, project: "Other project", session: .newInApp))
         XCTAssertEqual(model.snapshot.materials, saved.materials)
         XCTAssertEqual(model.note, saved.instruction)
+        model.usesProjectContext = true
+        model.chooseTool(.clipboard)
+        XCTAssertEqual(model.workName, "Other project")
+        XCTAssertEqual(model.session, .currentWindow)
+        model.chooseTool(nil)
+        XCTAssertEqual(model.confirmLabel, "Save local draft")
     }
 
     func testPocketRestoreCopyRecoveryAndLateCompletionAcrossRestart() throws {

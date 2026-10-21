@@ -55,7 +55,7 @@ final class DestinationMenuPresenter: NSObject {
             model.creatingProject = false; model.isCreating = true
         }
         add(L10n.s("New project…"), action: onName)
-        add(L10n.s("Save to Inbox only"), shortcut: "0") { model.chooseTool(nil) }
+        add(L10n.s(model.usesProjectContext ? "Save local draft" : "Save to Inbox only"), shortcut: "0") { model.chooseTool(nil) }
         activeMenu = menu
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.bounds.minY), in: anchor)
         activeMenu = nil

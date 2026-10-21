@@ -1,5 +1,9 @@
 # Beamhop
 
+最新 Hop 浮层将指令、选中文字、补充文本及文件/图片放在同一处编辑，原文与出处继续保留。Pocket 保存整份材料、指令和接收方；恢复前先暂存当前输入，也能只取用材料而不改变当前接收方。
+
+项目用于本地归类，可记住多个应用去处。新会话目前需在接收应用中手动创建，BH 不会把本地名称冒充真实会话地址。现有通道以文字草稿或剪贴板交接，附件需在原应用中手动添加；交接备份分别标明草稿已准备、文字已复制或交接未完成，不代表已发送或任务完成。这套交互不依赖模型、API key 或 UI 投影。
+
 > macOS 桌面 app — 在浏览器 / IDE / Notes / PDF / Figma 等任意 app 间抓取上下文，一键投递到任意外部 AI agent（Claude Code、Claude Cowork、ChatGPT Desktop 等）。
 
 **状态**：Phase 1 MVP — Week 0 Spike ✅ → spec V2.1；Week 1 地基 ✅；Week 2 金线 + 浏览器桥 ✅；`integration` 分支补齐 Phase 1 外围（ChatGPT AX 注入、Inbox/首次引导/兼容矩阵 UI、CI、打包、MCPB）——外围部分待 macOS 真机验收，CI（macos-15）覆盖编译与存储/协议自测。

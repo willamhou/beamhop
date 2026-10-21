@@ -35,7 +35,10 @@ public struct HopRoute: Codable, Equatable, Sendable {
     public init(target: DeliveryTarget? = nil, project: String = "", session: Session = .currentWindow) {
         self.target = target; self.project = project; self.session = session
     }
-    public var sessionLabel: String { L10n.s(session == .currentWindow ? "Current window" : "New session · create in app") }
+    public var sessionLabel: String {
+        if target == nil { return L10n.s("Keep on this Mac") }
+        return L10n.s(session == .currentWindow ? "Current window" : "New session · create in app")
+    }
 }
 
 public struct HopDraft: Codable, Equatable, Identifiable, Sendable {

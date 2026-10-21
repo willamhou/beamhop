@@ -127,7 +127,6 @@ final class AppServices {
     /// activation waits + pgrep would otherwise stall the hotkey→result path; AX/NSWorkspace
     /// calls are safe from a background thread. The panel show itself happens on the main thread.
     private let signposter = OSSignposter(subsystem: "com.beamhop.app", category: "perf")
-    private var targetMemory = TargetMemory()   // BeamhopCore: 默认 Claude Code，仅成功投递更新
     private var captureInFlight = false       // main-thread gate; DuplicateGate is not thread-safe
 
     private func doCapture() {
@@ -170,65 +169,6 @@ final class AppServices {
         let elapsed = Int(Date().timeIntervalSince(started) * 1000)
         log.info("panel_ms=\(elapsed)")
         events?.record(name: EventStore.Name.panelShown, detail: "ms=\(elapsed)", captureID: cap.id)
-    }
-
-    /// Essay 02 destination bookkeeping at confirm time:
-    /// - new name → register (the act of naming + choosing IS the first confirmation);
-    /// - existing work, user picked a DIFFERENT target in this panel → explicit in-panel
-    ///   rebind: the pick itself verifies the address, so rebind + confirm together;
-    /// - existing work, same target → leave confirmation state untouched (a separate
-    ///   rebind elsewhere may still require the two-step ack in the panel).
-    private func registerOrRebindWork(workName: String?, chosenTarget: DeliveryTarget?) {
-        guard let workStore, let raw = workName?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty, let target = chosenTarget else { return }
-        do {
-            if let existing = try workStore.fetch(name: raw) {
-                if existing.boundTarget != target {
-                    // Record the new address, but DO NOT confirm here: the two-step gate in
-                    // CapturePanelModel already made the user acknowledge the change, and the
-                    // post-delivery callback below is what actually verifies the address
-                    // (delivery succeeded). Rebinding without a successful delivery leaves
-                    // needsConfirmation true — honest state if the delivery never lands.
-                    _ = try workStore.rebind(id: existing.id, to: target)
-                    log.info("work '\(raw, privacy: .public)' rebound \(existing.boundTarget.rawValue) → \(target.rawValue)")
-                }
-            } else {
-                _ = try workStore.register(name: raw, boundTo: target)
-                log.info("work registered: \(raw, privacy: .public) → \(target.rawValue, privacy: .public)")
-            }
-        } catch {
-            log.error("work bookkeeping failed: \(String(describing: error), privacy: .public)")
-        }
-    }
-
-    /// Selected materials are one payload and one transport operation. No per-item paste.
-    private func deliverPocketBatch(_ batch: [PocketModel.Pair], to target: DeliveryTarget,
-                                    completion: @escaping (Bool) -> Void) {
-        guard let delivery else { completion(false); return }
-        do {
-            // Upgrade notes from items held by older builds before removing a prepared item.
-            for (item, _) in batch { try store?.setUserNote(item.note, captureID: item.captureID) }
-        } catch {
-            Notifier.error(L10n.s("Could not save note"), String(describing: error))
-            completion(false)
-            return
-        }
-        events?.record(name: EventStore.Name.pocketBatch, detail: "count=\(batch.count)")
-        let handoff = Handoff(items: batch.map { .init(capture: $0.1, note: $0.0.note) })
-        delivery.deliver(handoff, to: target) { [weak self] _, ok in
-            DispatchQueue.main.async {
-                for (item, _) in batch {
-                    self?.events?.record(name: ok ? EventStore.Name.pocketItemDelivered : EventStore.Name.pocketItemFailed,
-                                         detail: "target=\(target.rawValue)", captureID: item.captureID)
-                }
-                completion(ok)
-            }
-        }
-    }
-
-    private func saveNote(_ note: String, for captureID: String) {
-        do { try store?.setUserNote(note.isEmpty ? nil : note, captureID: captureID) }
-        catch { Notifier.error(L10n.s("Could not save note"), String(describing: error)) }
     }
 
     /// ⌘⇧V emergency channel (spec §9.3): render the LATEST capture to the clipboard from

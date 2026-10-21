@@ -261,6 +261,49 @@ enum NativeUISmoke {
         check("success removes only selected", shelf.model.count == 1 && shelf.model.items.first?.0.id == itemIDs[2])
         try capture(shelf.panel, name: "shelf-remaining", expectedWidth: 360)
         shelf.hide()
+        let library = try HopLibrary(db)
+        let firstDraft = HopDraft(materials: [HopMaterial(capture: sample)],
+                                  instruction: chinese ? "对照这些材料，修改方案" : "Compare these materials and update the plan",
+                                  route: .init(target: .kimiWork, project: work.name))
+        let secondDraft = HopDraft(materials: [HopMaterial(text: chinese ? "当前未发送的材料" : "Current unsent material")],
+                                   route: .init(target: .clipboard, project: chinese ? "项目 B" : "Project B"))
+        try library.hold(firstDraft)
+        try library.start(secondDraft)
+        let record = try library.begin(firstDraft)
+        try library.finish(record.id, status: .prepared)
+        let draftShelf = PocketWindowController()
+        draftShelf.library = library
+        var openedDrafts = 0
+        draftShelf.onOpenDraft = { openedDrafts += 1 }
+        draftShelf.show()
+        settle()
+        try capture(draftShelf.panel, name: "pocket-drafts", expectedWidth: 390)
+        check("viewing Pocket leaves current draft intact", library.state.active == secondDraft)
+        try library.restore(firstDraft.id)
+        check("Pocket restore parks current input", library.state.pocket == [secondDraft] && library.state.active == firstDraft)
+        try library.addMaterials(from: secondDraft)
+        check("Pocket reuse keeps instruction and receiver", library.state.active?.route == firstDraft.route
+              && library.state.active?.instruction == firstDraft.instruction && library.state.pocket == [secondDraft])
+        settle()
+        try capture(draftShelf.panel, name: "pocket-recovery", expectedWidth: 390)
+        draftShelf.hide()
+
+        // Exercise project selection and creation on the production panel, without external apps.
+        show()
+        controller.currentModel?.usesProjectContext = true
+        controller.currentModel?.workName = chinese ? "客户 A" : "Client A"
+        controller.currentModel?.chooseTool(.clipboard)
+        check("switching app preserves project context", controller.currentModel?.workName == (chinese ? "客户 A" : "Client A"))
+        controller.currentModel?.creatingProject = true
+        controller.currentModel?.isCreating = true
+        settle()
+        check("creation blocks accidental handoff", controller.currentModel?.canConfirm == false)
+        try capture(controller.panel, name: "capture-create-project", expectedWidth: 480)
+        _ = key("\u{1b}", code: 53, modifiers: [], to: controller.panel)
+        settle()
+        check("Escape closes creation before closing draft", controller.isVisible && controller.currentModel?.isCreating == false)
+        controller.currentModel?.cancel()
+        settle()
         check("real source app available for focus checks", sourcePID != nil && sourcePID != ProcessInfo.processInfo.processIdentifier,
               "sourcePID=\(sourcePID ?? -1)")
         let report = Report(language: language, appearance: dark ? "dark" : "light",

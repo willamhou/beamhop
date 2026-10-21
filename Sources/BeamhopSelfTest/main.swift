@@ -900,6 +900,12 @@ do {
     model.materials.append(HopMaterial(name: "file.png", path: "/local/file.png", image: true, bytes: 10))
     check(!model.canConfirm && model.snapshot.textFallback.contains("file.png"), "unsupported files block, copy names missing attachments")
     model.confirm()
+    model.usesProjectContext = true
+    model.workName = "Project A"
+    model.chooseTool(.clipboard)
+    check(model.workName == "Project A", "switching app keeps project context")
+    model.chooseTool(nil)
+    check(model.confirmLabel == "Save local draft", "local draft action names what it saves")
     let library = try HopLibrary(db)
     let second = HopDraft(materials: [HopMaterial(text: "second")], route: .init(target: .clipboard, project: "B"))
     try library.start(first); try library.hold(first); try library.start(second); try library.restore(first.id)
