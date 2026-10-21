@@ -123,6 +123,7 @@ final class CapturePanelController {
                           self.presentation == presentation,
                           self.panel?.isKeyWindow == false,
                           self.panel?.attachedSheet == nil else { return }
+                    self.currentModel?.isCreating = false
                     self.currentModel?.cancel()
                 }
             }

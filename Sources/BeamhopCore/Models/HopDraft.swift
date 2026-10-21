@@ -37,6 +37,7 @@ public struct HopRoute: Codable, Equatable, Sendable {
     }
     public var sessionLabel: String {
         if target == nil { return L10n.s("Keep on this Mac") }
+        if target == .clipboard || target == .cowork { return L10n.s("Paste into the app yourself") }
         return L10n.s(session == .currentWindow ? "Current window" : "New session · create in app")
     }
 }

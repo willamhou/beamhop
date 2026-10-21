@@ -132,6 +132,10 @@ enum NativeUISmoke {
         editor?.insertText("Native keyboard input", replacementRange: NSRange(location: 0, length: 0))
         settle()
         check("native editor updates note", controller.currentModel?.note == "Native keyboard input")
+        editor?.insertNewline(nil)
+        settle()
+        check("Return inserts a line break without handoff", controller.isVisible && confirms == 0
+              && controller.currentModel?.note.contains("\n") == true)
         controller.currentModel?.materials[0].text = "Edited inline <>&"
         controller.currentModel?.additionalText = "Additional material"
         check("inline material edits preserve original", controller.currentModel?.materials[0].original == sample)

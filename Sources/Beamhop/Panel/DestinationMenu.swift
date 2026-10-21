@@ -51,7 +51,7 @@ final class DestinationMenuPresenter: NSObject {
                 shortcut: shortcut.rawValue) { model.chooseTool(target) }
         }
         menu.addItem(.separator())
-        add(L10n.s("New session…"), enabled: model.selectedTarget != nil) {
+        add(L10n.s("New session…"), enabled: [.claudeCode, .chatgptDesktop, .kimiWork].contains(model.selectedTarget)) {
             model.creatingProject = false; model.isCreating = true
         }
         add(L10n.s("New project…"), action: onName)

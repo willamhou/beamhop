@@ -178,7 +178,9 @@ struct CapturePanelView: View {
                 }
             }
             Picker("Receiving app", selection: $newTarget) {
-                ForEach(model.visibleTargets, id: \.self) { Text($0.displayName).tag($0) }
+                ForEach(model.visibleTargets.filter { model.creatingProject || ($0 != .clipboard && $0 != .cowork) }, id: \.self) {
+                    Text($0.displayName).tag($0)
+                }
             }
             Text("Projects organize material locally. New conversations are created in the receiving app; this does not send anything.")
                 .font(.caption).foregroundStyle(.secondary)
