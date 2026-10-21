@@ -112,6 +112,27 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(dirty)
         self.assertNotEqual(first, second)
 
+    def test_index_hidden_inputs_never_claim_clean(self):
+        source = self.repo / "Sources/main.swift"
+        first, _ = PROVENANCE.source_state(self.repo)
+        for flag in ("assume-unchanged", "skip-worktree"):
+            with self.subTest(flag=flag):
+                source.write_text("print(1)")
+                self.git("update-index", "--" + flag, "Sources/main.swift")
+                self.assertTrue(PROVENANCE.source_state(self.repo)[1], "flag alone is conservatively dirty")
+                source.write_text("hidden edit")
+                self.assertEqual(self.git("status", "--porcelain", "--", "Sources").stdout, b"")
+                changed, dirty = PROVENANCE.source_state(self.repo)
+                self.assertTrue(dirty)
+                self.assertNotEqual(first, changed)
+                self.git("update-index", "--no-" + flag, "Sources/main.swift")
+
+    def test_tag_release_publishes_receipt_beside_app(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/release.yml").read_text()
+        self.assertIn("dist/*.zip", workflow)
+        self.assertIn("dist/build-records/*.json", workflow)
+        self.assertIn("fail_on_unmatched_files: true", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,7 @@ jobs:
         run: swift build
       - name: Swift tests
         run: swift test
-      - name: Self-test (28 storage checks)
+      - name: Self-test (storage, provenance and privacy)
         run: swift run BeamhopSelfTest
       - name: MCP stdio smoke test
         run: scripts/mcp-smoke.sh
@@ -29,10 +29,13 @@ jobs:
         run: ./packaging/build-app.sh
       - name: Zip Beamhop.app (ditto preserves permissions/metadata)
         run: cd dist && ditto -c -k --keepParent Beamhop.app "Beamhop-${GITHUB_REF_NAME}-macos.app.zip"
-      - name: Create GitHub Release with the app
+      - name: Create GitHub Release with the app and matching build receipt
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/build-records/*.json
+          fail_on_unmatched_files: true
           generate_release_notes: true
           body: |
             **Beamhop ${{ github.ref_name }}**
@@ -40,3 +43,5 @@ jobs:
             ⚠️ ad-hoc 签名构建,未公证。自己的 Mac 可用(首次需在系统设置里允许);分发给他人前需要 Developer ID 签名 + 公证。
 
             解压后拖入 /Applications;注册命令见 [packaging/README.md](../blob/main/packaging/README.md)。
+
+            随附的 JSON 构建记录对应包内 build ID，并包含签名后二进制的 SHA-256；请与应用一起保留。

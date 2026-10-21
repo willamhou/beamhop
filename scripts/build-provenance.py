@@ -44,7 +44,13 @@ def source_state(repo):
         else:
             digest.update(b"missing\0")
     status = git(repo, "status", "--porcelain", "--untracked-files=all", "--", *INPUTS)
-    return digest.hexdigest(), None if status is None or raw is None else bool(status.strip() or files - tracked)
+    flags = git(repo, "ls-files", "-v", "-z", "--cached", "--", *INPUTS)
+    # Porcelain deliberately hides assume-unchanged/skip-worktree edits. Conservatively
+    # mark these inputs dirty even when unchanged, rather than asserting a false clean build.
+    index_hidden = flags is not None and any(entry.startswith(b"S ") or entry[:1].islower()
+                                             for entry in flags.split(b"\0") if entry)
+    dirty = None if status is None or raw is None or flags is None else bool(status.strip() or files - tracked or index_hidden)
+    return digest.hexdigest(), dirty
 
 
 def write_json(path, data):

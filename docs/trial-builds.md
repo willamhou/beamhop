@@ -19,6 +19,8 @@ Input state covers `Sources`, Swift package manifests, the bridge source, packag
 
 After signing, packaging performs strict code-signature verification and writes an external JSON receipt in `<output>/build-records/<build-id>.json`. It contains the same provenance plus SHA-256 of the signed app executable, MCP helper and native bridge. The receipt is external to avoid a circular dependency between an embedded hash and the code signature. Changing a packaged binary invalidates its recorded digest. Keep the app and its matching receipt together; do not modify the app after signing.
 
+Inputs marked `assume-unchanged` or `skip-worktree` are conservatively labeled dirty even without a visible porcelain diff, because those index flags can hide edited worktree content. Tagged releases publish the matching JSON receipt beside the app ZIP and fail if either asset glob has no matches; CI also retains receipts as a separate artifact.
+
 Headless inspection (does not bootstrap the app, open Inbox or request permissions):
 
 ```sh
