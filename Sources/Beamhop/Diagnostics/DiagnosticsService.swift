@@ -2,14 +2,15 @@ import Foundation
 import AppKit
 import BeamhopCore
 
-enum DiagState { case ok, fail, warn, todo
+typealias DiagState = DiagnosticStatus
+extension DiagnosticStatus {
     var symbol: String {
         switch self { case .ok: return "✅"; case .fail: return "❌"; case .warn: return "⚠️"; case .todo: return "🚧" }
     }
 }
 
 struct DiagRow: Identifiable {
-    let id = UUID()
+    let id: DiagnosticCheckID
     let name: String
     let state: DiagState
     let detail: String
@@ -32,9 +33,24 @@ struct DiagnosticsService {
     // injected so we can show hotkey-conflict state
     var hotkeyConflicts: [String] = []
 
+    /// Never export row names/details/fix commands: they can contain paths or free text.
+    static func report(rows: [DiagRow], build: BuildInfo) -> DiagnosticReport {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        #if arch(arm64)
+        let architecture = "arm64"
+        #elseif arch(x86_64)
+        let architecture = "x86_64"
+        #else
+        let architecture = "unknown"
+        #endif
+        return DiagnosticReport(build: build, macOSVersion: "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
+                                runtimeArchitecture: architecture,
+                                checks: rows.map { DiagnosticCheck(id: $0.id, status: $0.state) })
+    }
+
     private func accessibilityRow() -> DiagRow {
         let ok = permissions.accessibility() == .granted
-        return DiagRow(name: "Accessibility permission",
+        return DiagRow(id: .accessibility, name: "Accessibility permission",
                        state: ok ? .ok : .fail,
                        detail: ok ? "Granted" : "Not granted — capture depends on it",
                        fixTitle: ok ? nil : "Open System Settings",
@@ -43,7 +59,7 @@ struct DiagnosticsService {
 
     private func screenRecordingRow() -> DiagRow {
         let ok = permissions.preflightScreenRecording() == .granted
-        return DiagRow(name: "Screen Recording permission",
+        return DiagRow(id: .screenRecording, name: "Screen Recording permission",
                        state: ok ? .ok : .warn,
                        detail: ok ? "Granted" : "Not granted (only screenshots need it — skippable)",
                        fixTitle: ok ? nil : "Open System Settings",
@@ -51,10 +67,10 @@ struct DiagnosticsService {
     }
 
     private func chromeHostRow() -> DiagRow {
-        // Week 1 has no host binary yet → fixed 🚧 (do NOT infer ✅ from a stray manifest). codex.
-        DiagRow(name: "Chrome native messaging host",
+        // Packaging exists; this row does not claim a live extension/host round-trip.
+        DiagRow(id: .chromeHost, name: "Chrome native messaging host",
                 state: .todo,
-                detail: "Week 2 implementation (host binary + manifest install)",
+                detail: "Host is packaged; browser manifest and live bridge require separate verification",
                 fixTitle: nil, fix: nil)
     }
 
@@ -84,12 +100,12 @@ struct DiagnosticsService {
                 NSPasteboard.general.setString(cmd, forType: .string)
             }
         }
-        return DiagRow(name: "Claude Code MCP registration", state: state, detail: detail,
+        return DiagRow(id: .claudeMCP, name: "Claude Code MCP registration", state: state, detail: detail,
                        fixTitle: fixTitle, fix: fix)
     }
 
     private func coworkRow() -> DiagRow {
-        DiagRow(name: "Claude Cowork integration",
+        DiagRow(id: .cowork, name: "Claude Cowork integration",
                 state: .todo,
                 detail: "Phase 1.5 — mechanism confirmed (.mcpb / claude_desktop_config.json), end-to-end pending",
                 fixTitle: nil, fix: nil)
@@ -98,13 +114,13 @@ struct DiagnosticsService {
     private func chatGPTRow() -> DiagRow {
         let appPath = "/Applications/ChatGPT.app"
         guard FileManager.default.fileExists(atPath: appPath) else {
-            return DiagRow(name: "ChatGPT Desktop AX",
+            return DiagRow(id: .chatGPT, name: "ChatGPT Desktop AX",
                            state: .warn, detail: "ChatGPT Desktop not installed",
                            fixTitle: nil, fix: nil)
         }
         let ver = (Bundle(path: appPath)?.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
         let known = ver == knownChatGPTVersion
-        return DiagRow(name: "ChatGPT Desktop AX",
+        return DiagRow(id: .chatGPT, name: "ChatGPT Desktop AX",
                        state: known ? .ok : .warn,
                        detail: known ? "v\(ver) (in the compatibility matrix)"
                                      : "v\(ver) is outside the verified matrix (v\(knownChatGPTVersion)) — re-test likely",
@@ -113,9 +129,9 @@ struct DiagnosticsService {
 
     private func hotkeyRow() -> DiagRow {
         if hotkeyConflicts.isEmpty {
-            return DiagRow(name: "Global hotkeys", state: .ok, detail: "Registered", fixTitle: nil, fix: nil)
+            return DiagRow(id: .hotkeys, name: "Global hotkeys", state: .ok, detail: "Registered", fixTitle: nil, fix: nil)
         }
-        return DiagRow(name: "Global hotkeys",
+        return DiagRow(id: .hotkeys, name: "Global hotkeys",
                        state: .warn,
                        detail: "Conflicts: \(hotkeyConflicts.joined(separator: ", ")) (possibly taken by Spotlight etc.)",
                        fixTitle: nil, fix: nil)   // 改键 UI: Week 1 Settings(后续)
