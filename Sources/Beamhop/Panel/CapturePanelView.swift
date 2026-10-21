@@ -70,6 +70,12 @@ struct CapturePanelView: View {
             if model.isCreating { creation }
             Divider()
             VStack(alignment: .leading, spacing: 10) {
+                if model.pendingImportCount > 0 {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Adding attachments…").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 HStack {
                     ZStack {
                         DestinationButton(presenter: destinationMenu, model: model) {
@@ -95,7 +101,8 @@ struct CapturePanelView: View {
                 if let message = model.draftError ?? model.attachmentWarning {
                     Text(message).font(.caption).foregroundStyle(.orange)
                     if model.attachmentWarning != nil {
-                        Button("Copy text · add files in app") { model.onCopyText?() }.font(.caption)
+                        Button("Copy text · add files in app") { model.onCopyText?() }
+                            .font(.caption).disabled(model.pendingImportCount > 0)
                     }
                 }
                 HStack {

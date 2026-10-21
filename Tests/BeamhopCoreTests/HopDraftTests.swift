@@ -22,6 +22,10 @@ final class HopDraftTests: XCTestCase {
         let handoff = Handoff(items: [.init(capture: capture)], editedText: draft.outgoingText)
         XCTAssertEqual(handoff.markdown, draft.outgoingText)
         XCTAssertEqual(handoff.claudeTrigger, draft.outgoingText)
+        model.pendingImportCount = 1
+        XCTAssertFalse(model.canConfirm)
+        model.confirm()
+        model.pendingImportCount = 0
         model.materials.append(HopMaterial(name: "image.png", path: "/local/image.png", image: true, bytes: 10))
         XCTAssertFalse(model.canConfirm)
         model.confirm()

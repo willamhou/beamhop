@@ -213,6 +213,7 @@ final class HopCoordinator {
 
     private func importFiles(_ urls: [URL], into model: CapturePanelModel) {
         let draft = model.snapshot
+        model.pendingImportCount += 1
         let directory = AppPaths.supportDir.appendingPathComponent("hop-attachments", isDirectory: true)
         DispatchQueue.global(qos: .userInitiated).async { [weak self, weak model] in
             var imported: [HopMaterial] = []
@@ -235,13 +236,21 @@ final class HopCoordinator {
             let added = imported, message = failure
             DispatchQueue.main.async {
                 guard let self else { return }
+                defer { model?.pendingImportCount = max(0, (model?.pendingImportCount ?? 1) - 1) }
                 if let model, self.panel.isVisible, self.panel.currentModel === model {
                     model.materials += added; model.draftError = message
                 } else if !added.isEmpty {
-                    var saved = draft; saved.id = UUID().uuidString; saved.materials += added
-                    do { try self.library.hold(saved) }
+                    let stillActive = self.library.state.active?.id == draft.id
+                    var saved = (stillActive ? self.library.state.active : self.library.state.pocket.first { $0.id == draft.id })
+                        ?? model?.snapshot ?? draft
+                    saved.materials += added
+                    do {
+                        if stillActive { try self.library.saveActive(saved) }
+                        else { try self.library.hold(saved) }
+                    }
                     catch { Notifier.error(L10n.s("Could not save draft"), error.localizedDescription) }
                 }
+                if let message, !self.panel.isVisible { Notifier.error(L10n.s("Could not add attachment"), message) }
             }
         }
     }

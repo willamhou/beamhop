@@ -26,6 +26,7 @@ public final class CapturePanelModel: ObservableObject {
     @Published public var materials: [HopMaterial] = [] { didSet { draftChanged() } }
     @Published public var session: HopRoute.Session = .currentWindow { didSet { draftChanged() } }
     @Published public var draftError: String?
+    @Published public var pendingImportCount = 0
     @Published public var savedRoutes: [HopRoute] = []
     @Published public var projects: [String] = []
     @Published public var isCreating = false
@@ -76,7 +77,7 @@ public final class CapturePanelModel: ObservableObject {
     }
     @Published public private(set) var unavailableTarget: DeliveryTarget?
     public var canConfirm: Bool {
-        !isCreating && draftError == nil && snapshot.hasContent
+        !isCreating && pendingImportCount == 0 && draftError == nil && snapshot.hasContent
             && (selectedTarget == nil || session == .newInApp || snapshot.attachments.isEmpty)
             && unavailableTarget == nil && (selectedTarget.map { visibleTargets.contains($0) } ?? true)
     }
@@ -202,7 +203,7 @@ public final class CapturePanelModel: ObservableObject {
         onHold?(unavailableTarget ?? selectedTarget, note)
     }
 
-    public var canHold: Bool { onHold != nil && !isCreating && snapshot.hasContent }
+    public var canHold: Bool { onHold != nil && !isCreating && pendingImportCount == 0 && snapshot.hasContent }
 
     // MARK: presentation helpers
 

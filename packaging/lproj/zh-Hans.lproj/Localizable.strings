@@ -1,4 +1,6 @@
 // Inline Hop workflow
+"Adding attachments…" = "正在添加附件…";
+"Could not add attachment" = "未能添加附件";
 "Save local draft" = "保存本地草稿";
 "Local draft" = "本地草稿";
 "Keep on this Mac" = "仅保存在这台 Mac";

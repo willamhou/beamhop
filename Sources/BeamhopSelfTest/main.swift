@@ -897,6 +897,10 @@ do {
           && !first.outgoingText.contains("immutable original"), "literal prompt and edited text only")
     let h = Handoff(items: [.init(capture: cap)], editedText: first.outgoingText)
     check(h.markdown == first.outgoingText && h.claudeTrigger == first.outgoingText, "MCP trigger cannot silently restore original")
+    model.pendingImportCount = 1
+    check(!model.canConfirm, "handoff cannot outrun an attachment import")
+    model.confirm()
+    model.pendingImportCount = 0
     model.materials.append(HopMaterial(name: "file.png", path: "/local/file.png", image: true, bytes: 10))
     check(!model.canConfirm && model.snapshot.textFallback.contains("file.png"), "unsupported files block, copy names missing attachments")
     model.confirm()
