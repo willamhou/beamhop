@@ -14,6 +14,12 @@
     addReference:['连同出处和适用条件加入','Add with its source and conditions'], included:['已加入参考','Reference included'], available:['可加入参考 · 1','Reference available · 1'],
     close:['收起详情','Close details'], back:['回到原消息','Back to the message'], remove:['移除','Remove'],
     materials:['这次带上的材料','Material for this handoff'], add:['添加材料','Add material'],
+    addText:['添加文本','Add text'], editText:['编辑文本','Edit text'], textName:['补充文本','Additional text'], manualSource:['手动添加的文本','Manually added text'],
+    textTitle:['标题','Title'], textBody:['文本内容','Text content'], textPlaceholder:['输入或粘贴要带上的材料…','Type or paste material to include…'],
+    textHelp:['更改自动保留，交接时使用修改后的内容。原文仅留在本页供对照，出处继续保留。','Changes are kept automatically; the edited content is used for handoff. The original stays in this page for comparison, and its source is retained.'],
+    newTextHelp:['输入的文字作为一份独立材料保留；给 Agent 的任务仍写在指令框里。','This text is a separate piece of material; write the task for the agent in the instruction field.'],
+    originalText:['原始文本','Original text'], editedText:['本次交接文本 · 已编辑','Handoff text · Edited'], originalVersion:['查看原始文本','View original text'],
+    restoreOriginal:['恢复原文','Restore original'], done:['完成','Done'], emptyText:['文本内容为空：','Empty text: '], emptyTextHelp:['。请补充内容或移除这项。','. Add content or remove this item.'],
     addFile:['添加示例文件','Add a sample file'], addImage:['添加示例图片','Add a sample image'], addLocal:['从本机选择…','Choose from this device…'],
     addHint:['也可以拖入文件，或在输入区粘贴图片。文件不会上传。','You can also drop files or paste an image into the input. Files are not uploaded.'],
     fileName:['部署约束.md','deployment-notes.md'], imageName:['内网示意图.svg','network-diagram.svg'],
@@ -57,10 +63,12 @@
   const routeName = id => {const r=route(id);return r.app+' · '+t(r.session);};
   let sequence=0, generation=0, timer=null;
   const objectUrls=new Set();
-  const sampleClip = () => ({id:'clip',kind:'text',name:t('clip'),source:t('source'),text:t('original')});
+  const sampleClip = () => ({id:'clip',kind:'text',name:t('clip'),source:t('source'),text:t('original'),originalText:t('original')});
   const newBatch = routeId => ({id:'batch-'+(++sequence),routeId,instruction:'',materials:[sampleClip()],dirty:false});
   const snapshot = batch => ({...batch,materials:batch.materials.map(m=>({...m}))});
-  const sameBatch = (a,b) => a?.id===b.id&&a.instruction===b.instruction&&a.routeId===b.routeId&&a.materials.map(m=>m.id).join('|')===b.materials.map(m=>m.id).join('|');
+  const materialVersion = items => JSON.stringify(items.map(m=>['id','kind','name','text','originalText','source','conditions','url','size'].map(key=>m[key])));
+  const sameBatch = (a,b) => a?.id===b.id&&a.instruction===b.instruction&&a.routeId===b.routeId&&materialVersion(a.materials)===materialVersion(b.materials);
+  const editedText = m => m.kind==='text' && m.originalText!==undefined && m.text!==m.originalText;
   const hasContent = batch => !!batch && (!!batch.materials.length || !!batch.instruction.trim());
   const state={batch:newBatch('a-codex'),lastRoute:'a-codex',open:true,detail:null,picker:null,ready:false,shelf:[],receipts:[],lastReceipt:null,busy:false};
   const button=(action,label,extra='')=>'<button type="button" data-action="'+action+'" '+extra+'>'+escape(label)+'</button>';
@@ -71,7 +79,7 @@
   function updateReference(){const included=state.batch?.materials.some(m=>m.id==='reference');$('show-reference').hidden=!(state.open&&state.ready);$('show-reference').textContent=t(included?'included':'available');}
   function suggest(){
     cancelSuggestion();state.ready=false;updateReference();
-    if(!state.open||!state.batch||route(state.batch.routeId).work!=='client'||!state.batch.materials.some(m=>m.id==='clip')||$('suggestion-speed').value==='none')return;
+    if(!state.open||!state.batch||route(state.batch.routeId).work!=='client'||!state.batch.materials.some(m=>m.id==='clip'&&(en?/company network/i:/内网/).test(m.text))||$('suggestion-speed').value==='none')return;
     const revision=generation,batchId=state.batch.id;
     const arrive=()=>{if(revision!==generation||!state.open||state.batch?.id!==batchId)return;state.ready=true;updateReference();};
     if($('suggestion-speed').value==='cached')arrive();else timer=setTimeout(arrive,4000);
@@ -86,31 +94,48 @@
   function unsupported(batch){return batch.materials.filter(m=>!route(batch.routeId).accept.includes(m.kind));}
   function renderRoute(){
     if(!state.batch)return;
-    const r=route(state.batch.routeId),missing=unsupported(state.batch),empty=!state.batch.materials.length&&!state.batch.instruction.trim();
+    const r=route(state.batch.routeId),missing=unsupported(state.batch),blankText=state.batch.materials.filter(m=>m.kind==='text'&&!m.text.trim()),empty=!state.batch.materials.length&&!state.batch.instruction.trim();
     $('receiver-name').textContent=routeName(r.id);$('work-name').textContent=t(r.work);$('choose-destination').title=t(r.work)+' / '+routeName(r.id);
-    $('action-label').textContent=t(r.mode==='background'?'send':r.mode==='draft'?'fill':'copyAction');$('prepare').disabled=!!missing.length||empty||state.busy;$('hold').disabled=empty||state.busy;
-    $('route-hint').textContent=missing.length?t('unsupported')+missing.map(m=>m.name).join(en?', ':'、')+t('unsupportedEnd'):t(r.mode==='background'?'bgHint':r.mode==='draft'?'draftHint':'copyHint');$('route-hint').classList.toggle('route-warning',!!missing.length);
+    $('action-label').textContent=t(r.mode==='background'?'send':r.mode==='draft'?'fill':'copyAction');$('prepare').disabled=!!missing.length||!!blankText.length||empty||state.busy;$('hold').disabled=!!blankText.length||empty||state.busy;
+    $('route-hint').textContent=blankText.length?t('emptyText')+blankText.map(m=>m.name).join(en?', ':'、')+t('emptyTextHelp'):missing.length?t('unsupported')+missing.map(m=>m.name).join(en?', ':'、')+t('unsupportedEnd'):t(r.mode==='background'?'bgHint':r.mode==='draft'?'draftHint':'copyHint');$('route-hint').classList.toggle('route-warning',!!missing.length||!!blankText.length);
   }
   function renderMaterials(){
     const items=state.batch?.materials||[];$('material-count').textContent=String(items.length);
-    $('material-chips').innerHTML=items.slice(0,2).map(m=>'<span class="material-chip"><button type="button" data-inspect="'+escape(m.id)+'" title="'+escape(m.name)+'" aria-label="'+escape(t('view')+' · '+m.name)+'">'+materialIcon(m)+'<span>'+escape(m.name)+'</span></button><button type="button" class="remove-chip" data-remove="'+escape(m.id)+'" aria-label="'+escape(t('remove')+' '+m.name)+'">×</button></span>').join('')+(items.length>2?'<button type="button" class="more-materials" data-all="true" aria-label="'+escape(t('more'))+'">+'+(items.length-2)+'</button>':'')+(!items.length?'<span class="empty-materials">'+escape(t('empty'))+'</span>':'');renderRoute();updateReference();
+    $('material-chips').innerHTML=items.slice(0,2).map(m=>'<span class="material-chip"><button type="button" data-inspect="'+escape(m.id)+'" title="'+escape(m.name)+'" aria-label="'+escape(t(m.kind==='text'?'editText':'view')+' · '+m.name)+'">'+materialIcon(m)+'<span>'+escape(m.name)+'</span></button><button type="button" class="remove-chip" data-remove="'+escape(m.id)+'" aria-label="'+escape(t('remove')+' '+m.name)+'">×</button></span>').join('')+(items.length>2?'<button type="button" class="more-materials" data-all="true" aria-label="'+escape(t('more'))+'">+'+(items.length-2)+'</button>':'')+(!items.length?'<span class="empty-materials">'+escape(t('empty'))+'</span>':'');renderRoute();updateReference();
   }
   function syncCapture(){document.querySelector('.panel-stage').style.minHeight='';$('quick-panel').hidden=false;$('quick-prompt').value=state.batch.instruction;resizeInput();renderMaterials();$('reopen').hidden=true;state.open=true;suggest();}
   function openCapture(){if(state.busy)return;if(!state.batch)state.batch=newBatch(state.lastRoute);hideDetail();hidePicker();feedback('');syncCapture();$('quick-prompt').focus({preventScroll:true});}
   function closeCapture(message=''){const stage=document.querySelector('.panel-stage');stage.style.minHeight=stage.getBoundingClientRect().height+'px';state.open=false;cancelSuggestion();hidePicker();hideDetail();$('quick-panel').hidden=true;$('reopen').hidden=!state.batch;feedback(message);$('capture-selection').focus({preventScroll:true});}
   function materialHTML(m,editable=false){
-    return '<section class="material-detail"><div class="material-title">'+materialIcon(m)+'<strong>'+escape(m.name)+'</strong><span class="muted">'+escape(t(m.kind))+(m.size===undefined?'':' · '+sizeText(m.size))+'</span></div><p class="muted">'+escape(m.source)+'</p>'+(m.kind==='text'?'<p class="literal">'+escape(m.text)+'</p>':m.kind==='image'?'<img class="image-preview" src="'+escape(m.url)+'" alt="'+escape(m.name)+'">':'<p>'+escape(m.fixture?t('fixtureFileNote'):t('fileNote'))+'</p>')+(m.conditions?'<p class="muted">'+escape(m.conditions)+'</p>':'')+(editable?'<button type="button" data-remove="'+escape(m.id)+'">'+escape(t('remove'))+'</button>':'')+'</section>';
+    return '<section class="material-detail"><div class="material-title">'+materialIcon(m)+'<strong>'+escape(m.name)+'</strong><span class="muted">'+escape(t(m.kind))+(m.size===undefined?'':' · '+sizeText(m.size))+'</span></div><p class="muted">'+escape(m.source)+'</p>'+(m.kind==='text'?(editedText(m)?'<p class="edited-label">'+escape(t('editedText'))+'</p>':'')+'<p class="literal">'+escape(m.text)+'</p>'+(editable?originalHTML(m):''):m.kind==='image'?'<img class="image-preview" src="'+escape(m.url)+'" alt="'+escape(m.name)+'">':'<p>'+escape(m.fixture?t('fixtureFileNote'):t('fileNote'))+'</p>')+(m.conditions?'<p class="muted">'+escape(m.conditions)+'</p>':'')+(editable?'<div class="material-actions">'+(m.kind==='text'?'<button type="button" data-edit="'+escape(m.id)+'">'+escape(t('editText'))+'</button>':'')+'<button type="button" data-remove="'+escape(m.id)+'">'+escape(t('remove'))+'</button></div>':'')+'</section>';
+  }
+  function originalHTML(m){return m.originalText===undefined?'':'<details class="original-text"><summary>'+escape(t('originalVersion'))+'</summary><p class="literal">'+escape(m.originalText)+'</p></details>';}
+  function editText(id){
+    if(state.busy||!state.batch)return;
+    const m=state.batch.materials.find(item=>item.id===id&&item.kind==='text');if(!m)return;
+    hidePicker();
+    showDetail('text-editor','<section id="text-editor" data-material="'+escape(m.id)+'"><h3>'+escape(t(m.originalText===undefined&&!m.text?'addText':'editText'))+'</h3><p class="muted">'+escape(m.source)+'</p><label for="material-title-input">'+escape(t('textTitle'))+'</label><input id="material-title-input" type="text" maxlength="160"><label for="material-text-input">'+escape(t('textBody'))+'</label><textarea id="material-text-input" rows="5" placeholder="'+escape(t('textPlaceholder'))+'" aria-describedby="text-editor-help"></textarea><p id="text-editor-help" class="muted">'+escape(t(m.originalText===undefined?'newTextHelp':'textHelp'))+'</p><p id="text-edit-state" class="edited-label" hidden>'+escape(t('editedText'))+'</p>'+originalHTML(m)+(m.conditions?'<p class="muted">'+escape(m.conditions)+'</p>':'')+'<div class="detail-actions">'+(m.originalText===undefined?'':button('restore-original',t('restoreOriginal')))+'<button type="button" data-remove="'+escape(m.id)+'">'+escape(t('remove'))+'</button>'+button('finish-text',t('done'))+'</div></section>');
+    $('material-title-input').value=m.name;$('material-text-input').value=m.text;
+    updateEditorState(m);$('material-text-input').focus({preventScroll:true});
+  }
+  function updateEditorState(m){
+    $('text-edit-state').hidden=!editedText(m);
+    const restoreButton=$('text-editor').querySelector('[data-action="restore-original"]');if(restoreButton)restoreButton.disabled=!editedText(m);
+  }
+  function addText(){
+    const item={id:'material-'+(++sequence),kind:'text',name:t('textName'),source:t('manualSource'),text:''};
+    addMaterials([item]);editText(item.id);
   }
   function showMaterials(id){if(!state.batch)return;const items=id?state.batch.materials.filter(m=>m.id===id):state.batch.materials;showDetail('materials','<h3>'+escape(t('materials'))+' · '+state.batch.materials.length+'</h3>'+items.map(m=>materialHTML(m,true)).join('')+(!items.length?'<p>'+escape(t('empty'))+'</p>':'')+'<div class="detail-actions">'+button('close',t('close'))+'</div>');}
   function showReference(){if(!state.batch||!state.ready)return;const added=state.batch.materials.some(m=>m.id==='reference');showDetail('reference','<h3>'+escape(t('reference'))+'</h3><p class="muted">'+escape(t('referenceMatch'))+'</p><p>'+escape(t('referenceBody'))+'</p><p class="muted">'+escape(t('conditions'))+'</p><div class="detail-actions">'+button('reference',t(added?'remove':'addReference'))+button('close',t('close'))+'</div>');}
   function addMaterials(items){if(!state.batch)state.batch=newBatch(state.lastRoute);state.batch.materials.push(...items);state.batch.dirty=true;hidePicker();renderMaterials();suggest();if(state.detail==='materials')showMaterials();}
-  function removeMaterial(id){if(!state.batch)return;state.batch.materials=state.batch.materials.filter(m=>m.id!==id);state.batch.dirty=true;renderMaterials();suggest();if(state.detail==='materials')showMaterials();else if(state.detail==='reference')showReference();$('show-material').focus({preventScroll:true});}
+  function removeMaterial(id){if(!state.batch)return;state.batch.materials=state.batch.materials.filter(m=>m.id!==id);state.batch.dirty=true;renderMaterials();suggest();if(state.detail==='materials'||state.detail==='text-editor')showMaterials();else if(state.detail==='reference')showReference();$('show-material').focus({preventScroll:true});}
   function addFiles(files){
     const items=Array.from(files).map(file=>{const kind=/^image\/(png|jpeg|webp|gif|avif|bmp)$/.test(file.type)?'image':'file';let url=null;if(kind==='image'){url=URL.createObjectURL(file);objectUrls.add(url);}return {id:'material-'+(++sequence),kind,name:file.name||t(kind),source:t('local'),size:file.size,file,url};});if(items.length)addMaterials(items);
   }
   function showPicker(kind){
     if(state.picker===kind){hidePicker(true);return;}hideDetail();state.picker=kind;
-    const content=kind==='add'?'<h3>'+escape(t('add'))+'</h3>'+button('sample-file',t('addFile'))+button('sample-image',t('addImage'))+button('local-files',t('addLocal'))+'<p>'+escape(t('addHint'))+'</p>':'<h3>'+escape(t('destination'))+'</h3>'+routes.map(r=>'<button type="button" data-route="'+r.id+'" aria-pressed="'+String(state.batch.routeId===r.id)+'"><strong>'+escape(routeName(r.id))+'</strong><span>'+escape(t(r.work)+' · '+t(r.mode))+'</span></button>').join('')+'<p>'+escape(t('connectionHint'))+'</p>';
+    const content=kind==='add'?'<h3>'+escape(t('add'))+'</h3>'+button('add-text',t('addText'))+button('sample-file',t('addFile'))+button('sample-image',t('addImage'))+button('local-files',t('addLocal'))+'<p>'+escape(t('addHint'))+'</p>':'<h3>'+escape(t('destination'))+'</h3>'+routes.map(r=>'<button type="button" data-route="'+r.id+'" aria-pressed="'+String(state.batch.routeId===r.id)+'"><strong>'+escape(routeName(r.id))+'</strong><span>'+escape(t(r.work)+' · '+t(r.mode))+'</span></button>').join('')+'<p>'+escape(t('connectionHint'))+'</p>';
     $('inline-picker').innerHTML=content;$('inline-picker').hidden=false;$('inline-picker').setAttribute('role','dialog');$('inline-picker').setAttribute('aria-label',t(kind==='add'?'add':'destination'));
     $('add-material').setAttribute('aria-expanded',String(kind==='add'));$('choose-destination').setAttribute('aria-expanded',String(kind==='destination'));positionPicker();($('inline-picker').querySelector('[aria-pressed="true"]')||$('inline-picker').querySelector('button')).focus({preventScroll:true});
   }
@@ -138,7 +163,7 @@
     state.shelf=state.shelf.filter(b=>b.id!==id);state.batch=snapshot(selected);state.lastRoute=selected.routeId;$('shelf-panel').hidden=true;$('shelf-toggle').setAttribute('aria-expanded','false');renderShelf();openCapture();feedback(t(kept?'restoreNotice':'restored'));
   }
   function packetHTML(batch){return '<p class="muted">'+escape(t(route(batch.routeId).work)+' / '+routeName(batch.routeId))+'</p><h4>'+escape(t('prompt'))+'</h4><p class="literal">'+escape(batch.instruction||t('noPrompt'))+'</p><h4>'+escape(t('materials'))+' · '+batch.materials.length+'</h4>'+batch.materials.map(m=>materialHTML(m)).join('');}
-  function packetText(batch){return [t(route(batch.routeId).work)+' / '+routeName(batch.routeId),t('prompt')+': '+(batch.instruction||t('noPrompt')),...batch.materials.map(m=>m.name+'\n'+m.source+'\n'+m.text+(m.conditions?'\n'+m.conditions:''))].join('\n\n');}
+  function packetText(batch){return [t(route(batch.routeId).work)+' / '+routeName(batch.routeId),t('prompt')+': '+(batch.instruction||t('noPrompt')),...batch.materials.map(m=>m.name+'\n'+m.source+'\n'+(editedText(m)?t('editedText')+'\n':'')+m.text+(m.conditions?'\n'+m.conditions:''))].join('\n\n');}
   function record(batch,status,previous=null){const receipt=previous||{id:'receipt-'+(++sequence),batch:snapshot(batch)};receipt.status=status;if(!previous)state.receipts.push(receipt);state.lastReceipt=receipt;$('view-receipt').hidden=false;$('open-receiver').hidden=status!=='sent';return receipt;}
   function showHistory(){
     if(state.receipts.length===1){showReceipt(state.receipts[0]);return;}
@@ -152,14 +177,15 @@
   function openWork(routeId,prepared=null){closeCapture('');showDetail('work','<h3>'+escape(routeName(routeId))+'</h3><p>'+escape(t($('receiver-unavailable').checked?'openUnavailable':prepared?'filled':'originalWork'))+'</p>'+(!$('receiver-unavailable').checked&&prepared?packetHTML(prepared):'<p class="muted">'+escape(t(route(routeId).work))+'</p>')+'<div class="detail-actions">'+button('back',t('back'))+'</div>');$('detail-panel').querySelector('button').focus({preventScroll:true});}
   async function deliver(batch,retryRecord=null){
     if(state.busy)return;const frozen=snapshot(batch),r=route(frozen.routeId);
+    const blankText=frozen.materials.filter(m=>m.kind==='text'&&!m.text.trim());if(blankText.length){feedback(t('emptyText')+blankText.map(m=>m.name).join(', ')+t('emptyTextHelp'));return;}
     if(unsupported(frozen).length){feedback(t('unsupported')+unsupported(frozen).map(m=>m.name).join(', '));return;}
     if(!frozen.materials.length&&!frozen.instruction.trim()){feedback(t('noContent'));return;}
     if(r.mode!=='copy'&&$('receiver-unavailable').checked){const rec=record(frozen,'failed',retryRecord);closeCapture(t('failed'));showReceipt(rec);return;}
     if(r.mode==='copy'){
-      state.busy=true;feedback(t('busy'));$('quick-panel').querySelectorAll('button,textarea').forEach(el=>{el.disabled=true;});
+      state.busy=true;feedback(t('busy'));document.querySelectorAll('#quick-panel button,#quick-panel textarea,#text-editor button,#text-editor input,#text-editor textarea').forEach(el=>{el.disabled=true;});
       try{await navigator.clipboard.writeText(packetText(frozen));}
-      catch{const rec=record(frozen,'copyFailed',retryRecord);state.busy=false;$('quick-panel').querySelectorAll('button,textarea').forEach(el=>{el.disabled=false;});renderRoute();closeCapture(t('copyFailed'));showReceipt(rec);return;}
-      state.busy=false;$('quick-panel').querySelectorAll('button,textarea').forEach(el=>{el.disabled=false;});
+      catch{const rec=record(frozen,'copyFailed',retryRecord);state.busy=false;document.querySelectorAll('#quick-panel button,#quick-panel textarea,#text-editor button,#text-editor input,#text-editor textarea').forEach(el=>{el.disabled=false;});renderRoute();closeCapture(t('copyFailed'));showReceipt(rec);return;}
+      state.busy=false;document.querySelectorAll('#quick-panel button,#quick-panel textarea,#text-editor button,#text-editor input,#text-editor textarea').forEach(el=>{el.disabled=false;});
     }
     const status=r.mode==='background'?'sent':r.mode==='draft'?'filled':'copied';record(frozen,status,retryRecord);
     // A retry must not consume a newer capture or a changed version of its input.
@@ -180,17 +206,28 @@
   $('file-input').addEventListener('change',event=>{addFiles(event.target.files);event.target.value='';});
   $('inline-picker').addEventListener('click',event=>{
     const b=event.target.closest('button');if(!b)return;
+    if(b.dataset.action==='add-text'){addText();return;}
     if(b.dataset.route){state.batch.routeId=b.dataset.route;state.lastRoute=b.dataset.route;state.batch.dirty=true;hidePicker(true);renderRoute();suggest();return;}
     if(b.dataset.action==='sample-file')addMaterials([{id:'material-'+(++sequence),kind:'file',name:t('fileName'),source:t('fixture'),fixture:true,url:'./deployment-notes.md'}]);
     if(b.dataset.action==='sample-image')addMaterials([{id:'material-'+(++sequence),kind:'image',name:t('imageName'),source:t('fixture'),fixture:true,url:'./material-sample.svg'}]);
     if(b.dataset.action==='local-files'){hidePicker();$('file-input').click();}$('add-material').focus({preventScroll:true});
   });
-  $('material-chips').addEventListener('click',event=>{const b=event.target.closest('button');if(!b)return;if(b.dataset.remove)removeMaterial(b.dataset.remove);else showMaterials(b.dataset.inspect);});
+  $('material-chips').addEventListener('click',event=>{const b=event.target.closest('button');if(!b)return;if(b.dataset.remove)removeMaterial(b.dataset.remove);else if(state.batch.materials.some(m=>m.id===b.dataset.inspect&&m.kind==='text'))editText(b.dataset.inspect);else showMaterials(b.dataset.inspect);});
+  $('detail-panel').addEventListener('input',event=>{
+    if(!['material-title-input','material-text-input'].includes(event.target.id)||state.busy)return;
+    const id=$('text-editor')?.dataset.material,m=state.batch?.materials.find(item=>item.id===id);if(!m)return;
+    if(event.target.id==='material-title-input')m.name=event.target.value.trim()||t('textName');else m.text=event.target.value;
+    state.batch.dirty=true;renderMaterials();updateEditorState(m);suggest();
+  });
   $('detail-panel').addEventListener('click',event=>{
-    const b=event.target.closest('button');if(!b)return;if(b.dataset.remove){removeMaterial(b.dataset.remove);return;}if(b.dataset.openWork){openWork(b.dataset.openWork);return;}if(b.dataset.record){showReceipt(state.receipts.find(r=>r.id===b.dataset.record));return;}const a=b.dataset.action;
+    const b=event.target.closest('button');if(!b)return;if(b.dataset.edit){editText(b.dataset.edit);return;}if(b.dataset.remove){removeMaterial(b.dataset.remove);return;}if(b.dataset.openWork){openWork(b.dataset.openWork);return;}if(b.dataset.record){showReceipt(state.receipts.find(r=>r.id===b.dataset.record));return;}const a=b.dataset.action;
+    if(a==='finish-text'){hideDetail();$('show-material').focus({preventScroll:true});}
+    if(a==='restore-original'){
+      const m=state.batch?.materials.find(item=>item.id===$('text-editor')?.dataset.material);if(m?.originalText!==undefined){m.text=m.originalText;state.batch.dirty=true;$('material-text-input').value=m.text;renderMaterials();updateEditorState(m);suggest();$('material-text-input').focus({preventScroll:true});}
+    }
     if(a==='close'){hideDetail();(state.open?$('show-material'):$('capture-selection')).focus({preventScroll:true});}
     if(a==='back'){hideDetail();feedback(t('returned'));$('capture-selection').focus({preventScroll:true});}
-    if(a==='reference'){if(state.batch.materials.some(m=>m.id==='reference'))removeMaterial('reference');else addMaterials([{id:'reference',kind:'text',name:t('reference'),source:t('reference')+' · '+t('fixture'),text:t('referenceBody'),conditions:t('conditions')}]);showReference();}
+    if(a==='reference'){if(state.batch.materials.some(m=>m.id==='reference'))removeMaterial('reference');else addMaterials([{id:'reference',kind:'text',name:t('reference'),source:t('reference')+' · '+t('fixture'),text:t('referenceBody'),originalText:t('referenceBody'),conditions:t('conditions')}]);showReference();}
     if(a==='retry'){const rec=state.receipts.find(item=>item.id===b.dataset.receipt);if(rec&&(rec.status==='failed'||rec.status==='copyFailed'))deliver(rec.batch,rec);}
     if(a==='history')showHistory();
     if(a==='recover'){const rec=state.receipts.find(item=>item.id===b.dataset.receipt);if(rec){const kept=hasContent(state.batch);if(kept)stash(state.batch);state.batch={...snapshot(rec.batch),id:'batch-'+(++sequence),dirty:true};state.lastRoute=state.batch.routeId;openCapture();feedback(t(kept?'restoreNotice':'restored'));}}

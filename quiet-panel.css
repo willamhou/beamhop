@@ -14,3 +14,7 @@
 @media(prefers-contrast:more){:root{--muted:light-dark(#444,#ddd);--line:light-dark(#888,#999)}.quick-panel{border-width:2px}}
 
 .record-snippet{display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}
+
+.material-actions{display:flex;gap:14px;margin-top:7px}.original-text{margin:10px 0;font-size:11px;color:var(--muted)}.original-text summary{cursor:pointer}.original-text .literal{color:var(--ink)}.edited-label{font-size:11px!important;color:var(--blue);margin:8px 0 4px!important}
+#text-editor label{display:block;font-size:12px;font-weight:500;margin:14px 0 6px}#text-editor input,#text-editor textarea{display:block;width:100%;border:1px solid var(--line);border-radius:6px;background:var(--paper);padding:9px 10px;color:var(--ink);font-size:14px;line-height:1.6}#text-editor textarea{min-height:150px;max-height:350px;resize:vertical;white-space:pre-wrap}#text-editor input:focus,#text-editor textarea:focus{outline:2px solid var(--blue);outline-offset:1px}#text-editor .detail-actions{align-items:center;gap:8px 16px}#text-editor [data-action="finish-text"]{background:var(--button);color:#fff;border-radius:5px;padding:5px 13px}#text-editor .muted{margin-top:10px}
+@media(max-width:560px){#text-editor input,#text-editor textarea{font-size:16px}.detail-panel #text-editor .detail-actions button{min-height:40px}}
