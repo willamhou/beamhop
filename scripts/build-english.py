@@ -26,8 +26,19 @@ def build(page):
     source = re.sub(r'<header\b[^>]*>.*?</header>', '<header></header>', source, count=1, flags=re.S)
     source = re.sub(r'<nav class="site-essays".*?</nav>', '', source, flags=re.S)
     translations = json.loads((ROOT / "translations" / f"{page}.en.json").read_text(encoding="utf-8"))
+    if page == 'quiet-panel':
+        translations.update(json.loads((ROOT / 'translations/quiet-flow.en.json').read_text(encoding='utf-8')))
     pattern = re.compile('|'.join(re.escape(key) for key in sorted(translations, key=len, reverse=True)))
     result = pattern.sub(lambda match: translations[match.group()], source)
+    if page == 'quiet-panel':
+        phrases = json.loads((ROOT / 'translations/quiet-flow.en.json').read_text(encoding='utf-8'))
+        flow_pattern = re.compile('|'.join(re.escape(key) for key in sorted(phrases, key=len, reverse=True)))
+        js = (ROOT / 'quiet-panel.js').read_text(encoding='utf-8')
+        js = flow_pattern.sub(lambda match: phrases[match.group()], js)
+        if re.search(r'[\u4e00-\u9fff]', js):
+            raise ValueError('Untranslated flow script')
+        (ROOT / 'quiet-panel.en.js').write_text(js, encoding='utf-8', newline='\n')
+        result = result.replace('./quiet-panel.js', './quiet-panel.en.js')
     missing = re.findall(r'[^\n<>]*[\u4e00-\u9fff][^\n<>]*', result)
     if missing:
         raise ValueError(f"Untranslated text in {page}: {missing[:5]!r}")

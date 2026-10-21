@@ -32,7 +32,7 @@
       "passed" : true
     },
     {
-      "detail" : "content=(420.0, 297.0) fitting=(420.0, 297.0)",
+      "detail" : "content=(480.0, 395.0) fitting=(480.0, 395.0)",
       "name" : "capture fits",
       "passed" : true
     },
@@ -49,6 +49,36 @@
     {
       "detail" : "",
       "name" : "native editor updates note",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "Return inserts a line break without handoff",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "inline material edits preserve original",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "outgoing draft uses edited text",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "inline addition needs no Done action",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "slash command stays literal",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "unsupported image blocks native handoff",
       "passed" : true
     },
     {
@@ -97,7 +127,12 @@
       "passed" : true
     },
     {
-      "detail" : "content=(420.0, 358.0) fitting=(420.0, 358.0)",
+      "detail" : "",
+      "name" : "replaced model callbacks cannot affect current capture",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(480.0, 437.0) fitting=(480.0, 437.0)",
       "name" : "capture-confirm-change fits",
       "passed" : true
     },
@@ -187,7 +222,67 @@
       "passed" : true
     },
     {
-      "detail" : "sourcePID=341",
+      "detail" : "content=(390.0, 468.0) fitting=(390.0, 468.0)",
+      "name" : "pocket-drafts fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "pocket-drafts content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "viewing Pocket leaves current draft intact",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "Pocket restore parks current input",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "Pocket reuse keeps instruction and receiver",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(390.0, 468.0) fitting=(390.0, 468.0)",
+      "name" : "pocket-recovery fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "pocket-recovery content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "switching app preserves project context",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "creation blocks accidental handoff",
+      "passed" : true
+    },
+    {
+      "detail" : "content=(480.0, 546.0) fitting=(480.0, 546.0)",
+      "name" : "capture-create-project fits",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "capture-create-project content not clipped",
+      "passed" : true
+    },
+    {
+      "detail" : "",
+      "name" : "Escape closes creation before closing draft",
+      "passed" : true
+    },
+    {
+      "detail" : "sourcePID=318",
       "name" : "real source app available for focus checks",
       "passed" : true
     }
@@ -197,13 +292,13 @@
   "snapshots" : [
     {
       "file" : "capture-zh-Hans-dark.png",
-      "height" : 297,
-      "width" : 420
+      "height" : 395,
+      "width" : 480
     },
     {
       "file" : "capture-confirm-change-zh-Hans-dark.png",
-      "height" : 358,
-      "width" : 420
+      "height" : 437,
+      "width" : 480
     },
     {
       "file" : "shelf-selected-zh-Hans-dark.png",
@@ -219,6 +314,21 @@
       "file" : "shelf-remaining-zh-Hans-dark.png",
       "height" : 279,
       "width" : 360
+    },
+    {
+      "file" : "pocket-drafts-zh-Hans-dark.png",
+      "height" : 468,
+      "width" : 390
+    },
+    {
+      "file" : "pocket-recovery-zh-Hans-dark.png",
+      "height" : 468,
+      "width" : 390
+    },
+    {
+      "file" : "capture-create-project-zh-Hans-dark.png",
+      "height" : 546,
+      "width" : 480
     }
   ]
 }

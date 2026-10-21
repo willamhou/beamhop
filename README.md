@@ -2,6 +2,12 @@
 
 [中文](./README.md) · [English](./README.en.md)
 
+随笔 03 现采用同一浮层内编辑：选中文字可修改并对照原文，补充文本直接输入，支持文件/图片选择、拖放与图片粘贴。接收菜单包含新建项目和会话；Pocket 可恢复完整批次，也可只复制材料。草稿、复制与接收确认分别呈现，查看历史不移动当前输入。
+
+演示文本保存在当前浏览器标签页的会话存储中，文件留在内存，刷新后需重新选择。所有应用能力和创建操作均为模拟。[Swift 实现分支](https://github.com/willamhou/beamhop/tree/codex/inline-hop-workflow) 使用已有文字交接通道，附件与新会话仍需在接收应用中手动添加和创建。
+
+运行 `python scripts/build-site.py` 生成英文页面与脚本。动态英文文案在 `translations/quiet-flow.en.json`，不要直接编辑生成的 `quiet-panel.en.js`。`node scripts/test-quiet-flow.cjs` 验证两种语言的编辑、创建、恢复、失败、附件与窄屏路径，需要 Playwright；可用 `PLAYWRIGHT_MODULE` 和 `CHROMIUM_EXECUTABLE` 指定本机依赖。
+
 本分支是 Beamhop 的 `gh-pages` 静态网站。原生应用代码位于 [`main`](https://github.com/willamhou/beamhop/tree/main)。
 
 - [首页](./index.html)：当前应用、原生界面与设计探索的统一入口。

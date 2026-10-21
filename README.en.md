@@ -2,6 +2,12 @@
 
 [中文](./README.md) · English
 
+Essay 03 now keeps editing within one panel: edit selected text while retaining the original, type additional material directly, select or drop files/images and paste images. The destination menu includes project and session creation. Pocket restores whole batches or copies only materials. Draft preparation, clipboard copy and receipt confirmation remain distinct; inspecting history does not move current input.
+
+Demo text uses the current browser tab's session storage. Files stay in memory and must be reselected after reload. App capabilities and creation are simulated. The [Swift implementation branch](https://github.com/willamhou/beamhop/tree/codex/inline-hop-workflow) uses existing text handoffs; attachments and new sessions still require manual action in the receiving app.
+
+Run `python scripts/build-site.py` to generate English pages and scripts. Review dynamic English copy in `translations/quiet-flow.en.json`, not the generated `quiet-panel.en.js`. Run `node scripts/test-quiet-flow.cjs` with Playwright for bilingual edit, creation, restore, failure, attachment and narrow-screen paths. Set `PLAYWRIGHT_MODULE` and `CHROMIUM_EXECUTABLE` to use local dependencies.
+
 This is Beamhop’s static `gh-pages` website. The native application lives on [`main`](https://github.com/willamhou/beamhop/tree/main).
 
 - [Home](./index.en.html): one entry point for the current app, native interface and design explorations.
