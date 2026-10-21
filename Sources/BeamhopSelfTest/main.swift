@@ -287,7 +287,7 @@ do {
                                   onCancel: { cancelled = true })
         check(m.summaryLine == "Kimi · Kimi Work · 20 chars", "summaryLine rounds chars down to 10s")
         check(m.previewText == String(repeating: "字", count: 25), "preview passes short text through")
-        check(m.confirmLabel == "Fill & review", "confirm label shows selected target")
+        check(m.confirmLabel == "Continue in Kimi Work", "confirm label shows selected target")
         m.note = "总结一下这段"
         m.confirm()
         check(confirmed?.0 == .kimiWork && confirmed?.1 == "总结一下这段", "confirm carries target + note")
@@ -878,6 +878,52 @@ do {
     print("EXCEPTION: \(error)")
     failures += 1
 }
+
+
+do {
+    print("== Inline Hop draft, Pocket and receipt safety ==")
+    let (db, path) = try freshDB()
+    defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
+    let cap = sample(selectedText: "immutable original")
+    let model = CapturePanelModel(capture: cap, initialTarget: .kimiWork,
+        onConfirm: { _, _ in check(false, "attachment must block handoff") }, onCancel: {})
+    model.materials[0].text = "edited <>&"
+    model.additionalText = "independent addition"
+    model.note = "/review\nLiteral instruction"
+    let first = model.snapshot
+    check(first.materials.count == 2, "inline addition is included without Done")
+    check(first.materials[0].original == cap, "original capture is immutable")
+    check(first.outgoingText.hasPrefix(model.note) && first.outgoingText.contains("edited <>&")
+          && !first.outgoingText.contains("immutable original"), "literal prompt and edited text only")
+    let h = Handoff(items: [.init(capture: cap)], editedText: first.outgoingText)
+    check(h.markdown == first.outgoingText && h.claudeTrigger == first.outgoingText, "MCP trigger cannot silently restore original")
+    model.materials.append(HopMaterial(name: "file.png", path: "/local/file.png", image: true, bytes: 10))
+    check(!model.canConfirm && model.snapshot.textFallback.contains("file.png"), "unsupported files block, copy names missing attachments")
+    model.confirm()
+    let library = try HopLibrary(db)
+    let second = HopDraft(materials: [HopMaterial(text: "second")], route: .init(target: .clipboard, project: "B"))
+    try library.start(first); try library.hold(first); try library.start(second); try library.restore(first.id)
+    check(library.state.active == first && library.state.pocket == [second], "restore protects even prompt-free current material")
+    try library.addMaterials(from: second)
+    check(library.state.active?.route == first.route && library.state.active?.instruction == first.instruction
+          && library.state.pocket == [second], "copy materials preserves both routes and original saved batch")
+    let before = library.state.active!
+    let record = try library.begin(before)
+    var newer = before; newer.materials[0].text = "newer"
+    try library.saveActive(newer); try library.finish(record.id, status: .prepared)
+    check(library.state.active == newer, "late completion cannot consume newer edit")
+    try library.recover(library.state.records[0])
+    check(library.state.pocket.contains(newer) && library.state.active?.materials == before.materials, "recovery protects input and uses frozen backup")
+    try library.remember(.init(target: .kimiWork, project: "A"))
+    try library.remember(.init(target: .chatgptDesktop, project: "A"))
+    check(library.state.routes.count == 2, "one project retains multiple applications")
+    let reopened = try HopLibrary(db)
+    check(reopened.state == library.state, "all drafts, routes and records survive restart")
+    let pending = try reopened.begin(reopened.state.active!)
+    let interrupted = try HopLibrary(db)
+    check(interrupted.state.records.first { $0.id == pending.id }?.status == .failed
+          && interrupted.state.records.last?.detail?.contains("unknown") == true, "interrupted handoff never becomes false success or automatic retry")
+} catch { print("HOP DRAFT EXCEPTION: \(error)"); failures += 1 }
 
 print(failures == 0 ? "\nALL PASS ✅" : "\n\(failures) FAILURE(S) ❌")
 exit(failures == 0 ? 0 : 1)

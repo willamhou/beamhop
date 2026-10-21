@@ -49,10 +49,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - name: Archive Beamhop.app with executable permissions
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/'))
         run: ditto -c -k --sequesterRsrc --keepParent dist/Beamhop.app dist/Beamhop-macOS.zip
       - name: Upload Beamhop.app artifact
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/phase15-detail-chain')
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/codex/'))
         uses: actions/upload-artifact@v4
         with:
           name: Beamhop-app-${{ github.sha }}

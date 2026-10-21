@@ -19,16 +19,67 @@ public final class CapturePanelModel: ObservableObject {
         didSet {
             if selectedTarget != oldValue { rebindAcknowledged = false }
             if let selectedTarget, visibleTargets.contains(selectedTarget) { unavailableTarget = nil }
+            draftChanged()
         }
     }
-    @Published public var note: String = ""
+    @Published public var note: String = "" { didSet { draftChanged() } }
+    @Published public var materials: [HopMaterial] = [] { didSet { draftChanged() } }
+    @Published public var session: HopRoute.Session = .currentWindow { didSet { draftChanged() } }
+    @Published public var draftError: String?
+    @Published public var savedRoutes: [HopRoute] = []
+    @Published public var projects: [String] = []
+    @Published public var isCreating = false
+    public var creatingProject = false
+    @Published public var additionalText = "" { didSet { draftChanged() } }
+    private let additionalID = UUID().uuidString
+    public var onDraftChange: ((HopDraft) -> Void)?
+    public var onRememberRoute: ((HopRoute) -> Void)?
+    public var onOpenPocket: (() -> Void)?
+    public var onAttachmentAction: (() -> Void)?
+    public var onPasteAttachments: (() -> Void)?
+    public var onDropFiles: (([URL]) -> Void)?
+    public var onCopyText: (() -> Void)?
+    private var draftID = UUID().uuidString
+    private var restoring = false
+    public var snapshot: HopDraft {
+        var allMaterials = materials
+        if !additionalText.isEmpty {
+            var added = HopMaterial(text: additionalText); added.id = additionalID
+            allMaterials.append(added)
+        }
+        var draft = HopDraft(materials: allMaterials, instruction: note,
+                             route: HopRoute(target: unavailableTarget ?? selectedTarget, project: workName, session: session))
+        draft.id = draftID
+        return draft
+    }
+    private func draftChanged() { if !restoring { onDraftChange?(snapshot) } }
+    public func restore(_ draft: HopDraft) {
+        restoring = true
+        draftID = draft.id; materials = draft.materials; note = draft.instruction; additionalText = ""
+        workName = draft.route.project; session = draft.route.session
+        selectedTarget = draft.route.target
+        unavailableTarget = draft.route.target.flatMap { visibleTargets.contains($0) ? nil : $0 }
+        restoring = false
+    }
+    public func chooseRoute(_ route: HopRoute) {
+        restoring = true
+        workName = route.project; session = route.session; selectedTarget = route.target
+        unavailableTarget = route.target.flatMap { visibleTargets.contains($0) ? nil : $0 }
+        restoring = false; draftChanged()
+    }
+    public func addText(_ text: String) { materials.append(HopMaterial(text: text)) }
+    public var attachmentWarning: String? {
+        guard !snapshot.attachments.isEmpty else { return nil }
+        return L10n.s("This connection accepts text only. Keep attachments in Pocket, or copy text and add files in the receiving app.")
+    }
     @Published public private(set) var unavailableTarget: DeliveryTarget?
     public var canConfirm: Bool {
-        unavailableTarget == nil && (selectedTarget.map { visibleTargets.contains($0) } ?? true)
+        !isCreating && draftError == nil && (selectedTarget == nil || snapshot.attachments.isEmpty)
+            && unavailableTarget == nil && (selectedTarget.map { visibleTargets.contains($0) } ?? true)
     }
     /// Optional named-destination binding (essay 02). Empty = plain tool-level routing.
     @Published public var workName: String = "" {
-        didSet { if workName != oldValue { rebindAcknowledged = false } }
+        didSet { if workName != oldValue { rebindAcknowledged = false }; draftChanged() }
     }
 
     public let capture: Capture
@@ -109,6 +160,7 @@ public final class CapturePanelModel: ObservableObject {
                 onCancel: @escaping () -> Void,
                 onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
         self.capture = capture
+        self.materials = [HopMaterial(capture: capture)]
         self.visibleTargets = visibleTargets
         self.selectedTarget = boundWork != nil && !visibleTargets.contains(boundWork!.boundTarget)
             ? nil : TargetAvailability.usable(initialTarget, among: visibleTargets)
@@ -134,13 +186,19 @@ public final class CapturePanelModel: ObservableObject {
         onConfirm(selectedTarget, note)
     }
 
-    public func cancel() { onCancel() }
+    public func cancel() {
+        if isCreating { isCreating = false; return }
+        onCancel()
+    }
 
     /// 「先留着」— essay 01: keep the material (with note + current target choice) in the
     /// pocket; nothing is delivered, the reading position stays put.
-    public func hold() { onHold?(unavailableTarget ?? selectedTarget, note) }
+    public func hold() {
+        guard canHold else { return }
+        onHold?(unavailableTarget ?? selectedTarget, note)
+    }
 
-    public var canHold: Bool { onHold != nil }
+    public var canHold: Bool { onHold != nil && !isCreating && snapshot.hasContent }
 
     // MARK: presentation helpers
 
@@ -195,6 +253,7 @@ public final class CapturePanelModel: ObservableObject {
             return L10n.f("Use %@ for this work", targetLabel(selectedTarget!))
         }
         guard let selectedTarget else { return L10n.s("Save to Inbox only") }
+        if session == .newInApp { return L10n.f("Create session in %@", selectedTarget.displayName) }
         return selectedTarget.handoffAction
     }
 }

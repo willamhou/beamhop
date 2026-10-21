@@ -7,6 +7,9 @@ final class PocketWindowController {
     private(set) var panel: HandoffPanel?
     private var resignObserver: NSObjectProtocol?
     let model = PocketModel()
+    var library: HopLibrary?
+    var onOpenDraft: (() -> Void)?
+    var onPrepareChange: (() -> Bool)?
 
     func show() {
         if panel?.isVisible == true { hide(); return }
@@ -24,7 +27,15 @@ final class PocketWindowController {
             p.standardWindowButton(.miniaturizeButton)?.isHidden = true
             p.standardWindowButton(.zoomButton)?.isHidden = true
             p.onEscape = { [weak self] in self?.hide() }
-            p.contentView = NSHostingView(rootView: PocketView(model: model, onClose: { [weak self] in self?.hide() })
+            let content: AnyView
+            if let library {
+                content = AnyView(HopPocketView(library: library, onClose: { [weak self] in self?.hide() },
+                    prepareChange: { [weak self] in self?.onPrepareChange?() ?? true },
+                    onOpen: { [weak self] in self?.onOpenDraft?() }))
+            } else {
+                content = AnyView(PocketView(model: model, onClose: { [weak self] in self?.hide() }))
+            }
+            p.contentView = NSHostingView(rootView: content
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(PanelSizeReader { [weak p] size in
                     DispatchQueue.main.async { p?.fitContent(size, keepingBottom: true) }
@@ -43,6 +54,85 @@ final class PocketWindowController {
     }
 
     func hide() { panel?.orderOut(nil) }
+}
+
+struct HopPocketView: View {
+    @ObservedObject var library: HopLibrary
+    let onClose: () -> Void
+    let prepareChange: () -> Bool
+    let onOpen: () -> Void
+    @State private var error: String?
+
+    private func perform(_ action: () throws -> Void) {
+        guard prepareChange() else { return }
+        do { try action(); error = nil; onOpen() }
+        catch { self.error = error.localizedDescription }
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Pocket", systemImage: "tray").font(.headline)
+                Spacer()
+                Button(action: onClose) { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close")
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let active = library.state.active, active.hasContent {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Current draft").font(.caption).foregroundStyle(.secondary)
+                            summary(active)
+                            Button("Resume editing") { perform {} }
+                        }
+                        Divider()
+                    }
+                    if library.state.pocket.isEmpty {
+                        Text("Save materials, instructions and destination together with Save to Pocket.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(library.state.pocket) { draft in
+                        VStack(alignment: .leading, spacing: 6) {
+                            summary(draft)
+                            HStack {
+                                Button(library.state.active?.hasContent == true ? L10n.s("Save current and restore") : L10n.s("Restore to panel")) {
+                                    perform { try library.restore(draft.id) }
+                                }
+                                Button("Add materials only") { perform { try library.addMaterials(from: draft) } }
+                            }.font(.caption)
+                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    if !library.state.records.isEmpty {
+                        Text("Recent handoffs · backups retained").font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(library.state.records.reversed()) { record in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(record.label).font(.callout)
+                            summary(record.draft)
+                            if let detail = record.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+                            DisclosureGroup("View handoff content") {
+                                Text(record.draft.textFallback).font(.caption).textSelection(.enabled)
+                            }.font(.caption)
+                            Button(library.state.active?.hasContent == true ? L10n.s("Save current and restore backup") : L10n.s("Restore backup")) {
+                                perform { try library.recover(record) }
+                            }.font(.caption)
+                            Text("Restores the Beamhop copy. Later edits in the receiving app are not synchronized.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }.padding(10).background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }.frame(maxHeight: 380)
+            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+        }.padding(16).frame(width: 390).background(.regularMaterial)
+    }
+    private func summary(_ draft: HopDraft) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text([draft.route.project, draft.route.target?.displayName ?? L10n.s("Inbox"), draft.route.sessionLabel]
+                .filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+            Text(draft.instruction.isEmpty ? draft.materials.map { $0.kind == .text ? $0.text : $0.name }.joined(separator: " · ") : draft.instruction)
+                .font(.system(size: 12)).lineLimit(2)
+            Text(L10n.f("Materials · %lld", Int64(draft.materials.count))).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
 }
 
 struct PocketView: View {

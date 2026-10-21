@@ -225,6 +225,9 @@ enum Migrations {
         m.registerMigration("v7-pocket-work-intent") { db in
             try db.alter(table: "pocket_items") { t in t.add(column: "work_name", .text) }
         }
+        m.registerMigration("v8-hop-drafts") { db in
+            try db.execute(sql: "CREATE TABLE hop_state (id INTEGER PRIMARY KEY CHECK(id = 1), payload BLOB NOT NULL)")
+        }
         return m
     }
 }

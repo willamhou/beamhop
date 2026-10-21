@@ -1,5 +1,9 @@
 # Beamhop
 
+The inline Hop panel now edits selected text, accepts additional text and local file/image copies, and keeps the original source for comparison. Instructions come first; ⌘Return prepares the handoff. Pocket saves complete drafts, restores them without losing current input, and can copy only their materials into another project. Handoff backups distinguish prepared drafts, copied text and incomplete operations.
+
+Projects are local context, with multiple remembered app/window choices. “New session” hands off to the receiving app for manual creation; it does not invent a conversation address. Current integrations accept text, so files remain in Pocket until added manually. Claude Code receives a clipboard handoff: arbitrary multiline material is never pasted into an unverified terminal. There is no model, API-key requirement or UI projection in this workflow.
+
 **Capture context. Choose a destination. Keep your train of thought.**
 
 A native macOS menu-bar app for handing material from the app you are using to an external AI tool. Bring along the source and a short note; hold material in a corner shelf when you want to return to it later.

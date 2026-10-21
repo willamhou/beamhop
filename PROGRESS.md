@@ -1,5 +1,15 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
+## Inline Hop workflow — 2026-10-21
+
+Active branch: codex/inline-hop-workflow, based on origin/main at 2dd92bb (the merged #7 tree). Capture uses one native panel for instructions, editable text, original comparison, added text, attachment imports, app/window selection and local project creation. ⌘Return confirms; Return stays available to text input. No AI service or ScreenCaptureKit dependency.
+
+HopLibrary persists active input, independent Pocket batches, route choices and frozen handoff records in migration v8. Restoring or recovering first parks current content atomically. Material-only reuse copies identities and leaves the source batch and current route/instruction intact. Legacy Pocket rows import with stable IDs. Selected files are copied into app support; existing external app transports do not support these attachments, so normal handoff blocks and explicit text-copy fallback lists pending attachments.
+
+External session creation and stable conversation addressing are not implemented by existing transports. The new-session path explicitly copies text and opens the receiving app for manual creation. Current-window draft filling keeps the existing nonempty-composer protection. Edited material bypasses original-capture MCP triggers; for Claude Code it is copied rather than injected into an unverified shell. No path reports receipt confirmation or task completion. Interrupted handoffs retain an unknown-status warning; they never retry automatically.
+
+Validation: new XCTest and mirrored SelfTest scenarios cover literal edits, immutable sources, attachment blocking, complete Pocket restoration, cross-project material reuse, late completion versus newer edits, recovery and restart persistence. Production native fixtures add inline edit/attachment checks. Hosted macOS build/test/UI results are recorded after the branch run. Real signed-in app/TCC and fullscreen/multidisplay acceptance remain device checks.
+
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
 > Last updated: 2026-10-20 — active development on `feat/phase15-detail-chain`; compact handoff and native macOS verification from Windows. See the current follow-up below for present behavior; older acceptance records are historical.
 

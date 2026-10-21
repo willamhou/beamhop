@@ -18,6 +18,7 @@ final class AppServices {
     private(set) var events: EventStore?
     private(set) var pocketStore: PocketStore?
     private(set) var workStore: WorkStore?
+    private var hop: HopCoordinator?
     private(set) var capture: CaptureService?
     private(set) var delivery: DeliveryService?
     private(set) var menuBar: MenuBarController?
@@ -70,16 +71,8 @@ final class AppServices {
                     self?.delivery?.deliver(capture, to: target)
                 }
             }
-            let hud = self.pocketHUD
-            hud.onOpen = { [weak self] in self?.pocket.show() }
-            pocket.model.configure(store: pocketStore,
-                                   onDeliver: { [weak self] batch, target, completion in
-                self?.deliverPocketBatch(batch, to: target, completion: completion)
-            }, onCountChange: { [weak hud] count in
-                hud?.update(count: count)
-            })
-            // boot state: if the pocket already holds items (previous session), show the chip
-            pocket.model.reload()
+            self.hop = try HopCoordinator(database: db, panel: panel, pocket: pocket, hud: pocketHUD,
+                                          delivery: self.delivery!, captures: store, legacy: pocketStore)
             log.info("database opened at \(AppPaths.databaseURL.path, privacy: .public) recovered=\(db.recoveredFromCorruption)")
         } catch {
             log.error("database open failed: \(String(describing: error), privacy: .public)")
@@ -172,95 +165,11 @@ final class AppServices {
     }
 
     private func showPanel(_ cap: Capture, delivery: DeliveryService) {
-        let state = signposter.beginInterval("panel_show")
-        let pt0 = Date()
-
-        // Essay 02: re-bind the remembered named destination (if any) and surface an
-        // unconfirmed receiver change. The panel pre-selects the work's CURRENT binding —
-        // the first Enter then only acknowledges the change, the second delivers.
-        let rememberedWork = targetMemory.lastWorkName.flatMap { name in
-            try? workStore?.fetch(name: name)
-        }
-        let defaultTarget = rememberedWork?.boundTarget ?? targetMemory.last
-        // Only offer destinations that are REAL on this machine (no fake choices);
-        // the model falls back gracefully if the remembered target vanished.
-        let visibleTargets = TargetDetector.availableTargets()
-
-        panel.show(
-            capture: cap,
-            defaultTarget: defaultTarget,
-            visibleTargets: visibleTargets,
-            boundWork: rememberedWork,
-            workName: rememberedWork?.name ?? "",
-            availableWorks: (try? workStore?.list()) ?? [],
-            onConfirm: { [weak self] target, note in
-                guard let self else { return }
-                self.events?.record(name: EventStore.Name.panelConfirm,
-                                    detail: "target=\(target?.rawValue ?? "inbox_only")")
-                let workName = self.panel.currentModel?.workName
-                self.registerOrRebindWork(workName: workName, chosenTarget: target)
-                self.saveNote(note, for: cap.id)
-                guard let target else {
-                    // ⌘0 仅入 Inbox: explicit no-delivery choice — tell the user it isn't lost,
-                    // then hand focus back so the next ⌘⇧Space captures the real work, not us.
-                    Notifier.info(L10n.s("Saved to Inbox"), cap.id)
-                    return
-                }
-                // Delivery off-main (AX activation sleeps); failure paths inside DeliveryService
-                // degrade to clipboard and notify — never silent.
-                DispatchQueue.global(qos: .userInitiated).async {
-                    // self is already bound strongly by the outer onConfirm guard; capturing it
-                    // weakly here only re-triggers #ImplicitStrongCapture (outer strong scope).
-                    delivery.deliver(cap, to: target, userNote: note.isEmpty ? nil : note) { chosen, ok in
-                        DispatchQueue.main.async {
-                            if ok {
-                                self.targetMemory.markSucceeded(chosen, workName: workName)
-                                if let workName, let work = try? self.workStore?.fetch(name: workName),
-                                   work.needsConfirmation {
-                                    try? self.workStore?.confirm(id: work.id, expectedTarget: chosen)
-                                }
-                            }
-                            // Clipboard keeps the source app; prepared drafts stay visible for review.
-                            self.panel.restoreSourceIfStillActive(captureID: cap.id)
-                        }
-                    }
-                }
-            },
-            onCancel: { [weak self] in
-                guard let self else { return }
-                // Esc / focus loss — capture is safe in the Inbox; hand focus back so the next
-                // ⌘⇧Space captures the real work, not us.
-                self.saveNote(self.panel.currentModel?.note ?? "", for: cap.id)
-                self.events?.record(name: EventStore.Name.panelCancel, captureID: cap.id)
-                Notifier.info(L10n.s("Saved to Inbox"), cap.id)
-            },
-            onHold: { [weak self] target, note in
-                guard let self, let pocketStore else { return }
-                self.saveNote(note, for: cap.id)
-                // 「先留着」(essay 01): park in the pocket — order, note and intended target
-                // survive; nothing is delivered, reading position stays put.
-                do {
-                    let item = try pocketStore.hold(captureID: cap.id,
-                                                    note: note.isEmpty ? nil : note,
-                                                    intendedTarget: target,
-                                                    workName: self.panel.currentModel?.workName)
-                    self.events?.record(name: EventStore.Name.pocketHold,
-                                        detail: "target=\(target?.rawValue ?? "undecided")",
-                                        captureID: cap.id)
-                    let n = (try? pocketStore.count()) ?? 0
-                    self.pocket.model.reload()   // fires the bottom-right HUD count
-                    Notifier.info(L10n.f("Held in pocket (%lld)", Int64(n)),
-                                  L10n.s("Press ⌘⇧P to review and send"))
-                    self.log.info("held \(item.id, privacy: .public) stack=\(n)")
-                } catch {
-                    self.log.error("pocket hold failed: \(String(describing: error), privacy: .public)")
-                    Notifier.error(L10n.s("Could not hold"), String(describing: error))
-                }
-            })
-        let panelMs = Int(Date().timeIntervalSince(pt0) * 1000)
-        signposter.endInterval("panel_show", state, "\(panelMs)ms")
-        log.info("panel_ms=\(panelMs)")
-        events?.record(name: EventStore.Name.panelShown, detail: "ms=\(panelMs)", captureID: cap.id)
+        let started = Date()
+        hop?.capture(cap)
+        let elapsed = Int(Date().timeIntervalSince(started) * 1000)
+        log.info("panel_ms=\(elapsed)")
+        events?.record(name: EventStore.Name.panelShown, detail: "ms=\(elapsed)", captureID: cap.id)
     }
 
     /// Essay 02 destination bookkeeping at confirm time:

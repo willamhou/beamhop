@@ -126,12 +126,24 @@ enum NativeUISmoke {
         check("capture can receive keyboard", controller.panel?.canBecomeKey == true)
         check("capture actually owns keyboard focus", controller.panel?.isKeyWindow == true)
         check("capture is not a document window", controller.panel?.canBecomeMain == false)
-        try capture(controller.panel, name: "capture", expectedWidth: 420)
+        try capture(controller.panel, name: "capture", expectedWidth: 480)
         let editor = controller.panel?.firstResponder as? NSTextView
         check("note receives initial focus", editor != nil)
         editor?.insertText("Native keyboard input", replacementRange: NSRange(location: 0, length: 0))
         settle()
         check("native editor updates note", controller.currentModel?.note == "Native keyboard input")
+        controller.currentModel?.materials[0].text = "Edited inline <>&"
+        controller.currentModel?.additionalText = "Additional material"
+        check("inline material edits preserve original", controller.currentModel?.materials[0].original == sample)
+        check("outgoing draft uses edited text", controller.currentModel?.snapshot.outgoingText.contains("Edited inline <>&") == true)
+        check("inline addition needs no Done action", controller.currentModel?.snapshot.materials.count == 2)
+        controller.currentModel?.note = "/review"
+        check("slash command stays literal", controller.currentModel?.snapshot.outgoingText.hasPrefix("/review") == true)
+        controller.currentModel?.materials.append(HopMaterial(name: "fixture.png", path: "/fixture.png", image: true, bytes: 1))
+        check("unsupported image blocks native handoff", controller.currentModel?.canConfirm == false)
+        controller.currentModel?.materials.removeLast()
+        controller.currentModel?.additionalText = ""
+        controller.currentModel?.materials[0].text = sample.selectedText ?? ""
         controller.currentModel?.note = ""
         let nodes = accessibilityNodes(controller.panel!)
         let accessibilityDump = nodes.map { node in
@@ -185,7 +197,7 @@ enum NativeUISmoke {
         controller.currentModel?.note = chinese ? "第一行交代\n第二行说明\n第三行补充" : "First line of context\nSecond line of context\nThird line of context"
         controller.currentModel?.selectedTarget = .claudeCode
         settle()
-        try capture(controller.panel, name: "capture-confirm-change", expectedWidth: 420)
+        try capture(controller.panel, name: "capture-confirm-change", expectedWidth: 480)
         check("hold shortcut handled", key("5", code: 23, modifiers: .command, to: controller.panel))
         settle()
         check("hold dismisses and keeps note", !controller.isVisible && held?.contains(chinese ? "第三行" : "Third line") == true)
