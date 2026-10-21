@@ -22,18 +22,22 @@ def run_case(name, script, supplied, expected_exit, *, fail_unlock=False, fail_s
         tools.mkdir()
         calls = sandbox / "calls"
         calls.touch()
-        for relative in ("scripts/setup-dev-signing.sh", "packaging/build-app.sh"):
+        for relative in ("scripts/setup-dev-signing.sh", "packaging/build-app.sh", "scripts/build-provenance.py"):
             target = sandbox / relative
             target.parent.mkdir(exist_ok=True)
             target.write_bytes((ROOT / relative).read_text(encoding="utf-8").encode("utf-8"))
         for relative in (".build/release/Beamhop", ".build/release/BeamhopMCP", "packaging/Info.plist"):
             target = sandbox / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text("fixture", encoding="utf-8")
+            if relative == "packaging/Info.plist":
+                target.write_bytes((ROOT / relative).read_bytes())
+            else:
+                target.write_text("fixture", encoding="utf-8")
         (sandbox / ".build/resources/Beamhop_Beamhop.bundle").mkdir(parents=True)
         mocks = {
             "uname": "echo Darwin\n",
-            "swift": "exit 0\n",
+            "swift": "echo 'Apple Swift version 6.0'\n",
+            "lipo": "echo arm64\n",
             "swiftc": 'touch "$4"\n',
             "plutil": "exit 0\n",
             "security": '''

@@ -1,11 +1,17 @@
 import SwiftUI
 import BeamhopCore
 
+// Keep view-local state compatible with CLT SDKs that declare @State as a macro
+// without shipping SwiftUIMacros. StateObject preserves the same per-view lifetime.
+private final class CapturePanelViewState: ObservableObject {
+    @Published var naming = false
+    let destinationMenu = DestinationMenuPresenter()
+}
+
 /// The default surface is one handoff. Other receivers are disclosed only on request.
 struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
-    @State private var naming = false
-    @State private var destinationMenu = DestinationMenuPresenter()
+    @StateObject private var viewState = CapturePanelViewState()
     @FocusState private var noteFocused: Bool
 
     var body: some View {
@@ -29,7 +35,7 @@ struct CapturePanelView: View {
             }
 
             ZStack {
-                DestinationButton(presenter: destinationMenu, model: model) { naming = true }
+                DestinationButton(presenter: viewState.destinationMenu, model: model) { viewState.naming = true }
                 HStack(spacing: 10) {
                     Image(systemName: model.selectedTarget == nil ? "tray" : "arrow.up.forward.app")
                         .font(.system(size: 22, weight: .light))
@@ -59,10 +65,10 @@ struct CapturePanelView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
 
-            if naming {
+            if viewState.naming {
                 TextField("Name this work", text: $model.workName)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { naming = false }
+                    .onSubmit { viewState.naming = false }
             }
             if model.receiverChanged && !model.rebindAcknowledged {
                 Text("Confirm the receiving app for this work before continuing.")

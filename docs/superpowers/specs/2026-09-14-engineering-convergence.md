@@ -5,6 +5,8 @@
 > Positioning: the **process-layer** companion to MVP design spec V2.1. Changes no product scope; locks down "where code is written, how it's verified, how it merges".
 > Origin: the 2026-06~09 parallel-implementation incident (a Linux clone sat at the June 3 baseline while an agent, working from stale docs, rewrote all of Phase 1 — diverging from 33 on-device-verified commits on the Mac).
 
+> Current-state clarification (2026-10-21): this September document describes the intended acceptance policy and a historical transition, not proof that every present `main` commit passed real-device acceptance. PR #7 is merged at `2dd92bb`, CI passed, and real-agent/fullscreen/multidisplay acceptance is still pending. Use [PROGRESS](../../../PROGRESS.md) and revision-specific records for actual status; `verified-*` should only be applied with recorded evidence. New work starts from current `main`, not the old `integration`/feature branches. The no-parallel-reimplementation and separate CI/device-evidence rules remain applicable.
+
 ## TL;DR
 
 The only long-lived branch is `main`; `main` means "the most recent on-device-verified state". Linux develops, CI is the compile gate (full macos-15 suite), the Mac is the acceptance gate; every machine, every session runs `git fetch` to align with origin before starting.

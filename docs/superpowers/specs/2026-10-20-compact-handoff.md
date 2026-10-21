@@ -21,7 +21,7 @@ A named work currently binds an application enum, not a conversation ID. Names h
 
 Core regression tests cover acknowledgment invalidation, Inbox-only confirmation, work switching, unavailable named receivers, memory reset, ordered payloads with notes and sources, v6 database upgrades, partial selection, distinct work isolation, duplicate submit prevention, and failure recovery. The CLT self-test mirrors the principal flow regressions. No UI snapshot on Windows can validate AppKit behavior.
 
-Mac acceptance before merging:
+Integration acceptance checklist (PR #7 merged October 20 as `2dd92bb`; these real-device items still require separate evidence, tracked in the [current checklist](../../regressions/2026-10-21-device-acceptance.md)):
 
 1. In Safari, PDF and an editor, invoke the panel, open its destination menu, press Escape, add a note, and use destination shortcuts. Check dynamic sizing, menu focus, Chinese/English labels, VoiceOver and full-screen behavior.
 2. Hold multiple materials. The existing document must keep its scroll position; only the corner count changes. Open and dismiss the shelf without activating Beamhop as a normal app. Check two displays and short screen heights.

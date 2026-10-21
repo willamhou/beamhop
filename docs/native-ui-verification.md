@@ -1,21 +1,23 @@
 # Native UI verification from a Windows development machine
 
-Beamhop's feature branch runs its production AppKit/SwiftUI views on GitHub's `macos-15` runner. Windows is used to edit, inspect reports and review the generated PNGs. The Windows browser is not used as a substitute for the macOS application.
+Beamhop runs its production AppKit/SwiftUI views on GitHub's `macos-15` runner for pushes and pull requests, including `main`. This workflow originated on a Windows development machine: a Windows browser is not a substitute for the macOS application.
 
 ## Run and inspect
 
-Push to `feat/phase15-detail-chain`. The CI workflow builds and tests Swift, assembles the app, and runs `scripts/native-ui-smoke.sh` against the packaged binary. It also runs the debug `--ui-regression` harness for repeated focus transitions and Inbox writes from a separate MCP process. The same checks can run on a Mac:
+Branch from current `main` and use the normal PR workflow; PR #7 is already merged. CI builds and tests Swift, assembles the app, and runs `scripts/native-ui-smoke.sh` against the packaged binary. It also runs the debug `--ui-regression` harness for repeated focus transitions and Inbox writes from a separate MCP process. The same checks can run on a Mac when no user acceptance session is in progress:
 
 ```sh
 bash scripts/native-ui-smoke.sh dist/Beamhop.app dist/ui-smoke
 "$(swift build --show-bin-path)/Beamhop" --ui-regression dist/ui-smoke/focus-inbox
 ```
 
-CI retains three artifacts:
+CI retains UI/build evidence and, on eligible push runs, the packaged app:
 
 - `Beamhop-native-ui-<commit>`: PNGs, per-scenario JSON assertions, logs and an `index.html` gallery. Download and extract it; open the gallery to review native rendering.
 - `Beamhop-build-log-<commit>`: Swift compiler diagnostics, including failed builds.
 - `Beamhop-app-<commit>`: an inner `Beamhop-macOS.zip`, created with `ditto` to preserve executable permissions. Extract both archives before opening the app on a Mac. This is an ad-hoc signed development build, not a notarized release.
+
+Trial-build engineering additionally retains `Beamhop-build-records-<commit>`: embedded provenance plus post-signing binary hashes. This new artifact is local engineering work until merged; it is not retroactively available for historical runs. See [trial build privacy](trial-builds.md).
 
 Reports use synthetic text and an isolated temporary database. The harness bypasses normal bootstrap, does not register global hotkeys, does not request capture permissions, and does not interact with installed AI applications. Keyboard events are dispatched only to our own panel; the destination menu is opened through the native button's accessibility press action and its receiver item is then selected during native menu tracking.
 
@@ -37,6 +39,8 @@ The focus/Inbox harness adds 20 consecutive open/cancel cycles, source nonactiva
 A permanent copy of the reviewed PNGs and reports is available in the [native macOS gallery](https://willamhou.github.io/beamhop/native-ui/) on the separate `gh-pages` branch. The gallery identifies the tested revision; it is not a live view of the latest app build.
 
 ## Verified run
+
+The merged baseline `2dd92bb` passed [main CI run 39382794001](https://github.com/willamhou/beamhop/actions/runs/39382794001), including native UI and focus/Inbox fixtures. The October 21 local acceptance build passed 156/156 UI assertions (39 per scenario). Counts differ from the earlier implementation run below; each report is scoped to its exact revision and build, not every later package.
 
 Commit `fde3a97`, [CI run 39360579032](https://github.com/willamhou/beamhop/actions/runs/39360579032), passed on macOS 15.7.9 (24G830). Each of four locale/appearance combinations passed 38 assertions, for 152/152 total. The artifact contains 20 native PNGs, reviewed for destination detail, confirmation text, long notes and shelf failure state. Swift tests, SelfTest, protocol checks, packaging, extension build and shell checks passed in the same run.
 
