@@ -2,7 +2,11 @@
 
 ## Inline Hop workflow — 2026-10-21
 
-Active branch: codex/inline-hop-workflow, based on origin/main at 2dd92bb (the merged #7 tree). Capture uses one native panel for instructions, editable text, original comparison, added text, attachment imports, app/window selection and local project creation. ⌘Return confirms; Return stays available to text input. No AI service or ScreenCaptureKit dependency.
+Integration workstream: `codex/inline-hop-workflow` (PR #8), incorporating main `5c6f829` (PR #10). Capture uses one native panel for instructions, editable text, original comparison, added text, attachment imports, app/window selection and local project creation. ⌘Return confirms; Return stays available to text input. No AI service or ScreenCaptureKit dependency.
+
+Conflict resolution preserves both feature sets: Hop-native editing/Pocket recovery and Claude Desktop registration detection coexist with typed diagnostic export, version display, build receipts and CI provenance checks. Hop view-local state uses StateObject for CLT compatibility. Explicit Desktop registration now fails closed on malformed existing JSON or a non-object mcpServers value rather than overwriting unrelated settings; pure merge tests cover preservation and rejection. No actual user configuration is modified by these tests.
+
+Local integration verification: CLT Debug build and mirrored SelfTest passed, along with 9 provenance tests, 7 signing-credential cases, ShellCheck and Chinese localization lint. Full XCTest and interactive native fixtures are delegated to the latest hosted CI run; local verification does not replace those checks or real-device acceptance. The acceptance app was not repackaged.
 
 HopLibrary persists active input, independent Pocket batches, route choices and frozen handoff records in migration v8. Restoring or recovering first parks current content atomically. Material-only reuse copies identities and leaves the source batch and current route/instruction intact. Legacy Pocket rows import with stable IDs. Selected files are copied into app support; existing external app transports do not support these attachments, so normal handoff blocks and explicit text-copy fallback lists pending attachments.
 
@@ -11,22 +15,34 @@ External session creation and stable conversation addressing are not implemented
 Validation: new XCTest and mirrored SelfTest scenarios cover literal edits, immutable sources, attachment blocking, complete Pocket restoration, cross-project material reuse, late completion versus newer edits, recovery and restart persistence. Production native fixtures add inline edit/attachment checks. Verified code commit 81f23a6 passed hosted CI (https://github.com/willamhou/beamhop/actions/runs/39581913976): Swift build, XCTest, mirrored SelfTest, MCP/native host smoke, app packaging, 228/228 native UI assertions across English/Chinese and light/dark, plus the source-focus/Inbox regression. The Return-newline regression first failed with TextField, then passed after switching to native multiline editors. Final screenshots were inspected and published with the Pages gallery. Pending file imports block handoff and follow their draft across panel reopening. Real signed-in app/TCC and fullscreen/multidisplay acceptance remain device checks.
 
 > Single entry point for "what's next". Records: where we are, what's verified, what's blocked, how to recover, what to do next.
-> Last updated: 2026-10-21 — active development on `codex/inline-hop-workflow` (inline Hop section above); dev-Mac signing state changed (locked keychain retired, ad-hoc fallback in use). Older acceptance records below are historical.
+> Last updated: 2026-10-21 — PR #8 integrates Inline Hop and Claude Desktop diagnostics with `main` at `5c6f829` (trial-build engineering, PR #10). Signing state and local package snapshots below are machine/revision-specific; CI and real-device acceptance remain separate evidence.
 
 > 🗂 Full pre-2026-10 history (Chinese) is archived at [docs/zh/PROGRESS.zh.md](docs/zh/PROGRESS.zh.md).
 
 ---
 
 
-## Current follow-up: compact handoff (2026-10-20)
+## Current follow-up: trial-build engineering (2026-10-21)
 
-**PR #7 conflict resolution:** integrated `main` at `2b5b32d` (PR #6). The compact nonactivating panel, corner shelf, named-work safeguards and signing-password remediation remain intact. The capture gate and self-capture rejection, presentation-scoped focus recovery, deterministic timeline ordering, and Inbox external-write refresh/pagination now share one implementation. Both sets of storage/model regressions are retained. The native focus/Inbox fixture is adapted to assert that the source app stays active while the panel owns keyboard input and runs alongside the compact-panel UI checks in CI. Hosted validation is pending for this merge; real-app integration acceptance remains separate.
+The user is testing the October 21 acceptance app (`2dd92bb` plus the CLT `StateObject` compatibility adjustment). Its app bundle is preserved at `dist/Beamhop.app`; do not replace it while acceptance is in progress. Checklist: [real-device acceptance](docs/regressions/2026-10-21-device-acceptance.md). Local native fixtures passed 156/156 checks plus 20 repeated focus cycles, self-capture rejection and MCP-to-Inbox refresh; these are not real-agent/TCC/fullscreen/multidisplay acceptance.
+
+Trial engineering adds version/commit/local-change display, embedded build provenance, source fingerprints and post-signing binary receipts, plus a typed allowlist diagnostic report with full preview and explicit local save. No raw logs, capture text, notes, URLs, local paths, session IDs, configuration or credentials enter the report. Build outputs use a separate directory; no automatic diagnostic upload is implemented. See [trial builds](docs/trial-builds.md). The user has authorized commit/push and merge after CI and review pass; consult the repository for current integration status rather than treating a local package as CI evidence.
+
+Local package verification: Release/Debug build and SelfTest passed; 7 signing-credential tests, ShellCheck, localization lint and four offscreen language/appearance fixtures passed. Provenance coverage now has 9 local tests, including index-hidden source edits and tagged-release receipt assets. The packaged runtime metadata matches its embedded manifest/receipt, signed binary hashes match, and the user acceptance executable remains unchanged. Local `swift test` is blocked by CLT's missing XCTest; full-Xcode CI passed for `ce9a2f4`, before the subsequent review fixes. Preview/cancel/native-save interactions still need manual acceptance. [Exact local package snapshot](docs/regressions/2026-10-21-trial-engineering.md); [PR #10](https://github.com/willamhou/beamhop/pull/10) records current CI/review/integration status.
+
+User acceptance feedback: the user reported no issues in the current acceptance app during this round. No per-case matrix was supplied; do not infer that every platform/Agent scenario or the separate engineering export Save/Cancel flow has passed.
+
+Signing is conditional: an existing usable development identity can be selected; otherwise local/hosted builds are ad-hoc. The October 21 acceptance app is ad-hoc signed, not notarized. A stable development certificate is not Developer ID distribution, and password rotation remains required on Macs that used the former default. CI/XCTest success on another Mac does not imply this local CLT installation provides XCTest.
+
+## Merged baseline: compact handoff (2026-10-20)
+
+**PR #7 merged:** integrated PR #6 and was squash-merged to `main` as `2dd92bb` on October 20. The compact nonactivating panel, corner shelf, named-work safeguards and signing-password remediation remain intact. The capture gate and self-capture rejection, presentation-scoped focus recovery, deterministic timeline ordering, and Inbox external-write refresh/pagination now share one implementation. Both sets of storage/model regressions are retained. The native focus/Inbox fixture asserts that the source app stays active while the panel owns keyboard input and runs alongside compact-panel UI checks. [Main CI run 39382794001](https://github.com/willamhou/beamhop/actions/runs/39382794001) passed; real-app integration acceptance remains separate.
 
 **Signing credential remediation:** GitGuardian found a fixed default password in the earlier development-keychain setup and packaging scripts. The current scripts require hidden interactive input or an explicitly supplied secret, do not trace/export it to child commands, and stop on explicit unlock failure. Seven isolated command-stub regression cases cover these paths. The owner approved feature-history cleanup: 23 of 25 commits were rewritten, with the final file tree unchanged. [GitGuardian on `97ea92e`](https://github.com/willamhou/beamhop/pull/7/checks?check_run_id=118436760729) scanned all 25 commits and reported **No secrets detected**. The signing regression tests and ShellCheck also passed in hosted CI. Mac-side password rotation has not been performed from this Windows session and is still required wherever the former default was used. See [remediation instructions](docs/dev-signing-security.md).
 
 **Mac-side signing state (2026-10-21):** on the development Mac the dedicated `beamhop-sign` keychain became inaccessible — the owner does not know its password, it sat locked, and `codesign` failed headless with `errSecInternalComponent` while repeated password dialogs popped. The locked keychain file was moved aside to `~/beamhop-sign.locked-backup.keychain-db` (useless without its password; delete it once confirmed unneeded). Consequence: `packaging/build-app.sh` auto-detect no longer finds the identity and falls back to **ad-hoc** signing — every repack changes the cdhash and drops the TCC Accessibility grant, so re-grant per repack via `scripts/tcc-grant-runbook.md`. To restore repack-stable signing, rerun `scripts/setup-dev-signing.sh` with a new owner-known password (or supply `BEAMHOP_KEYCHAIN_PASSWORD` from a secret provider) and redo the one-time grant. Reverified on this Mac 2026-10-21 on `main@2dd92bb`: `swift build` clean (deprecation warnings only), SelfTest ALL PASS, XCTest 48/48, `mcp-smoke.sh` PASS, `native-ui-smoke.sh` 156/156 PASS against the ad-hoc-signed `dist/Beamhop.app`.
 
-Active development branch: `feat/phase15-detail-chain`. On 2026-10-20 the user directed the compact-handoff fixes from `codex/refine-capture-workflow` to be integrated here and further development to continue on this feature branch. [PR #7](https://github.com/willamhou/beamhop/pull/7) is open against `main`; refine and validate it before merging. The fixes originated from `4007bc0` and were integrated by fast-forward through `c5fab72`. User selected a compact shortcut panel with destinations disclosed on demand. The corner pocket remains optional.
+Historical development branch: `feat/phase15-detail-chain`. The compact-handoff fixes from `codex/refine-capture-workflow` were integrated there before [PR #7](https://github.com/willamhou/beamhop/pull/7) merged. Use current `main` for new branches, not the old feature-branch instructions. The user selected a compact shortcut panel with destinations disclosed on demand; the corner pocket remains optional.
 
 Implemented: nonactivating keyboard-capable panels; content-driven sizing; full destination label with a native menu; explicit handling of unavailable receivers; preserved manual shelf destinations; protection against stale binding confirmations; compact destination menu and optional naming; recent named destinations; selection-based corner panel; a single combined payload per handoff; work-intent preservation (v7 migration); recovery without clearing pending selections; serialized delivery; draft protection; no automatic Kimi new chat or terminal Enter; separate copied/prepared receipts; corrected destination acknowledgment and memory. Details and Mac acceptance: [compact handoff](docs/superpowers/specs/2026-10-20-compact-handoff.md).
 
@@ -38,11 +54,11 @@ Integration acceptance remains pending for logged-in agent apps, TCC capture, Vo
 
 Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now implemented and machine-verified**: ⌘⇧Space grabs the frontmost app's context and pops a keyboard-first floating panel (⌘1 Claude Code / ⌘2 ChatGPT / ⌘3 Cowork→clipboard / ⌘4 Kimi Work / ⌘0 Inbox-only; Enter delivers; Esc cancels and keeps the capture). Delivery coverage: Claude Code (MCP+paste), ChatGPT Desktop 26.x (set-value), Kimi Work 3.2.17 (clipboard-paste into a fresh chat), Cowork (clipboard fallback). Logic is covered by 198 SelfTest checks. **MCP write-back (plan A) + search dedup merged 2026-10-18** (stage table below). **Product essays 01/02 implemented 2026-10-19** (from the pages branch thinking): essay 01 「先留着」 — ⌘5 parks capture+note+intended target in a `pocket_items` stack (`PocketStore`), ⌘⇧P pocket window delivers the stack in hold order (serial, failure keeps the item); essay 02 two-layer destinations — named works (`works` table: work name over a bound receiving session) with `⌘5 先留着` / two-step rebind confirmation: an in-panel receiver change under a confirmed work, or a stored unconfirmed rebind, makes the first Enter acknowledge the new address and only the second deliver. Both machine-verified 2026-10-19. **UI pass 2026-10-19 (dogfood feedback)**: panel slimmed (460pt, single-row instruction+work-name inputs, inline two-layer destination line, no "Deliver to" caption); ⌘3 is Clipboard (the self-deceiving "Cowork → clipboard" is gone — `.cowork` keeps API-level existence for S2 but no panel slot); the panel only offers destinations that are REAL on the machine (`TargetAvailability` + `TargetDetector`: Claude CLI / ChatGPT (either bundle id) / Kimi / clipboard-always), with graceful fallback when a remembered target vanishes; held items now surface as a bottom-right HUD chip (「口袋 · N ⌘⇧P」, hides when empty, click opens the pocket window, which itself anchors bottom-right). SelfTest 206 checks. **Dogfood instrumentation (Phase 1.5)**: an append-only local `events` table + `deliveries.duration_ms` feed `scripts/dogfood-metrics.sh`, which prints the evolution-decisions §3 gate table (press frequency, delivery success, Inbox accumulation/revisits, readable failures, panel P95) — all local, never leaves the machine. The app still ships as a SwiftPM-assembled `dist/Beamhop.app` (ad-hoc signed); `swift test`/XCTest work on machines with the Xcode toolchain (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`, CI runs them on macos-15); the original dev Mac still has CLT only.
 
-**Blockers**: ① signed distribution needs a machine with Xcode + Developer ID signing; ② ~~ad-hoc signing means every repack needs the Accessibility grant re-enabled~~ **SOLVED 2026-10-19** — repacks now sign with the stable self-signed "Beamhop Sign" identity (TCC anchors the grant to the certificate, verified DR-stable across repacks); the remaining one-time grant uses `scripts/tcc-grant-runbook.md` (needs the screen unlocked once).
+**Historical signing result, not a guarantee for every Mac:** an optional stable self-signed identity was verified on the original development Mac. Developer ID signing/notarization remain separate work. Ad-hoc builds may require regranting Accessibility after repacks; the current acceptance package is ad-hoc. See `scripts/tcc-grant-runbook.md` and the credential remediation guide.
 
 ---
 
-## 1. Stage table
+## 1. Historical stage table (see current follow-up for present evidence)
 
 | Stage | Status | Verification |
 |---|---|---|
@@ -83,12 +99,11 @@ Week 0–2 plus integration peripherals are done (CI green). **Week 3 is now imp
 ## 3. Recover / quick verify (SwiftPM, Command Line Tools)
 
 ```bash
-cd /Users/leo/Documents/Kimi/Workspaces/beamhop
-export DEVELOPER_DIR=/Library/Developer/CommandLineTools   # needed while Xcode license is unaccepted
+# From this repository root; use the installed toolchain (xcode-select -p).
 swift build                 # build all targets (incl. GRDB)
 swift run BeamhopSelfTest   # expect ALL PASS ✅, including focus + Inbox regressions
-./packaging/build-app.sh    # assemble dist/Beamhop.app (auto-signs "Beamhop Sign" if set up)
-open dist/Beamhop.app       # first grant only: scripts/tcc-grant-runbook.md (stable identity ⇒ no re-grant after repacks)
+BEAMHOP_OUTPUT_DIR="$PWD/dist/engineering-preview" ./packaging/build-app.sh
+open dist/engineering-preview/Beamhop.app  # only when ready to switch away from an acceptance build
 ```
 
 **Dogfood gate report (evolution-decisions §3) — run this weekly during the dogfood window:**
@@ -99,8 +114,9 @@ scripts/dogfood-metrics.sh --days 7        # shorter window
 Backed by migration v3: append-only `events` (capture outcomes, panel ms, Inbox engagement) + `deliveries.duration_ms`. All local; no telemetry.
 
 **Dogfood protocol (started 2026-10-19):**
-1. On the acceptance Mac: `git pull` → `./packaging/build-app.sh` → `open dist/Beamhop.app`
-   → re-grant Accessibility (ad-hoc signature, TCC drops per repack) → Diagnostics →
+1. On the acceptance Mac: fetch and fast-forward a clean `main`, build to a new output directory,
+   and switch apps deliberately (quit old instances first). Do not replace a bundle under test.
+   Check Accessibility for the current signature/path → Diagnostics →
    "Register now" (points MCP at the real `inbox.sqlite`).
 2. Use `⌘⇧Space` for real work daily (gate: ≥10/day). No script ever sends synthetic keys
    into real apps (incident rule, §6).
@@ -116,7 +132,7 @@ claude mcp add beamhop -s user -- "$BIN" --db "$DB"   # ✓ Connected
 claude mcp remove beamhop -s user
 ```
 
-**Perf numbers (Week 3 acceptance)**: `capture_ms` and `panel_ms` are logged with fixed field names; P95 = `log show --predicate 'subsystem == "com.beamhop.app"' | grep panel_ms` over 20 consecutive presses, take the 95th percentile (spec budget: panel_ms P95 ≤ 300ms).
+**Perf evidence boundary:** `capture_ms` and `panel_ms` are logged separately; `panel_ms` measures panel-show work, not full hotkey-to-interactive latency. Historical P95 values (including 211ms) must not be reused as current end-to-end acceptance. A fresh measurement with real sources is still needed.
 
 ---
 
@@ -149,7 +165,7 @@ Sources/
     Diagnostics/ DiagnosticsService, DiagnosticsWindow
     Inbox/       InboxWindow
     Compatibility/ CompatibilityMatrix
-  BeamhopMCP/    main.swift    # own MCP server (stdio, read-only on inbox.sqlite, --db override)
+  BeamhopMCP/    main.swift    # stdio capture reads + results-only writeback; app owns migrations
   BeamhopSelfTest/ main.swift  # XCTest-free runner + --seed helper (CLT has no XCTest)
 Tests/BeamhopCoreTests/        # XCTest mirror (runs once Xcode license is accepted)
 host/            main.swift     # native messaging host, pure frame relay Chrome<->app socket
@@ -158,7 +174,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 
 ---
 
-## 5. Verified vs pending
+## 5. Historical verification inventory (not current-build acceptance)
 
 **Verified:**
 - ✅ Data layer: dual FTS5 (unicode61+trigram), soft delete, corruption recovery, 10k ULID uniqueness (`BeamhopSelfTest`)
@@ -171,7 +187,7 @@ extension/       manifest.json, background.js, vendor/readability.js, build/ (es
 - ✅ Dogfood instrumentation: events table (v3) + delivery durations wired into capture/panel/inbox/delivery paths; `scripts/dogfood-metrics.sh` verified end-to-end against a seeded DB
 
 **Pending:**
-- ⬜ `swift test` / XCTest on a dev machine (needs Xcode; CI runs it on macos-15)
+- ⬜ Current engineering changes through XCTest/CI (local CLT does not provide XCTest; full-Xcode CI does)
 - ⬜ Cowork MCPB end-to-end (S2 mechanism confirmed only)
 - ⬜ AX word-grab re-test across 8 apps (per-app policy from S6)
 - ⬜ Week 3 perf P95 measurement session (20 presses, method in §3) — ongoing tracking now automated via `scripts/dogfood-metrics.sh`

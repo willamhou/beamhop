@@ -3,13 +3,18 @@ import SwiftUI
 import UniformTypeIdentifiers
 import BeamhopCore
 
+// CLT SDKs may declare @State without supplying its macro plugin.
+private final class CapturePanelViewState: ObservableObject {
+    let destinationMenu = DestinationMenuPresenter()
+    @Published var originals: Set<String> = []
+    @Published var imagePreviews: Set<String> = []
+    @Published var projectName = ""
+    @Published var newTarget: DeliveryTarget = .clipboard
+}
+
 struct CapturePanelView: View {
     @ObservedObject var model: CapturePanelModel
-    @State private var destinationMenu = DestinationMenuPresenter()
-    @State private var originals: Set<String> = []
-    @State private var imagePreviews: Set<String> = []
-    @State private var projectName = ""
-    @State private var newTarget: DeliveryTarget = .clipboard
+    @StateObject private var viewState = CapturePanelViewState()
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -78,7 +83,7 @@ struct CapturePanelView: View {
                 }
                 HStack {
                     ZStack {
-                        DestinationButton(presenter: destinationMenu, model: model) {
+                        DestinationButton(presenter: viewState.destinationMenu, model: model) {
                             model.creatingProject = true; model.isCreating = true
                         }
                         HStack(spacing: 7) {
@@ -123,7 +128,7 @@ struct CapturePanelView: View {
         .frame(width: 480).background(.regularMaterial)
         .onAppear { promptFocused = true }
         .onChange(of: model.isCreating) { _, value in
-            if value { projectName = model.creatingProject ? "" : model.workName; newTarget = model.selectedTarget ?? .clipboard }
+            if value { viewState.projectName = model.creatingProject ? "" : model.workName; viewState.newTarget = model.selectedTarget ?? .clipboard }
         }
         .onExitCommand { if model.isCreating { model.isCreating = false } else { model.cancel() } }
         .onPasteCommand(of: [.fileURL, .png, .tiff]) { _ in model.onPasteAttachments?() }
@@ -150,13 +155,13 @@ struct CapturePanelView: View {
                 if material.isEdited { Text("Edited").foregroundStyle(Color.accentColor) }
                 Spacer(minLength: 0)
                 if material.original != nil {
-                    Button(originals.contains(material.id) ? L10n.s("Hide original") : L10n.s("View original")) {
-                        if !originals.insert(material.id).inserted { originals.remove(material.id) }
+                    Button(viewState.originals.contains(material.id) ? L10n.s("Hide original") : L10n.s("View original")) {
+                        if !viewState.originals.insert(material.id).inserted { viewState.originals.remove(material.id) }
                     }.buttonStyle(.plain)
                 } else if let path = material.localPath {
                     if material.kind == .image {
                         Button("Preview") {
-                            if !imagePreviews.insert(material.id).inserted { imagePreviews.remove(material.id) }
+                            if !viewState.imagePreviews.insert(material.id).inserted { viewState.imagePreviews.remove(material.id) }
                         }.buttonStyle(.plain)
                     } else {
                         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
@@ -175,11 +180,11 @@ struct CapturePanelView: View {
             } else {
                 Text(ByteCountFormatter.string(fromByteCount: material.byteCount ?? 0, countStyle: .file))
                     .font(.caption2).foregroundStyle(.secondary)
-                if imagePreviews.contains(material.id), let path = material.localPath, let image = NSImage(contentsOfFile: path) {
+                if viewState.imagePreviews.contains(material.id), let path = material.localPath, let image = NSImage(contentsOfFile: path) {
                     Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 180)
                 }
             }
-            if originals.contains(material.id), let original = material.originalText {
+            if viewState.originals.contains(material.id), let original = material.originalText {
                 VStack(alignment: .leading, spacing: 4) {
                     if let url = material.original?.url { Text(url).font(.caption2).textSelection(.enabled) }
                     Text(original).font(.caption).textSelection(.enabled)
@@ -196,14 +201,14 @@ struct CapturePanelView: View {
                 Button("Cancel") { model.isCreating = false }.buttonStyle(.plain)
             }
             if model.creatingProject {
-                TextField("Project name", text: $projectName).textFieldStyle(.roundedBorder)
+                TextField("Project name", text: $viewState.projectName).textFieldStyle(.roundedBorder)
             } else {
-                Picker("Project", selection: $projectName) {
+                Picker("Project", selection: $viewState.projectName) {
                     Text("No project").tag("")
                     ForEach(model.projects, id: \.self) { Text($0).tag($0) }
                 }
             }
-            Picker("Receiving app", selection: $newTarget) {
+            Picker("Receiving app", selection: $viewState.newTarget) {
                 ForEach(model.visibleTargets.filter { model.creatingProject || ($0 != .clipboard && $0 != .cowork) }, id: \.self) {
                     Text($0.displayName).tag($0)
                 }
@@ -211,12 +216,12 @@ struct CapturePanelView: View {
             Text("Projects organize material locally. New conversations are created in the receiving app; this does not send anything.")
                 .font(.caption).foregroundStyle(.secondary)
             Button(model.creatingProject ? L10n.s("Create project and select") : L10n.s("Use new session in app")) {
-                let route = HopRoute(target: newTarget, project: projectName.trimmingCharacters(in: .whitespacesAndNewlines),
+                let route = HopRoute(target: viewState.newTarget, project: viewState.projectName.trimmingCharacters(in: .whitespacesAndNewlines),
                                      session: model.creatingProject ? .currentWindow : .newInApp)
                 model.onRememberRoute?(route)
                 guard model.draftError == nil else { return }
                 model.chooseRoute(route); model.isCreating = false
-            }.disabled(model.creatingProject && projectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }.disabled(model.creatingProject && viewState.projectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }.padding(14).background(Color.secondary.opacity(0.04))
     }
 }

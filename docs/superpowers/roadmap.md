@@ -21,8 +21,8 @@
 
 | Phase | Window | Status | Spec | Completed |
 |---|---|---|---|---|
-| Phase 1 — MVP | weeks 0–6 | ✅ delivered (Week 0 spike 6/6 → V2.1; Week 1 foundation; Week 2 golden path; integration peripherals; **Week 3 floating panel 2026-10-18, user-verified**) | [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) (Chinese original, archived) | 2026-10-18 |
-| Phase 1.5 — short-term patches | MVP + 2–4 weeks | 🚧 in progress (local metrics, zh-Hans, AX deadline, MCP registration; focus + Inbox-conclusion fixes locally verified on `codex/focus-inbox-results`, real-device acceptance pending) | [Focus/Inbox regression](../regressions/2026-10-19-focus-inbox.md) | — |
+| Phase 1 — MVP | weeks 0–6 | ✅ delivered (Week 0 spike 6/6 → V2.1; Week 1 foundation; Week 2 golden path; integration peripherals; **Week 3 floating panel 2026-10-18, user-verified**) | [2026-06-03-beamhop-mvp-design.md](../zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) (Chinese original, archived) | 2026-10-18 |
+| Phase 1.5 — short-term patches | MVP + 2–4 weeks | 🚧 PR #6/#7 merged to main; compact handoff/shelf and Inbox covered by CI; current real-device acceptance pending; trial engineering in progress | [Current acceptance](../regressions/2026-10-21-device-acceptance.md) · [Trial builds](../trial-builds.md) | — |
 | Phase 2.1 — cross-device Inbox | month 3–4 | 📋 planned | — | — |
 | Phase 2.2 — memory & semantic search | month 4–6 | 📋 planned | — | — |
 | Phase 2.3 — web chatbox & IDE agents | month 6–9 | 📋 planned | — | — |
@@ -36,7 +36,7 @@
 
 **Goal**: the capture→deliver golden path works on a single macOS machine; conditional goals fold in per spike results; the author uses it daily.
 
-**Spec**: [2026-06-03-beamhop-mvp-design.md](specs/2026-06-03-beamhop-mvp-design.md) (V2 — revised after Codex review; Chinese original archived under docs/zh/)
+**Spec**: [2026-06-03-beamhop-mvp-design.md](../zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) (V2 — revised after Codex review; Chinese original archived under docs/zh/)
 
 **🟢 Golden path (must ship)**:
 - macOS menu-bar app (native Swift / SwiftUI)
@@ -76,7 +76,7 @@ S1 Claude Code MCP **✅ PASS** / S2 Cowork **🟢 mechanism confirmed** / S3 Ch
 **Confirmed deferrals (from the V2 spec reshuffle)**:
 - **Safari extension** (three sandboxes: containing app + JS + native extension; standalone mac app engineering effort)
 - **Claude Cowork integration e2e verification + `.mcpb` packaging** (mechanism confirmed in Week 0; only logged-in registration + tool call verification remain)
-- **Auto-Enter after delivering to ChatGPT Desktop**
+- **Automatic submission** is not enabled: current adapters prepare drafts for manual review; a copied/prepared receipt does not establish agent receipt or completion.
 - Multi-browser extension packaging (Arc/Brave/Edge manifest paths)
 
 **Fast-follows rolled over from Week 0 spike (half-verified; close before GA)**:
@@ -95,7 +95,7 @@ S1 Claude Code MCP **✅ PASS** / S2 Cowork **🟢 mechanism confirmed** / S3 Ch
 **Delivered under Phase 1.5 so far**:
 - ✅ 2026-10-18 Dogfood gate instrumentation — events table + delivery durations + `scripts/dogfood-metrics.sh` (evolution-decisions §3 gate table)
 - ✅ 2026-10-19 **Inbox detail chain (Timeline)** — spec [2026-10-19-inbox-detail-chain.md](specs/2026-10-19-inbox-detail-chain.md); deliveries + agent write-backs merged into one ascending timeline in the Inbox detail view (`TimelineBuilder` in Core, SelfTest+XCTest covered); the first user-visible increment of the "fact trajectory" track (capture → deliveries → results)
-- ✅ 2026-10-19 **Stable dev signing** — `scripts/setup-dev-signing.sh`; repacks no longer drop the Accessibility grant (TCC anchored to the self-signed leaf)
+- ✅ 2026-10-19 **Optional stable dev signing** — `scripts/setup-dev-signing.sh`; verified on the original Mac when that identity is present and usable. Ad-hoc builds still exist, require permission checks, and are not notarized. Existing default-password users must follow [remediation](../dev-signing-security.md).
 
 **Spec placeholder**: `specs/YYYY-MM-DD-phase-1-5-patches.md` (consolidate remaining patches when the dogfood window closes)
 

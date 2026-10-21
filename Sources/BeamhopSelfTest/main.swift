@@ -874,6 +874,70 @@ do {
                 == [.result(a), .delivery(d), .result(b), .result(c)], "chronological timeline with deterministic delivery-first ties")
         check(TimelineBuilder.entries(deliveries: [], results: []).isEmpty, "empty timeline")
     }
+    print("== Claude Desktop MCP configuration merge ==")
+    do {
+        let original = Data(#"{"theme":"dark","mcpServers":{"other":{"command":"other","env":{"TOKEN":"fixture"}}}}"#.utf8)
+        let data = try MCPRegistrationConfig.updating(original, name: "beamhop", command: "helper", arguments: ["--db", "/test/db"])
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let servers = json["mcpServers"] as! [String: [String: Any]]
+        check(json["theme"] as? String == "dark", "unrelated config keys preserved")
+        check(servers["other"]?["command"] as? String == "other", "other MCP servers preserved")
+        check((servers["other"]?["env"] as? [String: String])?["TOKEN"] == "fixture", "other server environment preserved")
+        check(servers["beamhop"]?["args"] as? [String] == ["--db", "/test/db"], "new server arguments installed")
+        for text in ["not JSON", "[]", #"{"mcpServers":null}"#, #"{"mcpServers":[]}"#, #"{"mcpServers":"private"}"#] {
+            do {
+                _ = try MCPRegistrationConfig.updating(Data(text.utf8), name: "beamhop", command: "helper", arguments: [])
+                check(false, "malformed existing config rejected")
+            } catch { check(true, "malformed existing config rejected without overwrite") }
+        }
+        let first = try MCPRegistrationConfig.updating(nil, name: "beamhop", command: "old", arguments: [])
+        let second = try MCPRegistrationConfig.updating(first, name: "beamhop", command: "new", arguments: [])
+        let updated = try JSONSerialization.jsonObject(with: second) as! [String: Any]
+        check((updated["mcpServers"] as? [String: [String: Any]])?["beamhop"]?["command"] as? String == "new", "existing beamhop entry can be updated")
+    }
+
+    print("== Trial build provenance + privacy report ==")
+    do {
+        let build = BuildInfo(appVersion: "0.1.0", buildNumber: "7",
+                              buildID: "f0ab1c2d-1234-4321-abcd-123456789abc",
+                              commit: String(repeating: "a", count: 40), sourceDirty: true,
+                              sourceFingerprint: String(repeating: "b", count: 64),
+                              builtAtUTC: "2026-10-21T01:02:03Z", configuration: "release",
+                              architecture: "arm64", swiftVersion: "6.4.0", signing: .adhoc)
+        check(try JSONDecoder().decode(BuildInfo.self, from: JSONEncoder().encode(build)) == build, "provenance round-trips")
+        check(build.shortCommit == "aaaaaaa" && build.summary.contains("0.1.0 (7)"), "version and commit display")
+        check(BuildInfo().sourceDirty == nil && BuildInfo().shortCommit == "unknown", "missing provenance is unknown, not clean")
+        check(BuildInfo(sourceDirty: true).sourceLabel == L10n.s("Local changes"), "dirty source label")
+        check(BuildInfo(sourceDirty: false).sourceLabel == L10n.s("Clean build inputs"), "clean source label")
+        check(BuildInfo().sourceLabel == L10n.s("Source state unavailable"), "unknown source label")
+        let unsafe = """
+        {"schema_version":1,"app_version":"0.1.0","build_number":"1","build_id":"/Users/private/token",
+        "commit":"secret@example.com","source_dirty":true,"source_fingerprint":"https://private.invalid",
+        "built_at_utc":"private note","configuration":"/Users/private","architecture":"device-serial",
+        "swift_version":"SECRET","signing":"adhoc","notes":"TOP_SECRET","environment":{"token":"TOKEN_SECRET"}}
+        """
+        let filtered = try JSONDecoder().decode(BuildInfo.self, from: Data(unsafe.utf8))
+        check(filtered.commit == "unknown" && filtered.buildID == "unknown" && filtered.sourceFingerprint == "unknown", "untrusted manifest fields filtered")
+        let report = DiagnosticReport(build: filtered, macOSVersion: "/Users/private", runtimeArchitecture: "serial",
+            checks: [.init(id: .hotkeys, status: .fail), .init(id: .accessibility, status: .ok), .init(id: .hotkeys, status: .ok)])
+        let data = try report.jsonData()
+        let json = String(decoding: data, as: UTF8.self)
+        check(report.macOSVersion == "unknown" && report.runtimeArchitecture == "unknown", "system fields cannot carry arbitrary text")
+        check(report.checks.map(\.id) == [.accessibility, .hotkeys], "known status IDs only, stable order, no duplicates")
+        check(data == (try report.jsonData()), "preview and export bytes deterministic")
+        for secret in ["/Users/private", "secret@example", "private.invalid", "private note", "device-serial", "TOP_SECRET", "TOKEN_SECRET"] {
+            check(!json.contains(secret), "private sentinel excluded: \(secret)")
+        }
+        let object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        check(Set(object.keys) == Set(["schema_version", "build", "macos_version", "runtime_architecture", "checks", "privacy"]), "report schema has only allowlisted fields")
+        do {
+            _ = try JSONDecoder().decode(BuildInfo.self, from: Data("{\"schema_version\":2}".utf8))
+            check(false, "unsupported provenance rejected")
+        } catch { check(true, "unsupported provenance rejected") }
+        for value in ["0.1.0\nSECRET", "1.0 token", "../1", "", String(repeating: "1", count: 200)] {
+            check(BuildInfo(appVersion: value).appVersion == "unknown", "invalid version rejected")
+        }
+    }
 } catch {
     print("EXCEPTION: \(error)")
     failures += 1

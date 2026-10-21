@@ -298,3 +298,16 @@
 "Could not prepare materials for %@" = "未能把材料填入 %@";
 
 "Unavailable · choose another destination or hold for later" = "暂不可用 · 换个去处，或先留着";
+"Local changes" = "含本地改动";
+"Clean build inputs" = "构建源码无改动";
+"Source state unavailable" = "源码状态未知";
+"Build ID: %@" = "构建标识：%@";
+"Built (UTC): %@" = "构建时间（UTC）：%@";
+"Preview a privacy-filtered report before saving. Nothing is uploaded." = "先预览脱敏报告，再选择保存。不会上传任何内容。";
+"Preview diagnostic export…" = "预览诊断导出…";
+"Diagnostic export preview" = "诊断导出预览";
+"Review before saving" = "保存前请检查";
+"Includes build, macOS version and status codes only. No logs, local paths, URLs, capture text, notes, sessions or credentials. Nothing is uploaded." = "仅包含构建信息、macOS 版本和状态码。不含日志、本机路径、URL、抓取正文、备注、会话或凭据。不会上传任何内容。";
+"Save report…" = "保存报告…";
+"Could not save the report. Choose another location." = "无法保存报告，请选择其他位置。";
+"Host is packaged; browser manifest and live bridge require separate verification" = "Host 已打包；浏览器清单与实际桥接连接仍需单独验证";

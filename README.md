@@ -10,7 +10,7 @@ A native macOS menu-bar app for handing material from the app you are using to a
 
 **[Releases](https://github.com/willamhou/beamhop/releases) · [Website & product essays](https://willamhou.github.io/beamhop/index.en.html) · [Native screenshots](https://willamhou.github.io/beamhop/native-ui/) · [Builds & checks](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)**
 
-[![CI](https://github.com/willamhou/beamhop/actions/workflows/ci.yml/badge.svg?branch=codex%2Finline-hop-workflow)](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)
+[![CI](https://github.com/willamhou/beamhop/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)
 
 [![Beamhop’s compact native capture panel](https://willamhou.github.io/beamhop/native-ui/assets/capture-en-light.png)](https://willamhou.github.io/beamhop/native-ui/)
 
@@ -28,9 +28,9 @@ Beamhop handles context and handoff; reasoning and execution stay with your exte
 
 ## Get Beamhop
 
-**Development preview · macOS 14 or later.** There is no tagged release yet. [Releases](https://github.com/willamhou/beamhop/releases) is the home for future versions; current builds are available through [GitHub Actions](https://github.com/willamhou/beamhop/actions/workflows/ci.yml?query=branch%3Afeat%2Fphase15-detail-chain).
+**Development preview · macOS 14 or later.** There is no tagged release yet. [Releases](https://github.com/willamhou/beamhop/releases) is the home for future versions; the merged baseline is `main`, with builds available through [GitHub Actions](https://github.com/willamhou/beamhop/actions/workflows/ci.yml?query=branch%3Amain).
 
-To try a development build, open a successful feature-branch run and download its **Beamhop-app** artifact. Extract the outer artifact and the inner `Beamhop-macOS.zip`, then move `Beamhop.app` into Applications. These builds are ad-hoc signed and not notarized. Grant Accessibility access when requested. See [packaging and MCP setup](packaging/README.md).
+To try a development build, open a successful `main` push run and download its **Beamhop-app** artifact. Extract the outer artifact and the inner `Beamhop-macOS.zip`, then move `Beamhop.app` into Applications. Hosted builds are ad-hoc signed and not notarized. Grant Accessibility access when requested. Before an upgrade, quit the app and privately back up its Application Support directory; an old app alone cannot roll back database migrations. See [packaging and MCP setup](packaging/README.md).
 
 ## Receiving tools
 
@@ -51,7 +51,7 @@ On macOS 14+ with Swift 5.10 or newer:
 ```bash
 git clone git@github.com:willamhou/beamhop.git
 cd beamhop
-git switch feat/phase15-detail-chain
+git switch main
 swift build
 swift test                          # requires full Xcode
 swift run BeamhopSelfTest            # works with Command Line Tools
@@ -59,7 +59,7 @@ swift run BeamhopSelfTest            # works with Command Line Tools
 open dist/Beamhop.app
 ```
 
-The app includes the menu-bar UI and MCP helper. The [packaging guide](packaging/README.md) covers MCP registration and the browser bridge. For a stable local signing identity, see [development signing](scripts/setup-dev-signing.sh). The setup uses a hidden password prompt or an explicitly supplied secret, with no default password. Existing users of the earlier signing script should follow the [credential remediation guide](docs/dev-signing-security.md).
+The app includes the menu-bar UI and MCP helper. The [packaging guide](packaging/README.md) covers MCP registration, the browser bridge and separate output directories. Trial engineering adds version/commit display, embedded provenance, signed-binary build receipts and preview-before-save, allowlisted diagnostics; see [trial builds and privacy](docs/trial-builds.md). For a stable local signing identity, see [development signing](scripts/setup-dev-signing.sh). The setup uses a hidden password prompt or an explicitly supplied secret, with no default password. Existing users of the earlier signing script should follow the [credential remediation guide](docs/dev-signing-security.md).
 
 CI runs Swift tests, protocol smoke checks, packaging and native UI interactions on **macOS**, plus extension and shell checks on Ubuntu. The [verified native run](https://github.com/willamhou/beamhop/actions/runs/39360579032) passed **152 UI assertions** across four language/appearance combinations and produced the gallery above. Tests cover focus, note editing, destination menus, dismissal, selection and retry. Logged-in agent delivery, VoiceOver speech, fullscreen and multiple displays still require integration acceptance. [Verification scope and artifacts →](docs/native-ui-verification.md)
 
@@ -67,7 +67,7 @@ CI runs Swift tests, protocol smoke checks, packaging and native UI interactions
 
 - [Product essays on Pages](https://willamhou.github.io/beamhop/index.en.html) — interactive explorations of destinations, context and the corner shelf; [Chinese edition](https://willamhou.github.io/beamhop/).
 - [Native macOS gallery](https://willamhou.github.io/beamhop/native-ui/) — production views with fixture data and downloadable check reports.
-- [Progress and next steps](PROGRESS.md) — the starting point for contributors. Active development is on `feat/phase15-detail-chain`.
+- [Progress and next steps](PROGRESS.md) — merged baseline, current work and evidence boundaries. PR #7 is merged; new work branches from current `main`.
 - [Compact handoff specification](docs/superpowers/specs/2026-10-20-compact-handoff.md) — current behavior and acceptance criteria.
 - [Product positioning](docs/product-positioning.md) · [Roadmap](docs/superpowers/roadmap.md) · [Compatibility evidence](spike/compatibility-matrix-v0.json).
 - [MVP design](docs/zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) · [Engineering conventions](docs/superpowers/specs/2026-09-14-engineering-convergence.md).

@@ -56,17 +56,21 @@ final class PocketWindowController {
     func hide() { panel?.orderOut(nil) }
 }
 
+private final class HopPocketViewState: ObservableObject {
+    @Published var error: String?
+}
+
 struct HopPocketView: View {
     @ObservedObject var library: HopLibrary
     let onClose: () -> Void
     let prepareChange: () -> Bool
     let onOpen: () -> Void
-    @State private var error: String?
+    @StateObject private var viewState = HopPocketViewState()
 
     private func perform(_ action: () throws -> Void) {
         guard prepareChange() else { return }
-        do { try action(); error = nil; onOpen() }
-        catch { self.error = error.localizedDescription }
+        do { try action(); viewState.error = nil; onOpen() }
+        catch { viewState.error = error.localizedDescription }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -121,7 +125,7 @@ struct HopPocketView: View {
                     }
                 }
             }.frame(maxHeight: 380)
-            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+            if let error = viewState.error { Text(error).font(.caption).foregroundStyle(.orange) }
         }.padding(16).frame(width: 390).background(.regularMaterial)
     }
     private func summary(_ draft: HopDraft) -> some View {

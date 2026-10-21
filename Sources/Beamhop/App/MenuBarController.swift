@@ -32,6 +32,10 @@ final class MenuBarController: NSObject {
         }
 
         let menu = NSMenu()
+        let version = NSMenuItem(title: "Beamhop \(BuildInfo.load().summary)", action: nil, keyEquivalent: "")
+        version.isEnabled = false
+        menu.addItem(version)
+        menu.addItem(.separator())
         menu.addItem(item(L10n.s("Capture frontmost  ⌘⇧Space"), #selector(capture)))
         menu.addItem(item(L10n.s("Inbox  ⌘⇧I"), #selector(inbox)))
         menu.addItem(item(L10n.s("Pocket  ⌘⇧P"), #selector(pocket)))

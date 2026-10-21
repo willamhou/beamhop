@@ -1,6 +1,30 @@
 import AppKit
 import BeamhopCore
 
+// Headless provenance inspection: no NSApplication, user DB, hotkeys or permission checks.
+if CommandLine.arguments.contains("--build-info") {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    if let data = try? encoder.encode(BuildInfo.load()), let json = String(data: data, encoding: .utf8) {
+        print(json)
+        exit(0)
+    }
+    exit(1)
+}
+
+if let index = CommandLine.arguments.firstIndex(of: "--trial-ui-smoke"),
+   CommandLine.arguments.count > index + 1 {
+    do {
+        try TrialEngineeringSmoke.run(output: URL(fileURLWithPath: CommandLine.arguments[index + 1]),
+                                      chinese: CommandLine.arguments.contains("--zh"),
+                                      dark: CommandLine.arguments.contains("--dark"))
+        exit(0)
+    } catch {
+        fputs("Trial engineering offscreen smoke failed\n", stderr)
+        exit(1)
+    }
+}
+
 // An opt-in native UI harness for hosted Macs. It uses isolated fixtures and never
 // bootstraps hotkeys, permissions, external agent delivery, or the user's Inbox.
 if let index = CommandLine.arguments.firstIndex(of: "--ui-smoke"),

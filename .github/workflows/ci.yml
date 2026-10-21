@@ -27,6 +27,12 @@ jobs:
         run: ./packaging/build-app.sh
       - name: Native UI interactions and screenshots
         run: bash scripts/native-ui-smoke.sh
+      - name: Offscreen diagnostics privacy and UI fixtures
+        run: |
+          dist/Beamhop.app/Contents/MacOS/Beamhop --trial-ui-smoke dist/ui-smoke/trial -AppleLanguages '(en)'
+          dist/Beamhop.app/Contents/MacOS/Beamhop --trial-ui-smoke dist/ui-smoke/trial --dark -AppleLanguages '(en)'
+          dist/Beamhop.app/Contents/MacOS/Beamhop --trial-ui-smoke dist/ui-smoke/trial --zh -AppleLanguages '(zh-Hans)'
+          dist/Beamhop.app/Contents/MacOS/Beamhop --trial-ui-smoke dist/ui-smoke/trial --zh --dark -AppleLanguages '(zh-Hans)'
       - name: Native focus and Inbox write-back regression
         timeout-minutes: 3
         run: |
@@ -59,6 +65,13 @@ jobs:
           path: dist/Beamhop-macOS.zip
           if-no-files-found: error
           retention-days: 30
+      - name: Upload build provenance receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Beamhop-build-records-${{ github.sha }}
+          path: dist/build-records
+          if-no-files-found: error
+          retention-days: 30
 
   extension:
     runs-on: ubuntu-latest
@@ -81,6 +94,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Development signing credential regression checks
         run: python3 scripts/dev-signing-smoke.py
+      - name: Build provenance regression checks
+        run: python3 scripts/build-provenance-smoke.py
       - name: ShellCheck all shell scripts
         run: |
           find scripts host packaging cowork-extension -name '*.sh' -print0 | xargs -0 shellcheck

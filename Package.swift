@@ -23,7 +23,8 @@ let package = Package(
             resources: [.copy("Resources")]   // compatibility-matrix-v0.json (spike evidence)
         ),
         // Beamhop's own MCP server (stdio JSON-RPC). Registered with Claude Code via
-        // `claude mcp add beamhop -s user -- <bin> --db <inbox.sqlite>`. Reads the DB read-only.
+        // `claude mcp add beamhop -s user -- <bin> --db <inbox.sqlite>`. Captures are read-only;
+        // save_result writes conclusions through ResultStore without owning migrations.
         .executableTarget(
             name: "BeamhopMCP",
             dependencies: ["BeamhopCore"],
