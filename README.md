@@ -10,7 +10,7 @@ A native macOS menu-bar app for handing material from the app you are using to a
 
 **[Releases](https://github.com/willamhou/beamhop/releases) · [Website & product essays](https://willamhou.github.io/beamhop/index.en.html) · [Native screenshots](https://willamhou.github.io/beamhop/native-ui/) · [Builds & checks](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)**
 
-[![CI](https://github.com/willamhou/beamhop/actions/workflows/ci.yml/badge.svg?branch=feat%2Fphase15-detail-chain)](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)
+[![CI](https://github.com/willamhou/beamhop/actions/workflows/ci.yml/badge.svg?branch=codex%2Finline-hop-workflow)](https://github.com/willamhou/beamhop/actions/workflows/ci.yml)
 
 [![Beamhop’s compact native capture panel](https://willamhou.github.io/beamhop/native-ui/assets/capture-en-light.png)](https://willamhou.github.io/beamhop/native-ui/)
 
