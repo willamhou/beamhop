@@ -92,6 +92,8 @@
 "Register now" = "立即注册";
 "Beamhop MCP registered" = "Beamhop MCP 已注册";
 "Restart Claude Code sessions to pick it up" = "重启 Claude Code 会话后生效";
+"Restart Claude Desktop to pick it up" = "重启 Claude Desktop 后生效";
+"Not registered in Claude Desktop — one-click register below" = "Claude Desktop 中未注册——用下方按钮一键注册";
 "Registration failed" = "注册失败";
 
 // MARK: Panel
