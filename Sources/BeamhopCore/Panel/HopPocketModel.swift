@@ -13,7 +13,7 @@ public final class HopPocketModel: ObservableObject {
     @Published public var error: String?
     @Published public var blockedDraftIDs: Set<String> = []
     @Published public var historyLimit = 20
-    public var availableTargets = DeliveryTarget.allCases
+    @Published public var availableTargets = DeliveryTarget.allCases
     public var onDeliver: ((HopRecord, @escaping (Bool) -> Void) -> Void)?
     private var subscription: AnyCancellable?
 

@@ -80,6 +80,7 @@ private struct PocketActionButton: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(action) }
     func makeNSView(context: Context) -> NSButton {
         let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.invoke(_:)))
+        button.setAccessibilityElement(true)
         button.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
         return button
@@ -170,7 +171,7 @@ struct HopPocketView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(model.drafts) { draft in draftRow(draft); Divider() }
                     }
-                }.frame(height: min(CGFloat(model.drafts.count) * 58 + (viewState.expandedID == nil ? 0 : 110), 290))
+                }.frame(height: min(CGFloat(model.drafts.count) * 58 + (viewState.expandedID == nil ? 0 : 110), 260))
             }
             if !(library.state.deletedDrafts ?? []).isEmpty {
                 HStack {
