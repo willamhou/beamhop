@@ -1,6 +1,6 @@
 # Beamhop
 
-The inline Hop panel now edits selected text, accepts additional text and local file/image copies, and keeps the original source for comparison. Instructions come first; ⌘Return prepares the handoff. Pocket saves complete drafts, restores them without losing current input, and can copy only their materials into another project. Handoff backups distinguish prepared drafts, copied text and incomplete operations.
+The inline Hop panel now edits selected text, accepts additional text and local file/image copies, and keeps the original source for comparison. Instructions come first; ⌘Return prepares the handoff. Pocket uses a compact searchable list with new/edit/duplicate/delete/undo actions and multi-select handoff. Matching destinations carry over; cross-project combinations require an explicit destination. Drafts and handoff history have separate tabs. Restoring a draft preserves current input; failed batches keep their selection, while success removes only unchanged selected drafts. Handoff backups distinguish prepared drafts, copied text and incomplete operations.
 
 Projects are local context, with multiple remembered app/window choices. “New session” hands off to the receiving app for manual creation; it does not invent a conversation address. Current integrations accept text, so files remain in Pocket until added manually. Claude Code receives a clipboard handoff: arbitrary multiline material is never pasted into an unverified terminal. There is no model, API-key requirement or UI projection in this workflow.
 

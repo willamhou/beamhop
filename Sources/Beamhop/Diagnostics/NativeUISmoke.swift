@@ -331,13 +331,18 @@ enum NativeUISmoke {
         if let batchRecord {
             try library.finish(batchRecord.id, status: .failed); batchDone?(false)
         }
+        settle()
         check("Pocket failed batch keeps selection", shelfModel.selection.count == 2 && !shelfModel.isDelivering)
         try capture(draftShelf.panel, name: "pocket-batch-retry", expectedWidth: 380)
-        _ = pressShelf("pocket.deliver")
+        let failedRecordID = batchRecord?.id
+        check("Pocket retry starts a new handoff", pressShelf("pocket.deliver")
+              && batchRecord?.id != failedRecordID && shelfModel.isDelivering)
         if let batchRecord {
             try library.finish(batchRecord.id, status: .copied); batchDone?(true)
         }
-        check("Pocket successful batch consumes only selected", library.state.pocket.isEmpty && library.state.active?.id == firstDraft.id)
+        settle()
+        check("Pocket successful batch consumes only selected", library.state.pocket.isEmpty && library.state.active?.id == firstDraft.id
+              && shelfModel.error == nil && !shelfModel.isDelivering)
         // History is separate and bounded; a long archive cannot expand the draft shelf.
         shelfModel.section = .history
         settle()
