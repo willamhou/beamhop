@@ -1121,5 +1121,12 @@ do {
     for (url, data) in zip(urls, original) { check(try Data(contentsOf: url) == data, "both configurations unchanged on parse failure") }
 } catch { print("DESKTOP CONFIG EXCEPTION: \(error)"); failures += 1 }
 
+do {
+    let pocket = HopPocketRegression()
+    try pocket.testCreateEditDuplicateDeleteUndoSurviveRestart()
+    try pocket.testBatchFailureRetryAndLateEditPreservation()
+    try pocket.testMixedRoutesRequireExplicitChoiceAndFilteringClearsHiddenSelection()
+} catch { print("POCKET CRUD EXCEPTION: \(error)"); failures += 1 }
+
 print(failures == 0 ? "\nALL PASS ✅" : "\n\(failures) FAILURE(S) ❌")
 exit(failures == 0 ? 0 : 1)

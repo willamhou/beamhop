@@ -32,6 +32,10 @@ final class HopCoordinator {
             try legacy.remove(id: item.id)
         }
         pocket.library = library
+        pocket.hopModel?.onDeliver = { [weak self] record, completion in
+            guard let self else { completion(false); return }
+            self.deliver(record, completion: completion)
+        }
         pocket.onOpenDraft = { [weak self] in self?.showActive() }
         pocket.onPrepareChange = { [weak self] in
             guard let self else { return false }
@@ -47,6 +51,7 @@ final class HopCoordinator {
     }
 
     private func updateHUD() {
+        pocket.hopModel?.blockedDraftIDs = Set(pendingImports.keys)
         hud.update(count: library.state.pocket.count + (library.state.active?.hasContent == true ? 1 : 0),
                    hasRecords: !library.state.records.isEmpty)
     }
@@ -147,15 +152,15 @@ final class HopCoordinator {
         })
     }
 
-    private func deliver(_ record: HopRecord) {
+    private func deliver(_ record: HopRecord, completion: ((Bool) -> Void)? = nil) {
         let draft = record.draft
-        guard let target = draft.route.target else { return }
+        guard let target = draft.route.target else { completion?(false); return }
         if draft.route.session == .newInApp || target == .claudeCode {
             // No verified create-session API exists. Copy once and open the real app;
             // never clear its composer, synthesize New Chat, or claim a session was created.
             guard copy(draft.textFallback) else {
                 let detail = L10n.s("Could not copy materials")
-                finish(record, status: .failed, detail: detail)
+                finish(record, status: .failed, detail: detail, completion: completion)
                 Notifier.error(detail, L10n.s("The handoff backup is preserved."))
                 return
             }
@@ -171,13 +176,13 @@ final class HopCoordinator {
             }
             AppActivator.open(bundleIDs: bundleIDs) { [weak self] error in
                 let result = error.map { $0 + " " + L10n.s("Text is on the clipboard. Open the receiving app and paste manually.") } ?? detail
-                self?.finish(record, status: .copied, detail: result)
+                self?.finish(record, status: .copied, detail: result, completion: completion)
                 Notifier.info(L10n.s("Text copied · not sent"), result)
             }
             return
         }
         guard draft.attachments.isEmpty else {
-            finish(record, status: .failed, detail: L10n.s("Attachments require manual addition in the receiving app."))
+            finish(record, status: .failed, detail: L10n.s("Attachments require manual addition in the receiving app."), completion: completion)
             return
         }
         do {
@@ -192,15 +197,20 @@ final class HopCoordinator {
             delivery.deliver(handoff, to: target) { [weak self] _, succeeded in
                 DispatchQueue.main.async {
                     self?.finish(record, status: succeeded ? (target == .clipboard || target == .cowork ? .copied : .prepared) : .failed,
-                                 detail: succeeded ? nil : L10n.s("Check the receiving app and clipboard before retrying. The handoff backup is preserved."))
+                                 detail: succeeded ? nil : L10n.s("Check the receiving app and clipboard before retrying. The handoff backup is preserved."), completion: completion)
                 }
             }
-        } catch { finish(record, status: .failed, detail: error.localizedDescription) }
+        } catch { finish(record, status: .failed, detail: error.localizedDescription, completion: completion) }
     }
 
-    private func finish(_ record: HopRecord, status: HopRecord.Status, detail: String?) {
-        do { try library.finish(record.id, status: status, detail: detail) }
-        catch { Notifier.error(L10n.s("Could not save handoff status"), error.localizedDescription) }
+    private func finish(_ record: HopRecord, status: HopRecord.Status, detail: String?, completion: ((Bool) -> Void)? = nil) {
+        do {
+            try library.finish(record.id, status: status, detail: detail)
+            completion?(status == .prepared || status == .copied)
+        } catch {
+            Notifier.error(L10n.s("Could not save handoff status"), error.localizedDescription)
+            completion?(false)
+        }
     }
     private func copy(_ text: String) -> Bool {
         NSPasteboard.general.clearContents()
@@ -222,6 +232,7 @@ final class HopCoordinator {
     private func importFiles(_ urls: [URL], into model: CapturePanelModel) {
         let draft = model.snapshot
         pendingImports[draft.id, default: 0] += 1
+        pocket.hopModel?.blockedDraftIDs = Set(pendingImports.keys)
         model.pendingImportCount = pendingImports[draft.id] ?? 0
         let directory = AppPaths.supportDir.appendingPathComponent("hop-attachments", isDirectory: true)
         DispatchQueue.global(qos: .userInitiated).async { [weak self, weak model] in
@@ -247,6 +258,7 @@ final class HopCoordinator {
                 guard let self else { return }
                 let remaining = max(0, (self.pendingImports[draft.id] ?? 1) - 1)
                 self.pendingImports[draft.id] = remaining == 0 ? nil : remaining
+                self.pocket.hopModel?.blockedDraftIDs = Set(self.pendingImports.keys)
                 model?.pendingImportCount = remaining
                 if let current = self.panel.currentModel, self.panel.isVisible, current.snapshot.id == draft.id {
                     current.materials += added; current.draftError = message

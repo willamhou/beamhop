@@ -284,7 +284,7 @@ enum NativeUISmoke {
         draftShelf.onOpenDraft = { openedDrafts += 1 }
         draftShelf.show()
         settle()
-        try capture(draftShelf.panel, name: "pocket-drafts", expectedWidth: 390)
+        try capture(draftShelf.panel, name: "pocket-drafts", expectedWidth: 380)
         check("viewing Pocket leaves current draft intact", library.state.active == secondDraft)
         try library.restore(firstDraft.id)
         check("Pocket restore parks current input", library.state.pocket == [secondDraft] && library.state.active == firstDraft)
@@ -292,7 +292,59 @@ enum NativeUISmoke {
         check("Pocket reuse keeps instruction and receiver", library.state.active?.route == firstDraft.route
               && library.state.active?.instruction == firstDraft.instruction && library.state.pocket == [secondDraft])
         settle()
-        try capture(draftShelf.panel, name: "pocket-recovery", expectedWidth: 390)
+        try capture(draftShelf.panel, name: "pocket-recovery", expectedWidth: 380)
+        // Exercise the replacement shelf's real controls, not only its storage methods.
+        let shelfModel = draftShelf.hopModel!
+        shelfModel.availableTargets = [.clipboard, .kimiWork]
+        var batchRecord: HopRecord?
+        var batchDone: ((Bool) -> Void)?
+        shelfModel.onDeliver = { batchRecord = $0; batchDone = $1 }
+        func pressShelf(_ id: String) -> Bool {
+            guard let panel = draftShelf.panel,
+                  let node = accessibilityNodes(panel).first(where: { identifier($0) == id }) else { return false }
+            node.accessibilityPerformAction(.press)
+            settle()
+            return true
+        }
+        try library.duplicate(secondDraft)
+        settle()
+        check("Pocket select-all control works", pressShelf("pocket.select-all") && shelfModel.selection.count == 2)
+        check("Pocket inherits matching destination", shelfModel.route == secondDraft.route && shelfModel.canDeliver)
+        try capture(draftShelf.panel, name: "pocket-selection", expectedWidth: 380)
+        check("Pocket delete control works", pressShelf("pocket.delete") && library.state.pocket.isEmpty)
+        check("Pocket undo restores selected drafts", pressShelf("pocket.undo") && library.state.pocket.count == 2)
+        _ = pressShelf("pocket.select-all")
+        check("Pocket batch handoff button works", pressShelf("pocket.deliver") && batchRecord?.pocketSources?.count == 2)
+        if let batchRecord {
+            try library.finish(batchRecord.id, status: .failed); batchDone?(false)
+        }
+        check("Pocket failed batch keeps selection", shelfModel.selection.count == 2 && !shelfModel.isDelivering)
+        try capture(draftShelf.panel, name: "pocket-batch-retry", expectedWidth: 380)
+        _ = pressShelf("pocket.deliver")
+        if let batchRecord {
+            try library.finish(batchRecord.id, status: .copied); batchDone?(true)
+        }
+        check("Pocket successful batch consumes only selected", library.state.pocket.isEmpty && library.state.active?.id == firstDraft.id)
+        // History is separate and bounded; a long archive cannot expand the draft shelf.
+        shelfModel.section = .history
+        settle()
+        try capture(draftShelf.panel, name: "pocket-history", expectedWidth: 380)
+        shelfModel.section = .drafts
+        for index in 1...8 {
+            try library.hold(HopDraft(materials: [HopMaterial(text: (chinese ? "材料 " : "Material ") + String(index))], route: secondDraft.route))
+        }
+        settle()
+        try capture(draftShelf.panel, name: "pocket-dense", expectedWidth: 380)
+        check("Pocket list height stays bounded", (draftShelf.panel?.contentView?.bounds.height ?? 1000) < 480)
+        shelfModel.query = chinese ? "材料 3" : "Material 3"
+        settle()
+        check("Pocket search narrows list without hidden selection", shelfModel.drafts.count == 1 && shelfModel.selectedIDs.isEmpty)
+        let editedID = shelfModel.drafts.first!.id
+        let opensBefore = openedDrafts
+        check("Pocket edit opens the draft", pressShelf("pocket.edit." + editedID) && openedDrafts == opensBefore + 1 && library.state.active?.id == editedID)
+        check("Pocket edit parks previous input", library.state.pocket.contains { $0.id == firstDraft.id })
+        shelfModel.query = ""
+        check("Pocket new draft control works", pressShelf("pocket.new") && library.state.active?.materials.isEmpty == true)
         draftShelf.hide()
 
         // Exercise project selection and creation on the production panel, without external apps.

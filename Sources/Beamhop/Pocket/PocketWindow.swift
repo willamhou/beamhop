@@ -7,7 +7,8 @@ final class PocketWindowController {
     private(set) var panel: HandoffPanel?
     private var resignObserver: NSObjectProtocol?
     let model = PocketModel()
-    var library: HopLibrary?
+    var library: HopLibrary? { didSet { hopModel = library.map(HopPocketModel.init) } }
+    private(set) var hopModel: HopPocketModel?
     var onOpenDraft: (() -> Void)?
     var onPrepareChange: (() -> Bool)?
 
@@ -28,8 +29,8 @@ final class PocketWindowController {
             p.standardWindowButton(.zoomButton)?.isHidden = true
             p.onEscape = { [weak self] in self?.hide() }
             let content: AnyView
-            if let library {
-                content = AnyView(HopPocketView(library: library, onClose: { [weak self] in self?.hide() },
+            if let library, let hopModel {
+                content = AnyView(HopPocketView(library: library, model: hopModel, onClose: { [weak self] in self?.hide() },
                     prepareChange: { [weak self] in self?.onPrepareChange?() ?? true },
                     onOpen: { [weak self] in self?.onOpenDraft?() }))
             } else {
@@ -46,6 +47,7 @@ final class PocketWindowController {
             panel = p
         }
         model.reload()
+        hopModel?.availableTargets = TargetDetector.availableTargets()
         if let panel, let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main {
             let frame = screen.visibleFrame
             panel.setFrameOrigin(NSPoint(x: frame.maxX - panel.frame.width - 16, y: frame.minY + 64))
@@ -57,85 +59,228 @@ final class PocketWindowController {
 }
 
 private final class HopPocketViewState: ObservableObject {
-    @Published var error: String?
+    @Published var expandedID: String?
+    @Published var confirmingHistoryDeletion = false
 }
 
 struct HopPocketView: View {
     @ObservedObject var library: HopLibrary
+    @ObservedObject var model: HopPocketModel
     let onClose: () -> Void
     let prepareChange: () -> Bool
     let onOpen: () -> Void
     @StateObject private var viewState = HopPocketViewState()
 
-    private func perform(_ action: () throws -> Void) {
-        guard prepareChange() else { return }
-        do { try action(); viewState.error = nil; onOpen() }
-        catch { viewState.error = error.localizedDescription }
+    private func perform(open: Bool = false, _ action: () throws -> Void) {
+        guard !model.isDelivering, prepareChange() else { return }
+        do { try action(); model.error = nil; if open { onOpen() } }
+        catch { model.error = error.localizedDescription }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Label("Pocket", systemImage: "tray").font(.headline)
+                Text("\(library.state.pocket.count)").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button(action: onClose) { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close")
+                Button { perform(open: true) { try library.start(HopDraft(materials: [], route: library.state.lastRoute)) } } label: {
+                    Image(systemName: "square.and.pencil")
+                }.help("New draft").accessibilityLabel("New draft").accessibilityIdentifier("pocket.new")
+                    .keyboardShortcut("n", modifiers: .command).disabled(model.isDelivering)
+                Button(action: onClose) { Image(systemName: "xmark") }.accessibilityLabel("Close")
+            }.buttonStyle(.plain)
+            Picker("Pocket section", selection: $model.section) {
+                Text("Drafts").tag(HopPocketModel.Section.drafts)
+                Text("Handoff history").tag(HopPocketModel.Section.history)
+            }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("pocket.section")
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search materials, instructions or projects", text: $model.query)
+                    .textFieldStyle(.plain).font(.callout).accessibilityIdentifier("pocket.search")
+            }.padding(6).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+            if model.section == .drafts {
+                drafts
+            } else {
+                history
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let active = library.state.active, active.hasContent {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Current draft").font(.caption).foregroundStyle(.secondary)
-                            summary(active)
-                            Button("Resume editing") { perform {} }
-                        }
-                        Divider()
-                    }
-                    if library.state.pocket.isEmpty {
-                        Text("Save materials, instructions and destination together with Save to Pocket.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    ForEach(library.state.pocket) { draft in
-                        VStack(alignment: .leading, spacing: 6) {
-                            summary(draft)
-                            HStack {
-                                Button(library.state.active?.hasContent == true ? L10n.s("Save current and restore") : L10n.s("Restore to panel")) {
-                                    perform { try library.restore(draft.id) }
-                                }
-                                Button("Add materials only") { perform { try library.addMaterials(from: draft) } }
-                            }.font(.caption)
-                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    if !library.state.records.isEmpty {
-                        Text("Recent handoffs · backups retained").font(.caption).foregroundStyle(.secondary)
-                    }
-                    ForEach(library.state.records.reversed()) { record in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(record.label).font(.callout)
-                            summary(record.draft)
-                            if let detail = record.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
-                            DisclosureGroup("View handoff content") {
-                                Text(record.draft.textFallback).font(.caption).textSelection(.enabled)
-                            }.font(.caption)
-                            Button(library.state.active?.hasContent == true ? L10n.s("Save current and restore backup") : L10n.s("Restore backup")) {
-                                perform { try library.recover(record) }
-                            }.font(.caption)
-                            Text("Restores the Beamhop copy. Later edits in the receiving app are not synchronized.")
-                                .font(.caption2).foregroundStyle(.secondary)
-                        }.padding(10).background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-            }.frame(maxHeight: 380)
-            if let error = viewState.error { Text(error).font(.caption).foregroundStyle(.orange) }
-        }.padding(16).frame(width: 390).background(.regularMaterial)
+            if let error = model.error { Text(error).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+        }.padding(12).frame(width: 380).background(.regularMaterial)
+            .onChange(of: model.section) { _ in viewState.expandedID = nil; viewState.confirmingHistoryDeletion = false }
     }
-    private func summary(_ draft: HopDraft) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text([draft.route.project, draft.route.target?.displayName ?? L10n.s("Inbox"), draft.route.sessionLabel]
-                .filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-            Text(draft.instruction.isEmpty ? draft.materials.map { $0.kind == .text ? $0.text : $0.name }.joined(separator: " · ") : draft.instruction)
-                .font(.system(size: 12)).lineLimit(2)
-            Text(L10n.f("Materials · %lld", Int64(draft.materials.count))).font(.caption2).foregroundStyle(.secondary)
+    private var drafts: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let active = library.state.active, active.hasContent {
+                Button { perform(open: true) {} } label: {
+                    HStack {
+                        Image(systemName: "pencil.line")
+                        Text("Continue current draft")
+                        Text(title(active)).lineLimit(1).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                    }.font(.caption)
+                }.buttonStyle(.plain).accessibilityIdentifier("pocket.resume")
+            }
+            if model.drafts.isEmpty {
+                Text(L10n.s(model.query.isEmpty ? "Save a draft here, then select materials to hand off together." : "No matching drafts"))
+                    .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 64)
+            } else {
+                HStack {
+                    Button(model.selectedIDs == Set(model.drafts.map(\.id)) ? L10n.s("Deselect all") : L10n.s("Select all")) { model.selectAll() }
+                        .accessibilityIdentifier("pocket.select-all").keyboardShortcut("a", modifiers: .command)
+                    Spacer()
+                    Text(L10n.f("%lld selected", Int64(model.selectedIDs.count))).foregroundStyle(.secondary)
+                }.font(.caption).buttonStyle(.plain).disabled(model.isDelivering)
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(model.drafts) { draft in draftRow(draft); Divider() }
+                    }
+                }.frame(height: min(CGFloat(model.drafts.count) * 58 + (viewState.expandedID == nil ? 0 : 110), 290))
+            }
+            if !(library.state.deletedDrafts ?? []).isEmpty {
+                HStack {
+                    Text("Drafts deleted").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Undo delete") { perform { try library.undoDeleteDrafts() } }
+                        .keyboardShortcut("z", modifiers: .command).accessibilityIdentifier("pocket.undo")
+                }.font(.caption)
+            }
+            if !model.selection.isEmpty { batchActions }
         }
+    }
+    private func draftRow(_ draft: HopDraft) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button { model.toggle(draft.id) } label: {
+                    Image(systemName: model.selectedIDs.contains(draft.id) ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(model.selectedIDs.contains(draft.id) ? Color.accentColor : .secondary)
+                }.accessibilityLabel(L10n.f("Select draft: %@", title(draft))).accessibilityIdentifier("pocket.select.\(draft.id)")
+                Button { viewState.expandedID = viewState.expandedID == draft.id ? nil : draft.id } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title(draft)).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                        Text(metadata(draft)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }.accessibilityLabel(L10n.f("Preview draft: %@", title(draft)))
+                Button { perform(open: true) { try library.restore(draft.id) } } label: { Image(systemName: "pencil") }
+                    .help("Edit draft").accessibilityLabel("Edit draft").accessibilityIdentifier("pocket.edit.\(draft.id)")
+                Menu {
+                    Button("Duplicate draft") { perform { try library.duplicate(draft) } }
+                    Button("Add materials to current draft") { perform(open: true) { try library.addMaterials(from: draft) } }
+                    Divider()
+                    Button("Delete draft", role: .destructive) { perform { try library.deleteDrafts([draft.id]) } }
+                } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
+                    .accessibilityLabel("Draft actions").accessibilityIdentifier("pocket.actions.\(draft.id)")
+            }.buttonStyle(.plain).disabled(model.isDelivering || model.blockedDraftIDs.contains(draft.id) || library.inFlightIDs.contains(draft.id))
+            if viewState.expandedID == draft.id {
+                ScrollView { Text(draft.textFallback).font(.caption).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                    .frame(height: 100).padding(.leading, 24)
+            }
+        }.padding(.vertical, 9).padding(.horizontal, 4)
+            .background(model.selectedIDs.contains(draft.id) ? Color.accentColor.opacity(0.06) : Color.clear)
+    }
+    private var batchActions: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            if model.mixedRoutes && model.route == nil {
+                Text("Different destinations. Choose where to hand off this selection.").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(library.state.routes.indices, id: \.self) { index in
+                        let route = library.state.routes[index]
+                        if let target = route.target, model.availableTargets.contains(target) {
+                            Button(routeLabel(route)) { model.chooseRoute(route) }
+                        }
+                    }
+                    Divider()
+                    ForEach(model.availableTargets, id: \.self) { target in
+                        Button(target.displayName) { model.chooseRoute(HopRoute(target: target, project: model.mixedRoutes ? "" : model.selection.first?.route.project ?? "")) }
+                    }
+                } label: {
+                    Text(model.route.map(routeLabel) ?? L10n.s("Choose destination")).lineLimit(1).truncationMode(.middle)
+                }.menuStyle(.borderlessButton).accessibilityIdentifier("pocket.destination")
+                Spacer(minLength: 0)
+                Button { perform { try model.deleteSelection() } } label: { Image(systemName: "trash") }
+                    .buttonStyle(.plain).help("Delete selected drafts").accessibilityLabel("Delete selected drafts")
+                    .accessibilityIdentifier("pocket.delete").disabled(model.isDelivering || model.blockedSelection)
+                Button(L10n.f("Hand off (%lld)", Int64(model.selection.count))) { if prepareChange() { model.deliverSelection() } }
+                    .buttonStyle(.borderedProminent).controlSize(.small).disabled(!model.canDeliver)
+                    .keyboardShortcut(.return, modifiers: .command).accessibilityIdentifier("pocket.deliver")
+            }.font(.callout)
+            if model.isDelivering { ProgressView().controlSize(.small) }
+            if model.hasAttachments {
+                Text("Attachments stay here. Edit a draft to copy text and add its files in the receiving app.").font(.caption2).foregroundStyle(.secondary)
+            } else if let target = model.route?.target {
+                Text(target.handoffDetail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }
+        }
+    }
+    private var history: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if model.records.isEmpty {
+                Text("No handoff records").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 64)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(model.records.prefix(model.historyLimit))) { record in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Button { viewState.expandedID = viewState.expandedID == record.id ? nil : record.id } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(title(record.draft)).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                            Text(record.label).font(.caption2).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.down").font(.caption2)
+                                    }.contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                if viewState.expandedID == record.id {
+                                    Text(metadata(record.draft)).font(.caption2).foregroundStyle(.secondary)
+                                    if let detail = record.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+                                    ScrollView { Text(record.draft.textFallback).font(.caption).textSelection(.enabled) }.frame(height: 90)
+                                    HStack {
+                                        Button("Restore backup") { perform(open: true) { try library.recover(record) } }
+                                        Spacer()
+                                        Button("Delete record", role: .destructive) { perform { try library.deleteRecords([record.id]) } }
+                                    }.font(.caption).disabled(record.status == .preparing)
+                                }
+                            }.padding(.vertical, 9)
+                            Divider()
+                        }
+                        if model.records.count > model.historyLimit {
+                            Button("Show older records") { model.historyLimit += 20 }.font(.caption).padding(.vertical, 6)
+                        }
+                    }
+                }.frame(height: min(CGFloat(min(model.records.count, model.historyLimit)) * 55 + (viewState.expandedID == nil ? 0 : 150), 290))
+                if viewState.confirmingHistoryDeletion {
+                    Text("Delete these handoff backups? Drafts and Inbox materials stay intact.").font(.caption)
+                    HStack {
+                        Button("Cancel") { viewState.confirmingHistoryDeletion = false }
+                        Spacer()
+                        Button("Delete records", role: .destructive) {
+                            perform { try library.deleteRecords(Set(model.records.map(\.id))) }
+                            viewState.confirmingHistoryDeletion = false
+                        }
+                    }.font(.caption)
+                } else {
+                    HStack {
+                        Text(L10n.f("%lld records", Int64(model.records.count))).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Clear history…") { viewState.confirmingHistoryDeletion = true }
+                    }.font(.caption)
+                }
+            }
+        }
+    }
+    private func title(_ draft: HopDraft) -> String {
+        if !draft.instruction.isEmpty { return draft.instruction }
+        return draft.materials.first.map { $0.kind == .text ? $0.text : $0.name } ?? L10n.s("Empty draft")
+    }
+    private func routeLabel(_ route: HopRoute) -> String {
+        [route.project, route.target?.displayName ?? L10n.s("Keep on this Mac"), route.session == .newInApp ? L10n.s("New session · create in app") : ""]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+    private func metadata(_ draft: HopDraft) -> String {
+        let types = draft.materials.map { $0.kind == .text ? L10n.s("Text") : $0.name }.prefix(2).joined(separator: ", ")
+        return routeLabel(draft.route) + " · " + L10n.f("Materials · %lld", Int64(draft.materials.count)) + " · " + types
     }
 }
 

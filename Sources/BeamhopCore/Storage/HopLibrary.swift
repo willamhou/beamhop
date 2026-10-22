@@ -12,6 +12,7 @@ public final class HopLibrary: ObservableObject {
         public var routes: [HopRoute] = []
         public var projects: [String] = []
         public var lastRoute = HopRoute(target: .claudeCode)
+        public var deletedDrafts: [HopDraft]?
         public init() {}
     }
     @Published public private(set) var state: State
@@ -42,7 +43,7 @@ public final class HopLibrary: ObservableObject {
             }
         }
     }
-    private func change(records: [HopRecord] = [], _ edit: (inout State) -> Void) throws {
+    private func change(records: [HopRecord] = [], deletingRecords: Set<String> = [], _ edit: (inout State) -> Void) throws {
         var next = state; edit(&next)
         var drafts = next
         drafts.records = []
@@ -54,6 +55,7 @@ public final class HopLibrary: ObservableObject {
                 try db.execute(sql: "INSERT INTO hop_records (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
                                arguments: [id, data])
             }
+            for id in deletingRecords { try db.execute(sql: "DELETE FROM hop_records WHERE id = ?", arguments: [id]) }
         }
         state = next; onChange?()
     }
@@ -109,6 +111,61 @@ public final class HopLibrary: ObservableObject {
         try change(records: [record]) { $0.records.append(record) }
         return record
     }
+    public func beginBatch(_ drafts: [HopDraft], route: HopRoute) throws -> HopRecord {
+        guard !drafts.isEmpty, drafts.allSatisfy({ state.pocket.contains($0) && !inFlightIDs.contains($0.id) }) else {
+            throw PocketError.changed
+        }
+        var combined: HopDraft
+        if drafts.count == 1 { combined = drafts[0]; combined.route = route }
+        else {
+            // Preserve each instruction next to its own material, in shelf order.
+            let materials = drafts.flatMap { draft -> [HopMaterial] in
+                let context = [draft.route.project, draft.instruction].filter { !$0.isEmpty }.joined(separator: "\n")
+                let copied = draft.materials.map { material -> HopMaterial in
+                    var copy = material; copy.id = UUID().uuidString; return copy
+                }
+                return (context.isEmpty ? [] : [HopMaterial(text: context)]) + copied
+            }
+            combined = HopDraft(materials: materials, route: route)
+        }
+        var record = HopRecord(draft: combined)
+        record.pocketSources = drafts
+        try change(records: [record]) { $0.records.append(record) }
+        return record
+    }
+    public enum PocketError: LocalizedError {
+        case changed
+        public var errorDescription: String? { L10n.s("These drafts changed or are being handed off. Select them again.") }
+    }
+    public var inFlightIDs: Set<String> {
+        Set(state.records.filter { $0.status == .preparing }.flatMap { ($0.pocketSources ?? [$0.draft]).map(\.id) })
+    }
+    public func deleteDrafts(_ ids: Set<String>) throws {
+        guard ids.isDisjoint(with: inFlightIDs) else { throw PocketError.changed }
+        let removed = state.pocket.filter { ids.contains($0.id) }
+        guard !removed.isEmpty else { return }
+        try change { value in
+            value.deletedDrafts = removed
+            value.pocket.removeAll { ids.contains($0.id) }
+        }
+    }
+    public func undoDeleteDrafts() throws {
+        try change { value in
+            for draft in value.deletedDrafts ?? [] where value.active?.id != draft.id && !value.pocket.contains(where: { $0.id == draft.id }) {
+                value.pocket.append(draft)
+            }
+            value.deletedDrafts = nil
+        }
+    }
+    public func duplicate(_ draft: HopDraft) throws {
+        var copy = draft; copy.id = UUID().uuidString
+        copy.materials = copy.materials.map { var material = $0; material.id = UUID().uuidString; return material }
+        try hold(copy)
+    }
+    public func deleteRecords(_ ids: Set<String>) throws {
+        let removable = Set(state.records.filter { ids.contains($0.id) && $0.status != .preparing }.map(\.id))
+        try change(deletingRecords: removable) { $0.records.removeAll { removable.contains($0.id) } }
+    }
     public func finish(_ id: String, status: HopRecord.Status, detail: String? = nil) throws {
         guard let index = state.records.firstIndex(where: { $0.id == id }) else { return }
         var record = state.records[index]
@@ -119,7 +176,8 @@ public final class HopLibrary: ObservableObject {
             // snapshot, even if a new capture parked it while delivery was in flight.
             if status == .prepared || status == .copied {
                 if value.active == record.draft { value.active = nil }
-                value.pocket.removeAll { $0 == record.draft }
+                let sources = record.pocketSources ?? [record.draft]
+                value.pocket.removeAll { sources.contains($0) }
             }
         }
     }

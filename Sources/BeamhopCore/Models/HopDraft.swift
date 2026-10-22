@@ -71,6 +71,8 @@ public struct HopRecord: Codable, Equatable, Identifiable, Sendable {
     public let draft: HopDraft
     public var status: Status
     public var detail: String?
+    /// Frozen Pocket inputs for a combined handoff. Older receipts decode this as nil.
+    public var pocketSources: [HopDraft]?
     public init(draft: HopDraft, status: Status = .preparing, detail: String? = nil) {
         self.draft = draft; self.status = status; self.detail = detail
     }
