@@ -6,7 +6,10 @@ public final class HopPocketModel: ObservableObject {
     public enum Section: Hashable { case drafts, history }
     public let library: HopLibrary
     @Published public var section: Section = .drafts
-    @Published public var query = "" { didSet { selectedIDs = []; route = nil } }
+    /// SwiftUI's search-field binding writes the unchanged value back on view updates
+    /// (observed on macOS 15.7: writeback fires during delivery state changes); only a
+    /// real query edit may clear the selection, or a failed handoff loses it silently.
+    @Published public var query = "" { didSet { guard oldValue != query else { return }; selectedIDs = []; route = nil } }
     @Published public private(set) var selectedIDs: Set<String> = []
     @Published public private(set) var route: HopRoute?
     @Published public private(set) var isDelivering = false
