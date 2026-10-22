@@ -300,9 +300,22 @@ enum NativeUISmoke {
         var batchDone: ((Bool) -> Void)?
         shelfModel.onDeliver = { batchRecord = $0; batchDone = $1 }
         func pressShelf(_ id: String) -> Bool {
-            guard let panel = draftShelf.panel,
-                  let node = accessibilityNodes(panel).first(where: { identifier($0) == id }) else { return false }
-            node.accessibilityPerformAction(.press)
+            guard let panel = draftShelf.panel else { return false }
+            let nodes = accessibilityNodes(panel)
+            let dump = nodes.map { "\(type(of: $0)) id=\(identifier($0) ?? "-") actions=\($0.accessibilityActionNames())" }.joined(separator: "\n")
+            try? dump.write(to: output.appendingPathComponent("pocket-accessibility-\(suffix).txt"), atomically: true, encoding: .utf8)
+            guard let node = nodes.first(where: { identifier($0) == id }) else {
+                print("[native-ui] missing Pocket accessibility node: \(id)")
+                return false
+            }
+            // SwiftUI buttons implement the modern informal press selector; the legacy
+            // accessibilityPerformAction path used by NSButton can silently do nothing.
+            let selector = NSSelectorFromString("accessibilityPerformPress")
+            if node.responds(to: selector) {
+                typealias Press = @convention(c) (AnyObject, Selector) -> Bool
+                let press = unsafeBitCast(node.method(for: selector), to: Press.self)
+                guard press(node, selector) else { return false }
+            } else { node.accessibilityPerformAction(.press) }
             settle()
             return true
         }

@@ -95,7 +95,7 @@ struct HopPocketView: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Search materials, instructions or projects", text: $model.query)
-                    .textFieldStyle(.plain).font(.callout).accessibilityIdentifier("pocket.search")
+                    .textFieldStyle(.plain).font(.callout).accessibilityIdentifier("pocket.search").disabled(model.isDelivering)
             }.padding(6).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
             if model.section == .drafts {
                 drafts
@@ -196,7 +196,7 @@ struct HopPocketView: View {
                     }
                 } label: {
                     Text(model.route.map(routeLabel) ?? L10n.s("Choose destination")).lineLimit(1).truncationMode(.middle)
-                }.menuStyle(.borderlessButton).accessibilityIdentifier("pocket.destination")
+                }.menuStyle(.borderlessButton).accessibilityIdentifier("pocket.destination").disabled(model.isDelivering)
                 Spacer(minLength: 0)
                 Button { perform { try model.deleteSelection() } } label: { Image(systemName: "trash") }
                     .buttonStyle(.plain).help("Delete selected drafts").accessibilityLabel("Delete selected drafts")
