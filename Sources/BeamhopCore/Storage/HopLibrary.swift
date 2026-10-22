@@ -13,6 +13,7 @@ public final class HopLibrary: ObservableObject {
         public var projects: [String] = []
         public var lastRoute = HopRoute(target: .claudeCode)
         public var deletedDrafts: [HopDraft]?
+        public var deletedDraftPositions: [String: Int]?
         public init() {}
     }
     @Published public private(set) var state: State
@@ -112,7 +113,7 @@ public final class HopLibrary: ObservableObject {
         return record
     }
     public func beginBatch(_ drafts: [HopDraft], route: HopRoute) throws -> HopRecord {
-        guard !drafts.isEmpty, drafts.allSatisfy({ state.pocket.contains($0) && !inFlightIDs.contains($0.id) }) else {
+        guard route.target != nil, !drafts.isEmpty, drafts.allSatisfy({ state.pocket.contains($0) && !inFlightIDs.contains($0.id) }) else {
             throw PocketError.changed
         }
         var combined: HopDraft
@@ -146,15 +147,18 @@ public final class HopLibrary: ObservableObject {
         guard !removed.isEmpty else { return }
         try change { value in
             value.deletedDrafts = removed
+            value.deletedDraftPositions = Dictionary(uniqueKeysWithValues: value.pocket.enumerated()
+                .filter { ids.contains($0.element.id) }.map { ($0.element.id, $0.offset) })
             value.pocket.removeAll { ids.contains($0.id) }
         }
     }
     public func undoDeleteDrafts() throws {
         try change { value in
             for draft in value.deletedDrafts ?? [] where value.active?.id != draft.id && !value.pocket.contains(where: { $0.id == draft.id }) {
-                value.pocket.append(draft)
+                value.pocket.insert(draft, at: min(value.deletedDraftPositions?[draft.id] ?? value.pocket.count, value.pocket.count))
             }
             value.deletedDrafts = nil
+            value.deletedDraftPositions = nil
         }
     }
     public func duplicate(_ draft: HopDraft) throws {

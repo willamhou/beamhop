@@ -63,6 +63,44 @@ private final class HopPocketViewState: ObservableObject {
     @Published var confirmingHistoryDeletion = false
 }
 
+/// Keep shelf commands as native controls: dependable accessibility and key equivalents
+/// in a nonactivating NSPanel, including under the Command Line Tools SwiftUI runtime.
+private struct PocketActionButton: NSViewRepresentable {
+    let title: String
+    var symbol: String? = nil
+    let identifier: String
+    var key: String = ""
+    var bordered = false
+    let action: () -> Void
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(_ action: @escaping () -> Void) { self.action = action }
+        @objc func invoke(_ sender: NSButton) { action() }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(action) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.invoke(_:)))
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.action = action
+        button.title = title
+        button.image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: title) }
+        button.imagePosition = symbol == nil ? .noImage : .imageOnly
+        button.isBordered = bordered; button.bezelStyle = .rounded; button.controlSize = .small
+        button.font = .systemFont(ofSize: 11)
+        button.keyEquivalent = key; button.keyEquivalentModifierMask = .command
+        button.isEnabled = context.environment.isEnabled
+        button.setAccessibilityLabel(title)
+        button.setAccessibilityIdentifier(identifier)
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? {
+        CGSize(width: max(symbol == nil ? 0 : 20, nsView.fittingSize.width), height: 22)
+    }
+}
+
 struct HopPocketView: View {
     @ObservedObject var library: HopLibrary
     @ObservedObject var model: HopPocketModel
@@ -82,10 +120,9 @@ struct HopPocketView: View {
                 Label("Pocket", systemImage: "tray").font(.headline)
                 Text("\(library.state.pocket.count)").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button { perform(open: true) { try library.start(HopDraft(materials: [], route: library.state.lastRoute)) } } label: {
-                    Image(systemName: "square.and.pencil")
-                }.help("New draft").accessibilityLabel("New draft").accessibilityIdentifier("pocket.new")
-                    .keyboardShortcut("n", modifiers: .command).disabled(model.isDelivering)
+                PocketActionButton(title: L10n.s("New draft"), symbol: "square.and.pencil", identifier: "pocket.new", key: "n") {
+                    perform(open: true) { try library.start(HopDraft(materials: [], route: library.state.lastRoute)) }
+                }.help("New draft").disabled(model.isDelivering)
                 Button(action: onClose) { Image(systemName: "xmark") }.accessibilityLabel("Close")
             }.buttonStyle(.plain)
             Picker("Pocket section", selection: $model.section) {
@@ -124,8 +161,8 @@ struct HopPocketView: View {
                     .font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 64)
             } else {
                 HStack {
-                    Button(model.selectedIDs == Set(model.drafts.map(\.id)) ? L10n.s("Deselect all") : L10n.s("Select all")) { model.selectAll() }
-                        .accessibilityIdentifier("pocket.select-all").keyboardShortcut("a", modifiers: .command)
+                    PocketActionButton(title: model.selectedIDs == Set(model.drafts.map(\.id)) ? L10n.s("Deselect all") : L10n.s("Select all"),
+                                       identifier: "pocket.select-all", key: "a") { model.selectAll() }
                     Spacer()
                     Text(L10n.f("%lld selected", Int64(model.selectedIDs.count))).foregroundStyle(.secondary)
                 }.font(.caption).buttonStyle(.plain).disabled(model.isDelivering)
@@ -139,8 +176,7 @@ struct HopPocketView: View {
                 HStack {
                     Text("Drafts deleted").foregroundStyle(.secondary)
                     Spacer()
-                    Button("Undo delete") { perform { try library.undoDeleteDrafts() } }
-                        .keyboardShortcut("z", modifiers: .command).accessibilityIdentifier("pocket.undo")
+                    PocketActionButton(title: L10n.s("Undo delete"), identifier: "pocket.undo", key: "z") { perform { try library.undoDeleteDrafts() } }
                 }.font(.caption)
             }
             if !model.selection.isEmpty { batchActions }
@@ -149,18 +185,18 @@ struct HopPocketView: View {
     private func draftRow(_ draft: HopDraft) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Button { model.toggle(draft.id) } label: {
-                    Image(systemName: model.selectedIDs.contains(draft.id) ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(model.selectedIDs.contains(draft.id) ? Color.accentColor : .secondary)
-                }.accessibilityLabel(L10n.f("Select draft: %@", title(draft))).accessibilityIdentifier("pocket.select.\(draft.id)")
+                PocketActionButton(title: L10n.f("Select draft: %@", title(draft)),
+                                   symbol: model.selectedIDs.contains(draft.id) ? "checkmark.circle.fill" : "circle",
+                                   identifier: "pocket.select.\(draft.id)") { model.toggle(draft.id) }
                 Button { viewState.expandedID = viewState.expandedID == draft.id ? nil : draft.id } label: {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(title(draft)).font(.system(size: 12, weight: .medium)).lineLimit(1)
                         Text(metadata(draft)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                 }.accessibilityLabel(L10n.f("Preview draft: %@", title(draft)))
-                Button { perform(open: true) { try library.restore(draft.id) } } label: { Image(systemName: "pencil") }
-                    .help("Edit draft").accessibilityLabel("Edit draft").accessibilityIdentifier("pocket.edit.\(draft.id)")
+                PocketActionButton(title: L10n.s("Edit draft"), symbol: "pencil", identifier: "pocket.edit.\(draft.id)") {
+                    perform(open: true) { try library.restore(draft.id) }
+                }.help("Edit draft")
                 Menu {
                     Button("Duplicate draft") { perform { try library.duplicate(draft) } }
                     Button("Add materials to current draft") { perform(open: true) { try library.addMaterials(from: draft) } }
@@ -198,12 +234,12 @@ struct HopPocketView: View {
                     Text(model.route.map(routeLabel) ?? L10n.s("Choose destination")).lineLimit(1).truncationMode(.middle)
                 }.menuStyle(.borderlessButton).accessibilityIdentifier("pocket.destination").disabled(model.isDelivering)
                 Spacer(minLength: 0)
-                Button { perform { try model.deleteSelection() } } label: { Image(systemName: "trash") }
-                    .buttonStyle(.plain).help("Delete selected drafts").accessibilityLabel("Delete selected drafts")
-                    .accessibilityIdentifier("pocket.delete").disabled(model.isDelivering || model.blockedSelection)
-                Button(L10n.f("Hand off (%lld)", Int64(model.selection.count))) { if prepareChange() { model.deliverSelection() } }
-                    .buttonStyle(.borderedProminent).controlSize(.small).disabled(!model.canDeliver)
-                    .keyboardShortcut(.return, modifiers: .command).accessibilityIdentifier("pocket.deliver")
+                PocketActionButton(title: L10n.s("Delete selected drafts"), symbol: "trash", identifier: "pocket.delete") {
+                    perform { try model.deleteSelection() }
+                }.help("Delete selected drafts").disabled(model.isDelivering || model.blockedSelection)
+                PocketActionButton(title: batchActionLabel, identifier: "pocket.deliver", key: "\r", bordered: true) {
+                    if prepareChange() { model.deliverSelection() }
+                }.disabled(!model.canDeliver)
             }.font(.callout)
             if model.isDelivering { ProgressView().controlSize(.small) }
             if model.hasAttachments {
@@ -273,6 +309,11 @@ struct HopPocketView: View {
     private func title(_ draft: HopDraft) -> String {
         if !draft.instruction.isEmpty { return draft.instruction }
         return draft.materials.first.map { $0.kind == .text ? $0.text : $0.name } ?? L10n.s("Empty draft")
+    }
+    private var batchActionLabel: String {
+        let copies = model.route?.session == .newInApp || model.route?.target == .clipboard
+            || model.route?.target == .cowork || model.route?.target == .claudeCode
+        return L10n.f(copies ? "Copy (%lld)" : "Fill draft (%lld)", Int64(model.selection.count))
     }
     private func routeLabel(_ route: HopRoute) -> String {
         [route.project, route.target?.displayName ?? L10n.s("Keep on this Mac"), route.session == .newInApp ? L10n.s("New session · create in app") : ""]

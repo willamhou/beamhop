@@ -351,3 +351,5 @@
 "Empty draft" = "空草稿";
 "Text" = "文本";
 "These drafts changed or are being handed off. Select them again." = "这些草稿已更新或正在投递，请重新选择。";
+"Copy (%lld)" = "复制（%lld）";
+"Fill draft (%lld)" = "填入（%lld）";
