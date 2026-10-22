@@ -311,3 +311,8 @@
 "Save report…" = "保存报告…";
 "Could not save the report. Choose another location." = "无法保存报告，请选择其他位置。";
 "Host is packaged; browser manifest and live bridge require separate verification" = "Host 已打包；浏览器清单与实际桥接连接仍需单独验证";
+"Could not open the receiving app." = "无法打开接收应用。";
+"Text is on the clipboard. Open the receiving app and paste manually." = "文本已复制到剪贴板。请打开接收应用并手动粘贴。";
+"The handoff backup is preserved." = "投递备份已保留。";
+"Could not verify Claude Desktop registration." = "无法验证 Claude Desktop 的注册结果。";
+"Not registered in all Claude Desktop configurations — one-click register below" = "尚未注册到全部 Claude Desktop 配置，点击下方按钮完成注册";

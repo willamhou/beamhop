@@ -81,7 +81,18 @@ struct DiagnosticsService {
     private func claudeCodeMCPRow() -> DiagRow {
         let mcpBin = Self.preferredMCPBinary()
         let locations = Self.mcpRegisteredLocations(name: "beamhop")
-        if !locations.isEmpty {
+        let desktopInstalled = Self.desktopConfigURLs()
+            .contains { FileManager.default.fileExists(atPath: $0.path) }
+            || FileManager.default.fileExists(atPath: "/Applications/Claude.app")
+        let desktopComplete = Self.desktopConfigURLs().allSatisfy { Self.mcpServerRegistered(name: "beamhop", in: $0) }
+        // A legacy-only registration cannot establish readiness for the current deployment.
+        if desktopInstalled && !desktopComplete, let mcpBin {
+            return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .warn,
+                           detail: "Not registered in all Claude Desktop configurations — one-click register below",
+                           fixTitle: "Register now",
+                           fix: { Self.registerMCPInDesktop(name: "beamhop", mcpBinary: mcpBin) })
+        }
+        if !locations.isEmpty && (!desktopInstalled || desktopComplete) {
             return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .ok,
                            detail: "Registered (\(locations.joined(separator: ", ")))",
                            fixTitle: nil, fix: nil)
@@ -93,15 +104,6 @@ struct DiagnosticsService {
                            detail: "Not registered — one-click register below",
                            fixTitle: "Register now",
                            fix: { Self.registerMCP(claude: claudePath, mcpBinary: mcpBin) })
-        }
-        let desktopInstalled = Self.desktopConfigURLs()
-            .contains { FileManager.default.fileExists(atPath: $0.path) }
-            || FileManager.default.fileExists(atPath: "/Applications/Claude.app")
-        if desktopInstalled, let mcpBin {
-            return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .warn,
-                           detail: "Not registered in Claude Desktop — one-click register below",
-                           fixTitle: "Register now",
-                           fix: { Self.registerMCPInDesktop(name: "beamhop", mcpBinary: mcpBin) })
         }
         // Fallback (dev `swift run` without an app bundle, or no Claude product at all).
         let bin = mcpBin ?? "<absolute path to BeamhopMCP>"
@@ -210,9 +212,7 @@ struct DiagnosticsService {
     private static func desktopConfigURLs() -> [URL] {
         let appSupport = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support")
-        return ["Claude", "Claude-3p"].map {
-            appSupport.appendingPathComponent("\($0)/claude_desktop_config.json")
-        }
+        return MCPRegistrationConfig.desktopURLs(in: appSupport)
     }
 
     /// Human-readable locations where the named MCP server is already registered.
@@ -236,43 +236,29 @@ struct DiagnosticsService {
         return bundledMCPBinary()
     }
 
-    /// Register into every existing claude_desktop_config.json (creating the current
-    /// deployment's file when none exists). Claude Desktop must be restarted to pick it up.
+    /// Update both deployment homes even if only the legacy config already exists.
+    /// Claude Desktop must be restarted to pick it up.
     private static func registerMCPInDesktop(name: String, mcpBinary: String) {
         DispatchQueue.global(qos: .userInitiated).async {
-            var urls = desktopConfigURLs()
-                .filter { FileManager.default.fileExists(atPath: $0.path) }
-            if urls.isEmpty { urls = [desktopConfigURLs()[1]] }   // Claude-3p = current deployment
-            var failures = 0
-            for url in urls where !registerMCPInConfig(url: url, name: name, mcpBinary: mcpBinary) {
-                failures += 1
+            let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+            var failure: String?
+            do {
+                try MCPRegistrationConfig.registerDesktop(in: support, name: name, command: mcpBinary,
+                                                          arguments: ["--db", AppPaths.databaseURL.path])
+            } catch {
+                failure = error.localizedDescription
             }
-            let ok = failures == 0 && !mcpRegisteredLocations(name: name).isEmpty
+            let ok = failure == nil && desktopConfigURLs().allSatisfy { mcpServerRegistered(name: name, in: $0) }
+            let detail = failure ?? L10n.s("Could not verify Claude Desktop registration.")
             DispatchQueue.main.async {
                 if ok {
                     Notifier.success(L10n.s("Beamhop MCP registered"),
                                      L10n.s("Restart Claude Desktop to pick it up"))
                 } else {
                     Notifier.error(L10n.s("Registration failed"),
-                                   "\(failures) config file(s) could not be updated")
+                                   detail)
                 }
             }
-        }
-    }
-
-    /// Merge the server entry into one Desktop config file, preserving every existing key.
-    private static func registerMCPInConfig(url: URL, name: String, mcpBinary: String) -> Bool {
-        do {
-            let exists = FileManager.default.fileExists(atPath: url.path)
-            let previous = exists ? try Data(contentsOf: url) : nil
-            let data = try MCPRegistrationConfig.updating(previous, name: name, command: mcpBinary,
-                                                         arguments: ["--db", AppPaths.databaseURL.path])
-            if !exists { try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true) }
-            try data.write(to: url, options: .atomic)
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-            return true
-        } catch {
-            return false
         }
     }
 

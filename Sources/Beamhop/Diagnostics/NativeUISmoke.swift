@@ -273,7 +273,10 @@ enum NativeUISmoke {
                                    route: .init(target: .clipboard, project: chinese ? "项目 B" : "Project B"))
         try library.hold(firstDraft)
         try library.start(secondDraft)
-        let record = try library.begin(firstDraft)
+        // A history receipt belongs to an earlier batch, not the unsent Pocket draft.
+        var preparedDraft = firstDraft
+        preparedDraft.id = UUID().uuidString
+        let record = try library.begin(preparedDraft)
         try library.finish(record.id, status: .prepared)
         let draftShelf = PocketWindowController()
         draftShelf.library = library

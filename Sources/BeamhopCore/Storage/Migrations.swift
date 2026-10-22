@@ -228,6 +228,27 @@ enum Migrations {
         m.registerMigration("v8-hop-drafts") { db in
             try db.execute(sql: "CREATE TABLE hop_state (id INTEGER PRIMARY KEY CHECK(id = 1), payload BLOB NOT NULL)")
         }
+        // Keep full handoff backups out of the document rewritten on every editor change.
+        // The migration and its marker commit together, so interruption cannot duplicate records.
+        m.registerMigration("v9-hop-records") { db in
+            try db.execute(sql: """
+                CREATE TABLE hop_records (
+                    position INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id TEXT NOT NULL UNIQUE,
+                    payload BLOB NOT NULL
+                )
+                """)
+            if let payload = try Data.fetchOne(db, sql: "SELECT payload FROM hop_state WHERE id = 1") {
+                var state = try JSONDecoder().decode(HopLibrary.State.self, from: payload)
+                for record in state.records {
+                    try db.execute(sql: "INSERT INTO hop_records (id, payload) VALUES (?, ?)",
+                                   arguments: [record.id, try JSONEncoder().encode(record)])
+                }
+                state.records = []
+                try db.execute(sql: "UPDATE hop_state SET payload = ? WHERE id = 1",
+                               arguments: [try JSONEncoder().encode(state)])
+            }
+        }
         return m
     }
 }

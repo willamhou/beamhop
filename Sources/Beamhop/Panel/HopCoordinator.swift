@@ -153,21 +153,26 @@ final class HopCoordinator {
         if draft.route.session == .newInApp || target == .claudeCode {
             // No verified create-session API exists. Copy once and open the real app;
             // never clear its composer, synthesize New Chat, or claim a session was created.
-            let copied = copy(draft.textFallback)
+            guard copy(draft.textFallback) else {
+                let detail = L10n.s("Could not copy materials")
+                finish(record, status: .failed, detail: detail)
+                Notifier.error(detail, L10n.s("The handoff backup is preserved."))
+                return
+            }
             let detail = draft.route.session == .newInApp
                 ? L10n.s("Create a session in the receiving app, then paste. Nothing has been sent.")
                 : L10n.s("Text copied. Paste into the Claude Code input after checking the terminal session.")
-            finish(record, status: copied ? .copied : .failed, detail: detail)
-            if copied {
-                let app: NSRunningApplication?
-                switch target {
-                case .chatgptDesktop: app = ChatGPTDelivery.bundleIDs.compactMap { AppActivator.runningApp(bundleID: $0) }.first
-                case .kimiWork: app = KimiDelivery.bundleIDs.compactMap { AppActivator.runningApp(bundleID: $0) }.first
-                case .claudeCode: app = TerminalLocator.locate()?.app
-                default: app = nil
-                }
-                app?.activate(options: [])
-                Notifier.info(L10n.s("Text copied · not sent"), detail)
+            let bundleIDs: [String]
+            switch target {
+            case .chatgptDesktop: bundleIDs = ChatGPTDelivery.bundleIDs
+            case .kimiWork: bundleIDs = KimiDelivery.bundleIDs
+            case .claudeCode: bundleIDs = TerminalLocator.launchBundleIDs
+            default: bundleIDs = []
+            }
+            AppActivator.open(bundleIDs: bundleIDs) { [weak self] error in
+                let result = error.map { $0 + " " + L10n.s("Text is on the clipboard. Open the receiving app and paste manually.") } ?? detail
+                self?.finish(record, status: .copied, detail: result)
+                Notifier.info(L10n.s("Text copied · not sent"), result)
             }
             return
         }

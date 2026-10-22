@@ -22,6 +22,12 @@ Validation: new XCTest and mirrored SelfTest scenarios cover literal edits, immu
 ---
 
 
+## PR #8 review fixes (2026-10-22)
+
+Four review findings against `f54e349` are addressed: new-session handoffs open installed receivers when closed; v9 migrates full handoff backups into individually written `hop_records` rows so editor changes do not rewrite history; successful completion consumes only unchanged active/Pocket snapshots while failures and later edits survive; explicit Claude Desktop registration creates both supported config homes and preflights existing JSON before writes. A legacy-only registration no longer hides the repair action. Text copying and application launch remain distinct from creating a session or submitting a message.
+
+Regression coverage: XCTest and SelfTest mirror legacy migration/order/reopen, history-write rejection during edits, transactional rollback, all active/parked × unchanged/edited × prepared/copied/failed combinations, and missing/legacy/current/both/malformed Desktop configs. The native focus fixture exercises closed/running/missing/unlaunchable receiver apps using a disposable bundle only. This Windows session uses hosted macOS CI for Swift and native execution; real Claude configs and the user's acceptance app are not touched. The v9 migration retains all history; older binaries cannot display the separated records and are not a schema rollback mechanism.
+
 ## Current follow-up: trial-build engineering (2026-10-21)
 
 The user is testing the October 21 acceptance app (`2dd92bb` plus the CLT `StateObject` compatibility adjustment). Its app bundle is preserved at `dist/Beamhop.app`; do not replace it while acceptance is in progress. Checklist: [real-device acceptance](docs/regressions/2026-10-21-device-acceptance.md). Local native fixtures passed 156/156 checks plus 20 repeated focus cycles, self-capture rejection and MCP-to-Inbox refresh; these are not real-agent/TCC/fullscreen/multidisplay acceptance.

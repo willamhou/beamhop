@@ -7,6 +7,13 @@ enum TerminalLocator {
         "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp", "com.mitchellh.ghostty",
     ]
 
+    /// Keep the selected running terminal; otherwise launch the macOS built-in terminal.
+    /// Opening a terminal does not establish that Claude Code is running in any session.
+    static var launchBundleIDs: [String] {
+        if let target = locate() { return [target.bundleID] }
+        return ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp", "com.mitchellh.ghostty"]
+    }
+
     struct Target { let app: NSRunningApplication; let bundleID: String; let wasFrontmost: Bool }
 
     /// Prefer the frontmost terminal (so auto-Enter targets the window the user is looking at);

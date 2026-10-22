@@ -2,7 +2,8 @@ import Foundation
 import Combine
 import GRDB
 
-/// One transactional state document keeps restoration and current-input preservation atomic.
+/// Draft changes and individual handoff receipts commit atomically. History is stored
+/// separately so typing never serializes or rewrites full-text handoff backups.
 public final class HopLibrary: ObservableObject {
     public struct State: Codable, Equatable {
         public var active: HopDraft?
@@ -19,24 +20,40 @@ public final class HopLibrary: ObservableObject {
     public init(_ database: Database) throws {
         self.database = database
         state = try database.queue.read { db in
-            guard let json = try Data.fetchOne(db, sql: "SELECT payload FROM hop_state WHERE id = 1") else { return State() }
-            return try JSONDecoder().decode(State.self, from: json)
+            let json = try Data.fetchOne(db, sql: "SELECT payload FROM hop_state WHERE id = 1")
+            var value = try json.map { try JSONDecoder().decode(State.self, from: $0) } ?? State()
+            value.records = try Data.fetchAll(db, sql: "SELECT payload FROM hop_records ORDER BY position")
+                .map { try JSONDecoder().decode(HopRecord.self, from: $0) }
+            return value
         }
         // A process exit does not establish delivery failure; never retry automatically.
-        if state.records.contains(where: { $0.status == .preparing }) {
-            try change { value in
+        let interrupted = state.records.filter { $0.status == .preparing }.map { record -> HopRecord in
+            var updated = record
+            updated.status = .failed
+            updated.detail = L10n.s("Status unknown after restart. Check the receiving app before trying again.")
+            return updated
+        }
+        if !interrupted.isEmpty {
+            let updates = Dictionary(uniqueKeysWithValues: interrupted.map { ($0.id, $0) })
+            try change(records: interrupted) { value in
                 for index in value.records.indices where value.records[index].status == .preparing {
-                    value.records[index].status = .failed
-                    value.records[index].detail = L10n.s("Status unknown after restart. Check the receiving app before trying again.")
+                    value.records[index] = updates[value.records[index].id]!
                 }
             }
         }
     }
-    private func change(_ edit: (inout State) -> Void) throws {
+    private func change(records: [HopRecord] = [], _ edit: (inout State) -> Void) throws {
         var next = state; edit(&next)
-        let payload = try JSONEncoder().encode(next)
+        var drafts = next
+        drafts.records = []
+        let payload = try JSONEncoder().encode(drafts)
+        let receipts = try records.map { ($0.id, try JSONEncoder().encode($0)) }
         try database.queue.write { db in
             try db.execute(sql: "INSERT INTO hop_state (id, payload) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload", arguments: [payload])
+            for (id, data) in receipts {
+                try db.execute(sql: "INSERT INTO hop_records (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+                               arguments: [id, data])
+            }
         }
         state = next; onChange?()
     }
@@ -89,15 +106,21 @@ public final class HopLibrary: ObservableObject {
     }
     public func begin(_ draft: HopDraft) throws -> HopRecord {
         let record = HopRecord(draft: draft)
-        try change { $0.records.append(record) }
+        try change(records: [record]) { $0.records.append(record) }
         return record
     }
     public func finish(_ id: String, status: HopRecord.Status, detail: String? = nil) throws {
-        try change { value in
-            guard let index = value.records.firstIndex(where: { $0.id == id }) else { return }
-            value.records[index].status = status; value.records[index].detail = detail
-            // A late completion cannot consume a newer edit or a newly captured batch.
-            if value.active == value.records[index].draft { value.active = nil }
+        guard let index = state.records.firstIndex(where: { $0.id == id }) else { return }
+        var record = state.records[index]
+        record.status = status; record.detail = detail
+        try change(records: [record]) { value in
+            value.records[index] = record
+            // Failure retains input. A successful late completion consumes only its exact
+            // snapshot, even if a new capture parked it while delivery was in flight.
+            if status == .prepared || status == .copied {
+                if value.active == record.draft { value.active = nil }
+                value.pocket.removeAll { $0 == record.draft }
+            }
         }
     }
 }
