@@ -29,11 +29,10 @@ final class PocketHUDController {
     }
 
     /// count > 0 → show at bottom-right; 0 → hide. Idempotent, safe from any thread.
-    func update(count: Int) {
+    func update(count: Int, hasRecords: Bool = false) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.model.count = count
-            guard count > 0 else { self.panel?.orderOut(nil); return }
             if self.panel == nil { self.panel = self.makePanel() }
             guard let panel = self.panel else { return }
             let sf = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame ?? .zero
@@ -58,7 +57,7 @@ private struct PocketHUDView: View {
             HStack(spacing: 6) {
                 Image(systemName: "tray.and.arrow.down.fill")
                     .font(.system(size: 12))
-                Text(L10n.f("Held · %lld", Int64(model.count)))
+                Text(L10n.f("Pocket · %lld", Int64(model.count)))
                     .font(.callout.weight(.medium))
                 Text("⌘⇧P")
                     .font(.caption)

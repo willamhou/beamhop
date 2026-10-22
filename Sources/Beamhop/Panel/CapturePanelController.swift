@@ -5,6 +5,7 @@ import BeamhopCore
 /// Owns the NSPanel shell for the capture panel (Week 3 spec §3.1, S5 configuration verbatim).
 /// Panel hides — never destroys — so re-shows are instant and hotkeys keep working (S5).
 final class CapturePanelController {
+    enum FinishAction { case confirm, hold, cancel }
     private(set) var panel: HandoffPanel?
     /// Guard against the confirm → orderOut → didResignKey race (plan Task 2.2): once a
     /// delivery is in flight, a resign triggered by our own hide must not run the cancel path.
@@ -29,11 +30,17 @@ final class CapturePanelController {
               boundWork: Work? = nil,
               workName: String = "",
               availableWorks: [Work] = [],
+              draft: HopDraft? = nil,
+              configure: ((CapturePanelModel) -> Void)? = nil,
+              beforeFinish: ((CapturePanelModel, FinishAction) -> Bool)? = nil,
               onConfirm: @escaping (DeliveryTarget?, String) -> Void,
               onCancel: @escaping () -> Void,
               onHold: ((DeliveryTarget?, String) -> Void)? = nil) {
         // A new capture replaces the previous one only after its draft has been saved.
-        if isVisible && !finished { currentModel?.cancel() }
+        if isVisible && !finished {
+            currentModel?.cancel()
+            if !finished { return }
+        }
         // Keep the running-app object rather than resolving the PID on close (PID reuse).
         sourceApp = NSRunningApplication(processIdentifier: pid_t(capture.pid))
         captureID = capture.id
@@ -48,6 +55,7 @@ final class CapturePanelController {
             availableWorks: availableWorks,
             onConfirm: { [weak self] target, note in
                 guard let self, !self.finished, self.presentation == presentation else { return }
+                guard let model = self.currentModel, beforeFinish?(model, .confirm) != false else { return }
                 self.finished = true
                 self.isDelivering = true
                 self.hide()
@@ -60,6 +68,7 @@ final class CapturePanelController {
             },
             onCancel: { [weak self] in
                 guard let self, !self.finished, self.presentation == presentation else { return }
+                guard let model = self.currentModel, beforeFinish?(model, .cancel) != false else { return }
                 self.finished = true
                 self.hide()
                 self.restoreSourceIfStillActive(captureID: capture.id)
@@ -68,6 +77,7 @@ final class CapturePanelController {
             onHold: onHold.map { handler in
                 { [weak self] target, note in
                     guard let self, !self.finished, self.presentation == presentation else { return }
+                    guard let model = self.currentModel, beforeFinish?(model, .hold) != false else { return }
                     self.finished = true
                     self.hide()
                     self.restoreSourceIfStillActive(captureID: capture.id)
@@ -80,6 +90,8 @@ final class CapturePanelController {
         finished = false
         isDelivering = false   // a new showing supersedes any in-flight delivery race guard
         currentModel = model
+        if let draft { model.restore(draft) }
+        configure?(model)
         panel?.onEscape = { [weak model] in model?.cancel() }
         panel?.onShortcut = { [weak model] key in model?.handleShortcut(key) ?? false }
         panel?.onReturn = { [weak model] in model?.confirm() }
@@ -109,11 +121,10 @@ final class CapturePanelController {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, !self.isDelivering, !self.finished,
                           self.presentation == presentation,
-                          self.panel?.isKeyWindow == false else { return }
-                    self.finished = true
-                    self.hide()
-                    if let id = self.captureID { self.restoreSourceIfStillActive(captureID: id) }
-                    self.cancelHandler?()
+                          self.panel?.isKeyWindow == false,
+                          self.panel?.attachedSheet == nil else { return }
+                    self.currentModel?.isCreating = false
+                    self.currentModel?.cancel()
                 }
             }
         }
@@ -155,7 +166,7 @@ final class CapturePanelController {
 
     private func makePanel() -> HandoffPanel {
         let p = HandoffPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered, defer: false)
         p.level = .floating                                    // above fullscreen apps (S5)

@@ -74,34 +74,47 @@ struct DiagnosticsService {
                 fixTitle: nil, fix: nil)
     }
 
+    /// "Claude MCP registration" covers BOTH homes of the beamhop MCP server: Claude Code CLI
+    /// (~/.claude.json via `claude mcp add`) and Claude Desktop (mcpServers in
+    /// claude_desktop_config.json). A machine with only Claude Desktop (no `claude` CLI)
+    /// registers by editing the Desktop config directly (2026-10-21).
     private func claudeCodeMCPRow() -> DiagRow {
-        let registered = Self.mcpServerRegistered(name: "beamhop")
-        let claudePath = whichClaude()
-        let mcpBin = Self.bundledMCPBinary()
-        let state: DiagState = registered ? .ok : (claudePath != nil ? .warn : .fail)
-        let detail = registered ? "Registered (top-level mcpServers in ~/.claude.json)"
-            : (claudePath != nil ? "Not registered — one-click register below"
-                                 : "No `claude` CLI detected (install Claude Code first)")
-        let fixTitle: String?
-        let fix: (() -> Void)?
-        if registered {
-            fixTitle = nil; fix = nil
-        } else if let claudePath, let mcpBin {
-            // Week 2 close-out (2026-10-19): real one-click registration via `claude mcp add`.
-            fixTitle = "Register now"
-            fix = { Self.registerMCP(claude: claudePath, mcpBinary: mcpBin) }
-        } else {
-            // Fallback (dev `swift run` without an app bundle, or missing claude): copy the command.
-            let bin = mcpBin ?? "<absolute path to BeamhopMCP>"
-            fixTitle = "Copy registration command"
-            fix = {
-                let cmd = "claude mcp add beamhop -s user -- \(bin) --db \(AppPaths.databaseURL.path)"
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(cmd, forType: .string)
-            }
+        let mcpBin = Self.preferredMCPBinary()
+        let locations = Self.mcpRegisteredLocations(name: "beamhop")
+        let desktopInstalled = Self.desktopConfigURLs()
+            .contains { FileManager.default.fileExists(atPath: $0.path) }
+            || FileManager.default.fileExists(atPath: "/Applications/Claude.app")
+        let desktopComplete = Self.desktopConfigURLs().allSatisfy { Self.mcpServerRegistered(name: "beamhop", in: $0) }
+        // A legacy-only registration cannot establish readiness for the current deployment.
+        if desktopInstalled && !desktopComplete, let mcpBin {
+            return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .warn,
+                           detail: "Not registered in all Claude Desktop configurations — one-click register below",
+                           fixTitle: "Register now",
+                           fix: { Self.registerMCPInDesktop(name: "beamhop", mcpBinary: mcpBin) })
         }
-        return DiagRow(id: .claudeMCP, name: "Claude Code MCP registration", state: state, detail: detail,
-                       fixTitle: fixTitle, fix: fix)
+        if !locations.isEmpty && (!desktopInstalled || desktopComplete) {
+            return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .ok,
+                           detail: "Registered (\(locations.joined(separator: ", ")))",
+                           fixTitle: nil, fix: nil)
+        }
+        let claudePath = whichClaude()
+        if let claudePath, let mcpBin {
+            // Week 2 close-out (2026-10-19): real one-click registration via `claude mcp add`.
+            return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .warn,
+                           detail: "Not registered — one-click register below",
+                           fixTitle: "Register now",
+                           fix: { Self.registerMCP(claude: claudePath, mcpBinary: mcpBin) })
+        }
+        // Fallback (dev `swift run` without an app bundle, or no Claude product at all).
+        let bin = mcpBin ?? "<absolute path to BeamhopMCP>"
+        return DiagRow(id: .claudeMCP, name: "Claude MCP registration", state: .warn,
+                       detail: "No Claude Code CLI or Claude Desktop detected — install either to enable MCP write-back",
+                       fixTitle: "Copy registration command",
+                       fix: {
+                           let cmd = "claude mcp add beamhop -s user -- \(bin) --db \(AppPaths.databaseURL.path)"
+                           NSPasteboard.general.clearContents()
+                           NSPasteboard.general.setString(cmd, forType: .string)
+                       })
     }
 
     private func coworkRow() -> DiagRow {
@@ -157,7 +170,9 @@ struct DiagnosticsService {
             do {
                 try p.run()
                 p.waitUntilExit()
-                let ok = p.terminationStatus == 0 && mcpServerRegistered(name: "beamhop")
+                let cliConfig = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".claude.json")
+                let ok = p.terminationStatus == 0 && mcpServerRegistered(name: "beamhop", in: cliConfig)
                 DispatchQueue.main.async {
                     if ok {
                         Notifier.success(L10n.s("Beamhop MCP registered"),
@@ -192,8 +207,62 @@ struct DiagnosticsService {
         return nil
     }
 
-    private static func mcpServerRegistered(name: String) -> Bool {
-        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
+    /// Registration homes for Claude Desktop: both deployment variants' config files
+    /// (this machine runs the 3p deployment, where `Claude/` edits are silently ignored).
+    private static func desktopConfigURLs() -> [URL] {
+        let appSupport = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support")
+        return MCPRegistrationConfig.desktopURLs(in: appSupport)
+    }
+
+    /// Human-readable locations where the named MCP server is already registered.
+    private static func mcpRegisteredLocations(name: String) -> [String] {
+        var found: [String] = []
+        let cliConfig = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude.json")
+        if mcpServerRegistered(name: name, in: cliConfig) { found.append("Claude Code") }
+        for url in desktopConfigURLs() where mcpServerRegistered(name: name, in: url) {
+            found.append("Claude Desktop (\(url.deletingLastPathComponent().lastPathComponent))")
+        }
+        return found
+    }
+
+    /// Stable installed path survives repacks (NEVER register a `.build/` or `dist/` binary);
+    /// fall back to the copy bundled next to the app executable (nil under `swift run`).
+    private static func preferredMCPBinary() -> String? {
+        let stable = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/beamhop/bin/BeamhopMCP").path
+        if FileManager.default.isExecutableFile(atPath: stable) { return stable }
+        return bundledMCPBinary()
+    }
+
+    /// Update both deployment homes even if only the legacy config already exists.
+    /// Claude Desktop must be restarted to pick it up.
+    private static func registerMCPInDesktop(name: String, mcpBinary: String) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+            var failure: String?
+            do {
+                try MCPRegistrationConfig.registerDesktop(in: support, name: name, command: mcpBinary,
+                                                          arguments: ["--db", AppPaths.databaseURL.path])
+            } catch {
+                failure = error.localizedDescription
+            }
+            let ok = failure == nil && desktopConfigURLs().allSatisfy { mcpServerRegistered(name: name, in: $0) }
+            let detail = failure ?? L10n.s("Could not verify Claude Desktop registration.")
+            DispatchQueue.main.async {
+                if ok {
+                    Notifier.success(L10n.s("Beamhop MCP registered"),
+                                     L10n.s("Restart Claude Desktop to pick it up"))
+                } else {
+                    Notifier.error(L10n.s("Registration failed"),
+                                   detail)
+                }
+            }
+        }
+    }
+
+    private static func mcpServerRegistered(name: String, in url: URL) -> Bool {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let servers = json["mcpServers"] as? [String: Any] else { return false }

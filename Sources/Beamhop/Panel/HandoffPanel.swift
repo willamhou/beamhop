@@ -17,6 +17,7 @@ final class HandoffPanel: NSPanel {
             .subtracting([.capsLock, .numericPad, .function])
         if modifiers == .command, let key = event.charactersIgnoringModifiers,
            onShortcut?(key) == true { return true }
+        if modifiers == .command, event.keyCode == 36, let onReturn { onReturn(); return true }
         if modifiers.isEmpty, event.keyCode == 53 {
             onEscape?()
             return true
@@ -26,7 +27,6 @@ final class HandoffPanel: NSPanel {
 
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { onEscape?(); return }
-        if event.keyCode == 36, let onReturn { onReturn(); return }
         super.keyDown(with: event)
     }
 }

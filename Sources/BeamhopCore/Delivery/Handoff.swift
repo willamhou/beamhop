@@ -11,14 +11,16 @@ public struct Handoff: Sendable {
         }
     }
     public let items: [Item]
-    public init(items: [Item]) { self.items = items }
+    public let editedText: String?
+    public init(items: [Item], editedText: String? = nil) { self.items = items; self.editedText = editedText }
 
     public var markdown: String {
-        render { PromptRenderer.fullMarkdown($0.capture, userNote: $0.note) }
+        editedText ?? render { PromptRenderer.fullMarkdown($0.capture, userNote: $0.note) }
     }
 
     public var claudeTrigger: String {
-        render { PromptRenderer.claudeCodeTrigger($0.capture, userNote: $0.note) }
+        // An MCP fetch of the original capture would silently undo the user's edits.
+        editedText ?? render { PromptRenderer.claudeCodeTrigger($0.capture, userNote: $0.note) }
     }
 
     private func render(_ body: (Item) -> String) -> String {
@@ -43,14 +45,14 @@ public extension DeliveryTarget {
     var handoffAction: String {
         switch self {
         case .clipboard, .cowork: return L10n.s("Copy materials")
-        default: return L10n.s("Fill & review")
+        default: return L10n.f("Continue in %@", displayName)
         }
     }
 
     var handoffDetail: String {
         switch self {
         case .clipboard, .cowork: return L10n.s("Copy once, then paste where you need it")
-        case .claudeCode: return L10n.s("Current terminal · review before sending")
+        case .claudeCode: return L10n.s("Copy text, then paste into the Claude Code input")
         default: return L10n.s("Current window · review before sending")
         }
     }

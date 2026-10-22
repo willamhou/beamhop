@@ -34,6 +34,16 @@ final class DestinationMenuPresenter: NSObject {
             }
             menu.addItem(.separator())
         }
+        if !model.savedRoutes.isEmpty {
+            menu.addItem(.sectionHeader(title: L10n.s("Recent destinations")))
+            for route in model.savedRoutes {
+                add([route.project, route.target?.displayName ?? L10n.s("Inbox"), route.sessionLabel]
+                    .filter { !$0.isEmpty }.joined(separator: " · "), selected: model.snapshot.route == route) {
+                    model.chooseRoute(route)
+                }
+            }
+            menu.addItem(.separator())
+        }
         menu.addItem(.sectionHeader(title: L10n.s("Applications")))
         for shortcut in PanelShortcut.allCases {
             guard let target = shortcut.target, model.visibleTargets.contains(target) else { continue }
@@ -41,8 +51,11 @@ final class DestinationMenuPresenter: NSObject {
                 shortcut: shortcut.rawValue) { model.chooseTool(target) }
         }
         menu.addItem(.separator())
-        add(L10n.s("Remember with a name…"), enabled: model.selectedTarget != nil, action: onName)
-        add(L10n.s("Save to Inbox only"), shortcut: "0") { model.chooseTool(nil) }
+        add(L10n.s("New session…"), enabled: [.claudeCode, .chatgptDesktop, .kimiWork].contains(model.selectedTarget)) {
+            model.creatingProject = false; model.isCreating = true
+        }
+        add(L10n.s("New project…"), action: onName)
+        add(L10n.s(model.usesProjectContext ? "Save local draft" : "Save to Inbox only"), shortcut: "0") { model.chooseTool(nil) }
         activeMenu = menu
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.bounds.minY), in: anchor)
         activeMenu = nil

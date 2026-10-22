@@ -126,12 +126,28 @@ enum NativeUISmoke {
         check("capture can receive keyboard", controller.panel?.canBecomeKey == true)
         check("capture actually owns keyboard focus", controller.panel?.isKeyWindow == true)
         check("capture is not a document window", controller.panel?.canBecomeMain == false)
-        try capture(controller.panel, name: "capture", expectedWidth: 420)
+        try capture(controller.panel, name: "capture", expectedWidth: 480)
         let editor = controller.panel?.firstResponder as? NSTextView
         check("note receives initial focus", editor != nil)
         editor?.insertText("Native keyboard input", replacementRange: NSRange(location: 0, length: 0))
         settle()
         check("native editor updates note", controller.currentModel?.note == "Native keyboard input")
+        editor?.insertNewline(nil)
+        settle()
+        check("Return inserts a line break without handoff", controller.isVisible && confirms == 0
+              && controller.currentModel?.note.contains("\n") == true)
+        controller.currentModel?.materials[0].text = "Edited inline <>&"
+        controller.currentModel?.additionalText = "Additional material"
+        check("inline material edits preserve original", controller.currentModel?.materials[0].original == sample)
+        check("outgoing draft uses edited text", controller.currentModel?.snapshot.outgoingText.contains("Edited inline <>&") == true)
+        check("inline addition needs no Done action", controller.currentModel?.snapshot.materials.count == 2)
+        controller.currentModel?.note = "/review"
+        check("slash command stays literal", controller.currentModel?.snapshot.outgoingText.hasPrefix("/review") == true)
+        controller.currentModel?.materials.append(HopMaterial(name: "fixture.png", path: "/fixture.png", image: true, bytes: 1))
+        check("unsupported image blocks native handoff", controller.currentModel?.canConfirm == false)
+        controller.currentModel?.materials.removeLast()
+        controller.currentModel?.additionalText = ""
+        controller.currentModel?.materials[0].text = sample.selectedText ?? ""
         controller.currentModel?.note = ""
         let nodes = accessibilityNodes(controller.panel!)
         let accessibilityDump = nodes.map { node in
@@ -185,7 +201,7 @@ enum NativeUISmoke {
         controller.currentModel?.note = chinese ? "第一行交代\n第二行说明\n第三行补充" : "First line of context\nSecond line of context\nThird line of context"
         controller.currentModel?.selectedTarget = .claudeCode
         settle()
-        try capture(controller.panel, name: "capture-confirm-change", expectedWidth: 420)
+        try capture(controller.panel, name: "capture-confirm-change", expectedWidth: 480)
         check("hold shortcut handled", key("5", code: 23, modifiers: .command, to: controller.panel))
         settle()
         check("hold dismisses and keeps note", !controller.isVisible && held?.contains(chinese ? "第三行" : "Third line") == true)
@@ -249,6 +265,122 @@ enum NativeUISmoke {
         check("success removes only selected", shelf.model.count == 1 && shelf.model.items.first?.0.id == itemIDs[2])
         try capture(shelf.panel, name: "shelf-remaining", expectedWidth: 360)
         shelf.hide()
+        let library = try HopLibrary(db)
+        let firstDraft = HopDraft(materials: [HopMaterial(capture: sample)],
+                                  instruction: chinese ? "对照这些材料，修改方案" : "Compare these materials and update the plan",
+                                  route: .init(target: .kimiWork, project: work.name))
+        let secondDraft = HopDraft(materials: [HopMaterial(text: chinese ? "当前未发送的材料" : "Current unsent material")],
+                                   route: .init(target: .clipboard, project: chinese ? "项目 B" : "Project B"))
+        try library.hold(firstDraft)
+        try library.start(secondDraft)
+        // A history receipt belongs to an earlier batch, not the unsent Pocket draft.
+        var preparedDraft = firstDraft
+        preparedDraft.id = UUID().uuidString
+        let record = try library.begin(preparedDraft)
+        try library.finish(record.id, status: .prepared)
+        let draftShelf = PocketWindowController()
+        draftShelf.library = library
+        var openedDrafts = 0
+        draftShelf.onOpenDraft = { openedDrafts += 1 }
+        draftShelf.show()
+        settle()
+        try capture(draftShelf.panel, name: "pocket-drafts", expectedWidth: 380)
+        check("viewing Pocket leaves current draft intact", library.state.active == secondDraft)
+        try library.restore(firstDraft.id)
+        check("Pocket restore parks current input", library.state.pocket == [secondDraft] && library.state.active == firstDraft)
+        try library.addMaterials(from: secondDraft)
+        check("Pocket reuse keeps instruction and receiver", library.state.active?.route == firstDraft.route
+              && library.state.active?.instruction == firstDraft.instruction && library.state.pocket == [secondDraft])
+        settle()
+        try capture(draftShelf.panel, name: "pocket-recovery", expectedWidth: 380)
+        // Exercise the replacement shelf's real controls, not only its storage methods.
+        let shelfModel = draftShelf.hopModel!
+        shelfModel.availableTargets = [.clipboard, .kimiWork]
+        var batchRecord: HopRecord?
+        var batchDone: ((Bool) -> Void)?
+        shelfModel.onDeliver = { batchRecord = $0; batchDone = $1 }
+        func pressShelf(_ id: String) -> Bool {
+            guard let panel = draftShelf.panel else { return false }
+            let nodes = accessibilityNodes(panel)
+            let dump = nodes.map { "\(type(of: $0)) id=\(identifier($0) ?? "-") actions=\($0.accessibilityActionNames())" }.joined(separator: "\n")
+            try? dump.write(to: output.appendingPathComponent("pocket-accessibility-\(suffix).txt"), atomically: true, encoding: .utf8)
+            guard let node = nodes.first(where: { identifier($0) == id }) else {
+                print("[native-ui] missing Pocket accessibility node: \(id)")
+                return false
+            }
+            // SwiftUI buttons implement the modern informal press selector; the legacy
+            // accessibilityPerformAction path used by NSButton can silently do nothing.
+            let selector = NSSelectorFromString("accessibilityPerformPress")
+            if node.responds(to: selector) {
+                typealias Press = @convention(c) (AnyObject, Selector) -> Bool
+                let press = unsafeBitCast(node.method(for: selector), to: Press.self)
+                guard press(node, selector) else { return false }
+            } else { node.accessibilityPerformAction(.press) }
+            settle()
+            return true
+        }
+        try library.duplicate(secondDraft)
+        settle()
+        check("Pocket select-all control works", pressShelf("pocket.select-all") && shelfModel.selection.count == 2)
+        check("Pocket inherits matching destination", shelfModel.route == secondDraft.route && shelfModel.canDeliver)
+        try capture(draftShelf.panel, name: "pocket-selection", expectedWidth: 380)
+        check("Pocket delete control works", pressShelf("pocket.delete") && library.state.pocket.isEmpty)
+        check("Pocket undo restores selected drafts", pressShelf("pocket.undo") && library.state.pocket.count == 2)
+        _ = pressShelf("pocket.select-all")
+        check("Pocket batch handoff button works", pressShelf("pocket.deliver") && batchRecord?.pocketSources?.count == 2)
+        if let batchRecord {
+            try library.finish(batchRecord.id, status: .failed); batchDone?(false)
+        }
+        settle()
+        check("Pocket failed batch keeps selection", shelfModel.selection.count == 2 && !shelfModel.isDelivering)
+        try capture(draftShelf.panel, name: "pocket-batch-retry", expectedWidth: 380)
+        let failedRecordID = batchRecord?.id
+        check("Pocket retry starts a new handoff", pressShelf("pocket.deliver")
+              && batchRecord?.id != failedRecordID && shelfModel.isDelivering)
+        if let batchRecord {
+            try library.finish(batchRecord.id, status: .copied); batchDone?(true)
+        }
+        settle()
+        check("Pocket successful batch consumes only selected", library.state.pocket.isEmpty && library.state.active?.id == firstDraft.id
+              && shelfModel.error == nil && !shelfModel.isDelivering)
+        // History is separate and bounded; a long archive cannot expand the draft shelf.
+        shelfModel.section = .history
+        settle()
+        try capture(draftShelf.panel, name: "pocket-history", expectedWidth: 380)
+        shelfModel.section = .drafts
+        for index in 1...8 {
+            try library.hold(HopDraft(materials: [HopMaterial(text: (chinese ? "材料 " : "Material ") + String(index))], route: secondDraft.route))
+        }
+        settle()
+        try capture(draftShelf.panel, name: "pocket-dense", expectedWidth: 380)
+        check("Pocket list height stays bounded", (draftShelf.panel?.contentView?.bounds.height ?? 1000) < 480)
+        shelfModel.query = chinese ? "材料 3" : "Material 3"
+        settle()
+        check("Pocket search narrows list without hidden selection", shelfModel.drafts.count == 1 && shelfModel.selectedIDs.isEmpty)
+        let editedID = shelfModel.drafts.first!.id
+        let opensBefore = openedDrafts
+        check("Pocket edit opens the draft", pressShelf("pocket.edit." + editedID) && openedDrafts == opensBefore + 1 && library.state.active?.id == editedID)
+        check("Pocket edit parks previous input", library.state.pocket.contains { $0.id == firstDraft.id })
+        shelfModel.query = ""
+        check("Pocket new draft control works", pressShelf("pocket.new") && library.state.active?.materials.isEmpty == true)
+        draftShelf.hide()
+
+        // Exercise project selection and creation on the production panel, without external apps.
+        show()
+        controller.currentModel?.usesProjectContext = true
+        controller.currentModel?.workName = chinese ? "客户 A" : "Client A"
+        controller.currentModel?.chooseTool(.clipboard)
+        check("switching app preserves project context", controller.currentModel?.workName == (chinese ? "客户 A" : "Client A"))
+        controller.currentModel?.creatingProject = true
+        controller.currentModel?.isCreating = true
+        settle()
+        check("creation blocks accidental handoff", controller.currentModel?.canConfirm == false)
+        try capture(controller.panel, name: "capture-create-project", expectedWidth: 480)
+        _ = key("\u{1b}", code: 53, modifiers: [], to: controller.panel)
+        settle()
+        check("Escape closes creation before closing draft", controller.isVisible && controller.currentModel?.isCreating == false)
+        controller.currentModel?.cancel()
+        settle()
         check("real source app available for focus checks", sourcePID != nil && sourcePID != ProcessInfo.processInfo.processIdentifier,
               "sourcePID=\(sourcePID ?? -1)")
         let report = Report(language: language, appearance: dark ? "dark" : "light",

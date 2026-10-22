@@ -1,5 +1,9 @@
 import Foundation
 import BeamhopCore
+import GRDB
+
+typealias Database = BeamhopCore.Database
+typealias DatabaseError = BeamhopCore.DatabaseError
 
 // `--seed <db-path>`: insert one sample capture into the given DB and exit (dev helper for
 // testing the MCP server end-to-end).
@@ -287,7 +291,7 @@ do {
                                   onCancel: { cancelled = true })
         check(m.summaryLine == "Kimi · Kimi Work · 20 chars", "summaryLine rounds chars down to 10s")
         check(m.previewText == String(repeating: "字", count: 25), "preview passes short text through")
-        check(m.confirmLabel == "Fill & review", "confirm label shows selected target")
+        check(m.confirmLabel == "Continue in Kimi Work", "confirm label shows selected target")
         m.note = "总结一下这段"
         m.confirm()
         check(confirmed?.0 == .kimiWork && confirmed?.1 == "总结一下这段", "confirm carries target + note")
@@ -874,6 +878,28 @@ do {
                 == [.result(a), .delivery(d), .result(b), .result(c)], "chronological timeline with deterministic delivery-first ties")
         check(TimelineBuilder.entries(deliveries: [], results: []).isEmpty, "empty timeline")
     }
+    print("== Claude Desktop MCP configuration merge ==")
+    do {
+        let original = Data(#"{"theme":"dark","mcpServers":{"other":{"command":"other","env":{"TOKEN":"fixture"}}}}"#.utf8)
+        let data = try MCPRegistrationConfig.updating(original, name: "beamhop", command: "helper", arguments: ["--db", "/test/db"])
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let servers = json["mcpServers"] as! [String: [String: Any]]
+        check(json["theme"] as? String == "dark", "unrelated config keys preserved")
+        check(servers["other"]?["command"] as? String == "other", "other MCP servers preserved")
+        check((servers["other"]?["env"] as? [String: String])?["TOKEN"] == "fixture", "other server environment preserved")
+        check(servers["beamhop"]?["args"] as? [String] == ["--db", "/test/db"], "new server arguments installed")
+        for text in ["not JSON", "[]", #"{"mcpServers":null}"#, #"{"mcpServers":[]}"#, #"{"mcpServers":"private"}"#] {
+            do {
+                _ = try MCPRegistrationConfig.updating(Data(text.utf8), name: "beamhop", command: "helper", arguments: [])
+                check(false, "malformed existing config rejected")
+            } catch { check(true, "malformed existing config rejected without overwrite") }
+        }
+        let first = try MCPRegistrationConfig.updating(nil, name: "beamhop", command: "old", arguments: [])
+        let second = try MCPRegistrationConfig.updating(first, name: "beamhop", command: "new", arguments: [])
+        let updated = try JSONSerialization.jsonObject(with: second) as! [String: Any]
+        check((updated["mcpServers"] as? [String: [String: Any]])?["beamhop"]?["command"] as? String == "new", "existing beamhop entry can be updated")
+    }
+
     print("== Trial build provenance + privacy report ==")
     do {
         let build = BuildInfo(appVersion: "0.1.0", buildNumber: "7",
@@ -920,6 +946,187 @@ do {
     print("EXCEPTION: \(error)")
     failures += 1
 }
+
+
+do {
+    print("== Inline Hop draft, Pocket and receipt safety ==")
+    let (db, path) = try freshDB()
+    defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
+    let cap = sample(selectedText: "immutable original")
+    let model = CapturePanelModel(capture: cap, initialTarget: .kimiWork,
+        onConfirm: { _, _ in check(false, "attachment must block handoff") }, onCancel: {})
+    model.materials[0].text = "edited <>&"
+    model.additionalText = "independent addition"
+    model.note = "/review\nLiteral instruction"
+    let first = model.snapshot
+    check(first.materials.count == 2, "inline addition is included without Done")
+    check(first.materials[0].original == cap, "original capture is immutable")
+    check(first.outgoingText.hasPrefix(model.note) && first.outgoingText.contains("edited <>&")
+          && !first.outgoingText.contains("immutable original"), "literal prompt and edited text only")
+    let h = Handoff(items: [.init(capture: cap)], editedText: first.outgoingText)
+    check(h.markdown == first.outgoingText && h.claudeTrigger == first.outgoingText, "MCP trigger cannot silently restore original")
+    model.pendingImportCount = 1
+    check(!model.canConfirm, "handoff cannot outrun an attachment import")
+    model.confirm()
+    model.pendingImportCount = 0
+    model.materials.append(HopMaterial(name: "file.png", path: "/local/file.png", image: true, bytes: 10))
+    check(!model.canConfirm && model.snapshot.textFallback.contains("file.png"), "unsupported files block, copy names missing attachments")
+    model.confirm()
+    model.usesProjectContext = true
+    model.workName = "Project A"
+    model.chooseTool(.clipboard)
+    check(model.workName == "Project A", "switching app keeps project context")
+    model.chooseTool(nil)
+    check(model.confirmLabel == "Save local draft", "local draft action names what it saves")
+    let library = try HopLibrary(db)
+    let second = HopDraft(materials: [HopMaterial(text: "second")], route: .init(target: .clipboard, project: "B"))
+    try library.start(first); try library.hold(first); try library.start(second); try library.restore(first.id)
+    check(library.state.active == first && library.state.pocket == [second], "restore protects even prompt-free current material")
+    try library.addMaterials(from: second)
+    check(library.state.active?.route == first.route && library.state.active?.instruction == first.instruction
+          && library.state.pocket == [second], "copy materials preserves both routes and original saved batch")
+    let before = library.state.active!
+    let record = try library.begin(before)
+    var newer = before; newer.materials[0].text = "newer"
+    try library.saveActive(newer); try library.finish(record.id, status: .prepared)
+    check(library.state.active == newer, "late completion cannot consume newer edit")
+    try library.recover(library.state.records[0])
+    check(library.state.pocket.contains(newer) && library.state.active?.materials == before.materials, "recovery protects input and uses frozen backup")
+    try library.remember(.init(target: .kimiWork, project: "A"))
+    try library.remember(.init(target: .chatgptDesktop, project: "A"))
+    check(library.state.routes.count == 2, "one project retains multiple applications")
+    let reopened = try HopLibrary(db)
+    check(reopened.state == library.state, "all drafts, routes and records survive restart")
+    let pending = try reopened.begin(reopened.state.active!)
+    let interrupted = try HopLibrary(db)
+    check(interrupted.state.records.first { $0.id == pending.id }?.status == .failed
+          && interrupted.state.records.last?.detail?.contains("unknown") == true, "interrupted handoff never becomes false success or automatic retry")
+} catch { print("HOP DRAFT EXCEPTION: \(error)"); failures += 1 }
+
+do {
+    print("== PR #8: exact snapshot completion and atomic receipt ==")
+    let (db, path) = try freshDB()
+    defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
+    let library = try HopLibrary(db)
+    for parked in [false, true] {
+        for edited in [false, true] {
+            for status in [HopRecord.Status.prepared, .copied, .failed] {
+                let draft = HopDraft(materials: [HopMaterial(text: "snapshot")])
+                try library.start(draft)
+                let record = try library.begin(draft)
+                var current = draft
+                if edited { current.instruction = "new instruction"; try library.saveActive(current) }
+                let next = HopDraft(materials: [HopMaterial(text: "new capture")])
+                if parked { try library.start(next) }
+                try library.finish(record.id, status: status)
+                let keep = edited || status == .failed
+                check(parked ? library.state.active == next && library.state.pocket.contains(current) == keep
+                             : library.state.active == (keep ? current : nil),
+                      "completion protects edits/failure: parked=\(parked), edited=\(edited), status=\(status)")
+                check(library.state.records.last?.draft == draft && library.state.records.last?.status == status,
+                      "frozen handoff backup and status survive completion")
+            }
+        }
+    }
+    check(try HopLibrary(db).state == library.state, "completion state survives restart")
+    let draft = HopDraft(materials: [HopMaterial(text: "keep on write failure")])
+    try library.start(draft)
+    let record = try library.begin(draft)
+    try library.start(HopDraft(materials: [HopMaterial(text: "new capture")]))
+    let before = library.state
+    let payload = try db.queue.read { try Data.fetchOne($0, sql: "SELECT payload FROM hop_state WHERE id = 1") }
+    try db.queue.write { try $0.execute(sql: "CREATE TRIGGER fail_receipt BEFORE UPDATE ON hop_records BEGIN SELECT RAISE(ABORT, 'fixture failure'); END") }
+    do {
+        try library.finish(record.id, status: .prepared)
+        check(false, "receipt write must fail")
+    } catch { check(true, "receipt write failure propagated") }
+    check(library.state == before, "failed receipt does not publish consumption")
+    check(try db.queue.read { try Data.fetchOne($0, sql: "SELECT payload FROM hop_state WHERE id = 1") } == payload,
+          "failed receipt rolls back draft document")
+    try db.queue.write { try $0.execute(sql: "DROP TRIGGER fail_receipt") }
+    try library.finish(record.id, status: .prepared)
+    let reopened = try HopLibrary(db)
+    check(!library.state.pocket.contains(draft) && reopened.state == library.state, "retry commits receipt and exact consumption together")
+} catch { print("HOP COMPLETION EXCEPTION: \(error)"); failures += 1 }
+
+do {
+    print("== PR #8: legacy backup migration and editor write isolation ==")
+    let (db, path) = try freshDB()
+    defer { try? FileManager.default.removeItem(at: path.deletingLastPathComponent()) }
+    var legacy = HopLibrary.State()
+    legacy.active = HopDraft(materials: [HopMaterial(text: "editable")])
+    legacy.pocket = [HopDraft(materials: [HopMaterial(text: "parked")])]
+    legacy.projects = ["Project A"]
+    legacy.routes = [.init(target: .kimiWork, project: "Project A")]
+    legacy.lastRoute = legacy.routes[0]
+    legacy.records = (0..<60).map { index in
+        HopRecord(draft: HopDraft(materials: [HopMaterial(text: "\(index)" + String(repeating: "large backup", count: 800))]), status: .copied)
+    }
+    try db.queue.write { sql in
+        try sql.execute(sql: "DROP TABLE hop_records")
+        try sql.execute(sql: "DELETE FROM grdb_migrations WHERE identifier = 'v9-hop-records'")
+        try sql.execute(sql: "INSERT INTO hop_state (id, payload) VALUES (1, ?)", arguments: [try JSONEncoder().encode(legacy)])
+    }
+    let migrated = try Database(path: path)
+    let library = try HopLibrary(migrated)
+    check(library.state == legacy, "v8 migration preserves all backups, drafts, routes and order")
+    try migrated.queue.write { sql in
+        try sql.execute(sql: "CREATE TRIGGER no_history_insert BEFORE INSERT ON hop_records BEGIN SELECT RAISE(ABORT, 'editor rewrote history'); END")
+        try sql.execute(sql: "CREATE TRIGGER no_history_update BEFORE UPDATE ON hop_records BEGIN SELECT RAISE(ABORT, 'editor rewrote history'); END")
+    }
+    var draft = legacy.active!
+    for _ in 0..<10 { draft.instruction += "x"; try library.saveActive(draft) }
+    let document = try migrated.queue.read { try Data.fetchOne($0, sql: "SELECT payload FROM hop_state WHERE id = 1")! }
+    let stored = try JSONDecoder().decode(HopLibrary.State.self, from: document)
+    check(document.count < 4_096 && stored.records.isEmpty,
+          "editor document excludes large history payloads")
+    check(library.state.records == legacy.records, "editing preserves every backup without inserting/updating history")
+    check(try HopLibrary(Database(path: path)).state == library.state, "repeated open neither duplicates nor loses migrated history")
+} catch { print("HOP MIGRATION EXCEPTION: \(error)"); failures += 1 }
+
+do {
+    print("== PR #8: Claude Desktop deployment registration ==")
+    for existing in [[], [0], [1], [0, 1]] as [[Int]] {
+        let support = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: support) }
+        let urls = MCPRegistrationConfig.desktopURLs(in: support)
+        for index in existing {
+            try FileManager.default.createDirectory(at: urls[index].deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("{\"theme\":\"variant\(index)\",\"mcpServers\":{\"other\":{\"command\":\"keep\"}}}".utf8).write(to: urls[index])
+        }
+        try MCPRegistrationConfig.registerDesktop(in: support, name: "beamhop", command: "/fixture/helper", arguments: ["--db", "/fixture/db"])
+        for (index, url) in urls.enumerated() {
+            let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+            let servers = json["mcpServers"] as! [String: [String: Any]]
+            check(servers["beamhop"]?["command"] as? String == "/fixture/helper"
+                  && servers["beamhop"]?["args"] as? [String] == ["--db", "/fixture/db"], "both deployment configs receive registration")
+            if existing.contains(index) {
+                check(json["theme"] as? String == "variant\(index)" && servers["other"]?["command"] as? String == "keep",
+                      "each existing deployment keeps unrelated configuration")
+            }
+        }
+    }
+    let support = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: support) }
+    let urls = MCPRegistrationConfig.desktopURLs(in: support)
+    let original = [Data(#"{"theme":"keep"}"#.utf8), Data("invalid JSON".utf8)]
+    for (url, data) in zip(urls, original) {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url)
+    }
+    do {
+        try MCPRegistrationConfig.registerDesktop(in: support, name: "beamhop", command: "helper", arguments: [])
+        check(false, "malformed deployment must block registration")
+    } catch { check(true, "malformed deployment rejected before any write") }
+    for (url, data) in zip(urls, original) { check(try Data(contentsOf: url) == data, "both configurations unchanged on parse failure") }
+} catch { print("DESKTOP CONFIG EXCEPTION: \(error)"); failures += 1 }
+
+do {
+    let pocket = HopPocketRegression()
+    try pocket.testCreateEditDuplicateDeleteUndoSurviveRestart()
+    try pocket.testBatchFailureRetryAndLateEditPreservation()
+    try pocket.testMixedRoutesRequireExplicitChoiceAndFilteringClearsHiddenSelection()
+} catch { print("POCKET CRUD EXCEPTION: \(error)"); failures += 1 }
 
 print(failures == 0 ? "\nALL PASS ✅" : "\n\(failures) FAILURE(S) ❌")
 exit(failures == 0 ? 0 : 1)

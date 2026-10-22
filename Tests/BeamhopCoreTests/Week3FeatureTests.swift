@@ -148,7 +148,7 @@ final class Week3FeatureTests: XCTestCase {
         let m = panelModel(capture: cap)
         XCTAssertEqual(m.summaryLine, "Kimi · Kimi Work · 20 chars")
         XCTAssertEqual(m.previewText, String(repeating: "字", count: 25))
-        XCTAssertEqual(m.confirmLabel, "Fill & review")
+        XCTAssertEqual(m.confirmLabel, "Continue in Kimi Work")
     }
 
     func testPanelConfirmCarriesTargetAndNote() {

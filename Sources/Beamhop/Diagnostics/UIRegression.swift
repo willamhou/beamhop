@@ -36,6 +36,8 @@ enum UIRegression {
             let path = temp.appendingPathComponent("inbox.sqlite")
             let store = CaptureStore(try Database(path: path))
 
+            try verifyReceiverLaunch(in: temp)
+
             let sourceProcess = try launchFixture()
             defer { if sourceProcess.isRunning { sourceProcess.terminate(); sourceProcess.waitUntilExit() } }
             let source = try waitForApp(sourceProcess)
@@ -203,6 +205,56 @@ enum UIRegression {
             throw Failure(description: "external MCP save_result failed")
         }
         print("  ✓ real MCP subprocess saved a conclusion to the fixture database")
+    }
+
+    /// Exercise the production open-or-activate helper with a disposable app, never a
+    /// user's ChatGPT, Kimi or terminal. No keystrokes or clipboard writes are involved.
+    private static func verifyReceiverLaunch(in temp: URL) throws {
+        let bundleID = "com.beamhop.launch-fixture.\(UUID().uuidString.lowercased())"
+        let bundle = temp.appendingPathComponent("Receiver.app")
+        let contents = bundle.appendingPathComponent("Contents")
+        let executable = contents.appendingPathComponent("MacOS/Receiver")
+        try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL, to: executable)
+        let plist: [String: Any] = ["CFBundleIdentifier": bundleID, "CFBundleExecutable": "Receiver",
+                                    "CFBundleName": "Beamhop launch fixture", "CFBundlePackageType": "APPL",
+                                    "CFBundleVersion": "1"]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"))
+        defer { AppActivator.runningApp(bundleID: bundleID)?.terminate() }
+        try expect(AppActivator.runningApp(bundleID: bundleID) == nil, "receiver fixture starts closed")
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.arguments = ["--focus-fixture"]
+        var completed = false
+        var failure: String?
+        AppActivator.open(bundleIDs: [bundleID], applicationURL: { _ in bundle }, configuration: configuration) {
+            failure = $0; completed = true
+        }
+        try wait("closed installed receiver is launched", timeout: 10) { completed }
+        try expect(failure == nil, "receiver launch reports success")
+        guard let launched = AppActivator.runningApp(bundleID: bundleID) else { throw Failure(description: "receiver did not register") }
+        try wait("launched receiver becomes frontmost") { frontPID == launched.processIdentifier }
+        completed = false
+        var resolvedAgain = false
+        AppActivator.open(bundleIDs: [bundleID], applicationURL: { _ in resolvedAgain = true; return nil }) {
+            failure = $0; completed = true
+        }
+        try wait("running receiver is reused") { completed }
+        try expect(failure == nil && !resolvedAgain && AppActivator.runningApp(bundleID: bundleID)?.processIdentifier == launched.processIdentifier,
+                   "running receiver reuses its process without relaunch")
+        completed = false
+        AppActivator.open(bundleIDs: ["com.beamhop.missing-fixture"], applicationURL: { _ in nil }) {
+            failure = $0; completed = true
+        }
+        try expect(completed && failure != nil, "missing receiver reports a recoverable open failure")
+        completed = false
+        AppActivator.open(bundleIDs: ["com.beamhop.invalid-fixture"], applicationURL: { _ in temp.appendingPathComponent("Missing.app") }) {
+            failure = $0; completed = true
+        }
+        try wait("workspace launch failure completes", timeout: 10) { completed }
+        try expect(failure != nil, "workspace launch error is not reported as success")
+        launched.terminate()
+        try wait("receiver fixture exits") { launched.isTerminated }
     }
 
     private static func launchFixture() throws -> Process {
