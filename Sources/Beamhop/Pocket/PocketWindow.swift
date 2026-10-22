@@ -63,6 +63,15 @@ private final class HopPocketViewState: ObservableObject {
     @Published var confirmingHistoryDeletion = false
 }
 
+private final class PocketNativeButton: NSButton {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        performClick(nil)
+        return true
+    }
+}
+
 /// Keep shelf commands as native controls: dependable accessibility and key equivalents
 /// in a nonactivating NSPanel, including under the Command Line Tools SwiftUI runtime.
 private struct PocketActionButton: NSViewRepresentable {
@@ -79,7 +88,7 @@ private struct PocketActionButton: NSViewRepresentable {
     }
     func makeCoordinator() -> Coordinator { Coordinator(action) }
     func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.invoke(_:)))
+        let button = PocketNativeButton(title: title, target: context.coordinator, action: #selector(Coordinator.invoke(_:)))
         button.setAccessibilityElement(true)
         button.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -171,7 +180,7 @@ struct HopPocketView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(model.drafts) { draft in draftRow(draft); Divider() }
                     }
-                }.frame(height: min(CGFloat(model.drafts.count) * 58 + (viewState.expandedID == nil ? 0 : 110), 260))
+                }.frame(height: min(CGFloat(model.drafts.count) * 58 + (viewState.expandedID == nil ? 0 : 110), 240))
             }
             if !(library.state.deletedDrafts ?? []).isEmpty {
                 HStack {
