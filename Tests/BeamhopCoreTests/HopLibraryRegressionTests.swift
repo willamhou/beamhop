@@ -3,7 +3,7 @@ import GRDB
 @testable import BeamhopCore
 
 final class HopLibraryRegressionTests: XCTestCase {
-    private func withDatabase(_ body: (Database, URL) throws -> Void) throws {
+    private func withDatabase(_ body: (BeamhopCore.Database, URL) throws -> Void) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }

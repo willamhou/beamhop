@@ -2,6 +2,9 @@ import Foundation
 import BeamhopCore
 import GRDB
 
+typealias Database = BeamhopCore.Database
+typealias DatabaseError = BeamhopCore.DatabaseError
+
 // `--seed <db-path>`: insert one sample capture into the given DB and exit (dev helper for
 // testing the MCP server end-to-end).
 if let i = CommandLine.arguments.firstIndex(of: "--seed"), i + 1 < CommandLine.arguments.count {
