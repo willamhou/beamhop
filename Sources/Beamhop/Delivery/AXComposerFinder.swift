@@ -114,4 +114,17 @@ enum AXComposerFinder {
         } while Date() < deadline
         return hasWindow(pid: pid)
     }
+
+    /// Poll for the composer, not just the window: the window publishes before the full tree.
+    /// A single immediate findComposer right after activation can race the lazy AX build and
+    /// see zero AXTextArea nodes (log-verified 2026-10-24: Kimi delivery failed with
+    /// "未找到 Kimi 输入框" while a settled probe on the same version finds 1 AXTextArea).
+    static func waitForComposer(pid: pid_t, timeout: TimeInterval = 2.0) -> AXUIElement? {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if let composer = findComposer(pid: pid) { return composer }
+            usleep(100_000)
+        } while Date() < deadline
+        return findComposer(pid: pid)
+    }
 }

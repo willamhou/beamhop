@@ -26,7 +26,11 @@ enum AXHelper {
         let chromiumOrElectron = ["com.google.Chrome", "com.microsoft.VSCode",
                                   "com.todesktop.", "com.tinyspeck.slackmacgap",
                                   "com.openai.chat", "company.thebrowser.Browser",
-                                  "com.brave.Browser", "com.microsoft.edgemac"]
+                                  "com.brave.Browser", "com.microsoft.edgemac",
+                                  // Kimi Work (Electron 43): without the opt-in its web content
+                                  // exposes no AX selection — mouse-dragged selectedText reads
+                                  // empty (log-verified 2026-10-24, captures app=Kimi 0 chars).
+                                  "com.moonshot.kimichat"]
         return chromiumOrElectron.contains { bundleID.hasPrefix($0) }
     }
 

@@ -300,3 +300,25 @@ Compatibility matrix updated: `spike/compatibility-matrix-v0.json` — chatgpt_d
 > data → evolution-decisions §2.3 evaluation.
 
 - (empty — first paste due the Friday after the dogfood launch)
+
+---
+
+## 10. Kimi capture/delivery fix (2026-10-24, local branch codex/kimi-ax-capture-delivery)
+
+Dogfood evidence (real Inbox, read-only): 2026-10-24 11:17/11:18 captures with frontmost =
+Kimi Work stored `selectedText` = 0 chars via `ax-native`; the 11:18:48 delivery to
+`kimi_work` failed with "未找到 Kimi 输入框(AXTextArea)" and fell back to clipboard, while a
+settled read-only probe on the same Kimi 3.2.17 resolves the window and finds exactly one
+AXTextArea at depth 18 (tree 252 nodes, well inside the 4000/40 bounds).
+
+Root causes:
+1. `com.moonshot.kimichat` missing from `AXHelper.needsManualAX` — without the
+   AXManualAccessibility opt-in, Kimi's Electron web content exposes no AX selection, so
+   mouse-drag-selected text inside Kimi reads empty. One-line whitelist addition.
+2. Single-shot `findComposer` right after activation can race Chromium's lazy AX build
+   (window published, composer not yet). Added bounded `waitForComposer` (2 s poll, same
+   pattern as `waitForWindow`); KimiDelivery and ChatGPTDelivery now use it.
+
+Validation: `git diff --check`, `swift build`, `swift run BeamhopSelfTest` (ALL PASS) on this
+branch. Real-device acceptance still required: drag-select text inside Kimi → capture shows
+the selection; deliver to Kimi pastes into the composer.

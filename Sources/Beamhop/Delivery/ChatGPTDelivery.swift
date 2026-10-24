@@ -32,7 +32,7 @@ enum ChatGPTDelivery {
             return L10n.s("No ChatGPT window is open (open a chat window and try again)")
         }
 
-        guard let composer = AXComposerFinder.findComposer(pid: app.processIdentifier) else {
+        guard let composer = AXComposerFinder.waitForComposer(pid: app.processIdentifier) else {
             return L10n.s("ChatGPT input box (AXTextArea) not found — the version may have changed; use the clipboard")
         }
 

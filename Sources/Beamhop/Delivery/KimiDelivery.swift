@@ -30,7 +30,7 @@ enum KimiDelivery {
             return L10n.s("No Kimi Work window is open (open its window and try again)")
         }
 
-        guard let composer = AXComposerFinder.findComposer(pid: app.processIdentifier) else {
+        guard let composer = AXComposerFinder.waitForComposer(pid: app.processIdentifier) else {
             return L10n.s("Kimi input box (AXTextArea) not found — the version may have changed; use the clipboard")
         }
         guard AXComposerFinder.isEmpty(composer) else {
