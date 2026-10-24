@@ -1,0 +1,24 @@
+name: Site checks
+
+on:
+  pull_request:
+    branches: [gh-pages]
+  push:
+    branches: [gh-pages]
+
+permissions:
+  contents: read
+
+jobs:
+  navigation:
+    name: Navigation and reproducible build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/test-site-nav.py
+      - run: python scripts/build-site.py
+      - run: git diff --exit-code
+      - run: git diff --check

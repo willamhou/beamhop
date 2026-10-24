@@ -54,7 +54,7 @@ def _targets(page, english, nested):
         "gallery": prefix + "native-ui/" + gallery_index,
         "notes": prefix + "product-notes" + suffix,
         "essays": prefix + "index" + suffix + "#essays",
-        "zh": (f"../{page}.zh.html" if nested else f"./{page}.html"),
+        "zh": ("./index.zh.html" if nested else f"./{page}.html"),
         "en": ("./index.html" if nested else f"./{page}.en.html"),
         "essays_suffix": prefix,
         "essays_ext": suffix,
@@ -127,6 +127,14 @@ def apply(page, english=False, nested=False):
         for row in reversed(rows[1:]):
             source = source[:row.start()] + source[row.end():]
     source = re.sub(r'<nav class="site-reading\b.*?</nav>', '', source, flags=re.S)
+    if nested:
+        # Older galleries put revision/demo evidence in a second page footer.
+        # Retain those links inside the gallery, leaving one shared site footer.
+        legacy = re.search(r'<footer class="foot">(.*?)</footer>', source, re.S)
+        if legacy:
+            source = source[:legacy.start()] + source[legacy.end():]
+            evidence = '<p class="foot">' + legacy.group(1) + '</p>'
+            source = source.replace('</main>', evidence + '</main>', 1)
     # One shared site footer everywhere; drop the old minimal footer.
     # Stripping any previous site footer first keeps the build idempotent.
     source = re.sub(r'<footer class="site-footer">.*?</footer>', '', source, count=1, flags=re.S)

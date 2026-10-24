@@ -68,7 +68,7 @@ def build(evidence, sha, run):
 <div class="controls"><div class="segmented" role="group" aria-label="{"截图语言" if chinese else "Screenshot language"}"><button data-locale="en" aria-pressed="{str(not chinese).lower()}">English</button><button data-locale="zh-Hans" aria-pressed="{str(chinese).lower()}">中文</button></div><div class="segmented" role="group" aria-label="{"外观" if chinese else "Appearance"}"><button data-theme="light" aria-pressed="true">{"浅色" if chinese else "Light"}</button><button data-theme="dark" aria-pressed="false">{"深色" if chinese else "Dark"}</button></div><p id="view-status" class="status" aria-live="polite">{count} / {count}</p></div>
 <div class="grid">{markup}</div>
 <section class="evidence"><div><h2>{"实际运行的验证" if chinese else "Verification from the running app"}</h2><p>{validation}</p><p><a id="report" href="./assets/report-{locale}-light.json">{"检查报告" if chinese else "Check report"}</a> · <a href="https://github.com/willamhou/beamhop/actions/runs/{run}">{"构建与全部检查" if chinese else "Build and all checks"}</a></p></div><div><h2>{"当前接入范围" if chinese else "Current integration scope"}</h2><p>{limitation}</p></div></section>
-</main><footer class="foot"><a href="https://github.com/willamhou/beamhop/tree/{sha}">Swift · {sha[:7]}</a><a href="../quiet-panel{"" if chinese else ".en"}.html">{"交互演示" if chinese else "Interactive demo"}</a></footer></div></body></html>
+<p class="foot"><a href="https://github.com/willamhou/beamhop/tree/{sha}">Swift · {sha[:7]}</a><a href="../quiet-panel{"" if chinese else ".en"}.html">{"交互演示" if chinese else "Interactive demo"}</a></p></main></div></body></html>
 '''
         (ROOT / ("native-ui/index.zh.html" if chinese else "native-ui/index.html")).write_text(page, encoding="utf-8", newline="\n")
 
