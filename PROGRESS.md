@@ -322,3 +322,7 @@ Root causes:
 Validation: `git diff --check`, `swift build`, `swift run BeamhopSelfTest` (ALL PASS) on this
 branch. Real-device acceptance still required: drag-select text inside Kimi → capture shows
 the selection; deliver to Kimi pastes into the composer.
+
+User-verified 2026-10-24 on the ad-hoc preview build (dist/preview-kimi-fix-20261024-180733):
+drag-selected text inside Kimi captures with content (was 0 chars) and delivery to Kimi
+lands in the composer (was "未找到 Kimi 输入框" → clipboard fallback). Owner accepted the fix.
