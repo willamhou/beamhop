@@ -15,8 +15,8 @@ import BeamhopCore
 ///     across launches (UserDefaults), clamped to the visible frame so it can never be lost.
 ///   - Click opens the full Pocket window; ⌘⇧P works whether or not the chip is visible.
 final class PocketHUDController {
-    static let hideWhenEmptyKey = "pocketHUD.hideWhenEmpty"
-    static let idleFadeKey = "pocketHUD.idleFade"
+    static let hideWhenEmptyKey = PocketHUDPolicy.defaultsKeyHideWhenEmpty
+    static let idleFadeKey = PocketHUDPolicy.defaultsKeyIdleFade
     private static let originKey = "pocketHUD.origin"
 
     private var panel: NSPanel?
@@ -30,10 +30,7 @@ final class PocketHUDController {
     static var idleFadeEnabled: Bool { UserDefaults.standard.bool(forKey: idleFadeKey) }
 
     init() {
-        UserDefaults.standard.register(defaults: [
-            Self.hideWhenEmptyKey: true,
-            Self.idleFadeKey: true,
-        ])
+        UserDefaults.standard.register(defaults: PocketHUDPolicy.registeredDefaults)
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -70,7 +67,7 @@ final class PocketHUDController {
             forName: NSWindow.didMoveNotification, object: p, queue: .main
         ) { [weak p] _ in
             guard let origin = p?.frame.origin else { return }
-            UserDefaults.standard.set("\(origin.x),\(origin.y)", forKey: Self.originKey)
+            UserDefaults.standard.set(PocketHUDPolicy.formatOrigin(origin), forKey: Self.originKey)
         }
         return p
     }
@@ -89,7 +86,7 @@ final class PocketHUDController {
     }
 
     private func applyVisibility() {
-        guard lastCount > 0 || !Self.hideWhenEmptyEnabled else {
+        guard PocketHUDPolicy.isVisible(count: lastCount, hideWhenEmpty: Self.hideWhenEmptyEnabled) else {
             panel?.orderOut(nil)   // empty stack (per setting): never occupy the screen
             return
         }
@@ -108,13 +105,10 @@ final class PocketHUDController {
     /// Persisted drag position, clamped into the current visible frame so a stale or
     /// off-screen point (display rearrangement, resolution change) can't strand the chip.
     private static func savedOrigin(panelSize: CGSize) -> NSPoint? {
-        guard let raw = UserDefaults.standard.string(forKey: originKey) else { return nil }
-        let parts = raw.split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2, let sf = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame
+        guard let visibleFrame = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame,
+              let origin = PocketHUDPolicy.parseOrigin(UserDefaults.standard.string(forKey: originKey))
         else { return nil }
-        let x = min(max(parts[0], sf.minX), max(sf.minX, sf.maxX - panelSize.width))
-        let y = min(max(parts[1], sf.minY), max(sf.minY, sf.maxY - panelSize.height))
-        return NSPoint(x: x, y: y)
+        return PocketHUDPolicy.clampedOrigin(origin, panelSize: panelSize, visibleFrame: visibleFrame)
     }
 }
 
@@ -146,7 +140,7 @@ private struct PocketHUDView: View {
             .overlay(Capsule().strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .opacity(model.idleFade && !hovered ? 0.55 : 1.0)
+        .opacity(PocketHUDPolicy.opacity(idleFade: model.idleFade, hovered: hovered))
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) { hovered = hovering }
         }
