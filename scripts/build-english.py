@@ -26,6 +26,10 @@ def build(page):
     source = re.sub(r'<header\b[^>]*>.*?</header>', '<header></header>', source, count=1, flags=re.S)
     source = re.sub(r'<nav class="site-essays".*?</nav>', '', source, flags=re.S)
     translations = json.loads((ROOT / "translations" / f"{page}.en.json").read_text(encoding="utf-8"))
+    # The shared site footer is generated navigation chrome; site_nav re-adds it
+    # after this build, so strip any copy before translating the prose.
+    source = re.sub(r'<footer class="site-footer">.*?</footer>', '', source, flags=re.S)
+    source = re.sub(r'<footer class="home-end">.*?</footer>', '', source, flags=re.S)
     if page == 'quiet-panel':
         translations.update(json.loads((ROOT / 'translations/quiet-flow.en.json').read_text(encoding='utf-8')))
     pattern = re.compile('|'.join(re.escape(key) for key in sorted(translations, key=len, reverse=True)))
