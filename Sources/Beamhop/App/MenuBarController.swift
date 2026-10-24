@@ -32,6 +32,7 @@ final class MenuBarController: NSObject {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
         let version = NSMenuItem(title: "Beamhop \(BuildInfo.load().summary)", action: nil, keyEquivalent: "")
         version.isEnabled = false
         menu.addItem(version)
@@ -39,6 +40,7 @@ final class MenuBarController: NSObject {
         menu.addItem(item(L10n.s("Capture frontmost  ⌘⇧Space"), #selector(capture)))
         menu.addItem(item(L10n.s("Inbox  ⌘⇧I"), #selector(inbox)))
         menu.addItem(item(L10n.s("Pocket  ⌘⇧P"), #selector(pocket)))
+        menu.addItem(pocketChipMenuItem())
         menu.addItem(.separator())
         menu.addItem(item(L10n.s("Diagnostics…"), #selector(diagnostics)))
         menu.addItem(item(L10n.s("Compatibility Matrix…"), #selector(compatibility)))
@@ -52,6 +54,41 @@ final class MenuBarController: NSObject {
         let i = NSMenuItem(title: title, action: action, keyEquivalent: "")
         i.target = self
         return i
+    }
+
+    // MARK: pocket chip settings (visibility/fade; the HUD observes UserDefaults itself)
+
+    private lazy var chipHideEmptyItem: NSMenuItem = {
+        let i = NSMenuItem(title: L10n.s("Hide chip when Pocket is empty"),
+                           action: #selector(toggleChipHideEmpty), keyEquivalent: "")
+        i.target = self
+        return i
+    }()
+
+    private lazy var chipFadeItem: NSMenuItem = {
+        let i = NSMenuItem(title: L10n.s("Fade chip when idle"),
+                           action: #selector(toggleChipFade), keyEquivalent: "")
+        i.target = self
+        return i
+    }()
+
+    private func pocketChipMenuItem() -> NSMenuItem {
+        let submenu = NSMenu()
+        submenu.addItem(chipHideEmptyItem)
+        submenu.addItem(chipFadeItem)
+        let i = NSMenuItem(title: L10n.s("Pocket chip"), action: nil, keyEquivalent: "")
+        i.submenu = submenu
+        return i
+    }
+
+    @objc private func toggleChipHideEmpty() {
+        let new = !PocketHUDController.hideWhenEmptyEnabled
+        UserDefaults.standard.set(new, forKey: PocketHUDController.hideWhenEmptyKey)
+    }
+
+    @objc private func toggleChipFade() {
+        let new = !PocketHUDController.idleFadeEnabled
+        UserDefaults.standard.set(new, forKey: PocketHUDController.idleFadeKey)
     }
 
     // MARK: language (per-app AppleLanguages override; applied on relaunch)
@@ -123,4 +160,14 @@ final class MenuBarController: NSObject {
     @objc private func diagnostics() { onDiagnostics() }
     @objc private func compatibility() { onCompatibility() }
     @objc private func quit() { NSApp.terminate(nil) }
+}
+
+extension MenuBarController: NSMenuDelegate {
+    /// Refresh check-marks every time the menu opens (state lives in UserDefaults; the
+    /// HUD applies changes live via its own defaults observer).
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === statusItem.menu else { return }
+        chipHideEmptyItem.state = PocketHUDController.hideWhenEmptyEnabled ? .on : .off
+        chipFadeItem.state = PocketHUDController.idleFadeEnabled ? .on : .off
+    }
 }

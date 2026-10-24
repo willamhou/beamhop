@@ -1128,5 +1128,32 @@ do {
     try pocket.testMixedRoutesRequireExplicitChoiceAndFilteringClearsHiddenSelection()
 } catch { print("POCKET CRUD EXCEPTION: \(error)"); failures += 1 }
 
+do {
+    print("== Pocket HUD chip policy (2026-10-24 UX pass) ==")
+    check(PocketHUDPolicy.isVisible(count: 1, hideWhenEmpty: true), "non-empty stack visible (hide-when-empty on)")
+    check(PocketHUDPolicy.isVisible(count: 1, hideWhenEmpty: false), "non-empty stack visible (hide-when-empty off)")
+    check(!PocketHUDPolicy.isVisible(count: 0, hideWhenEmpty: true), "empty stack hidden by default")
+    check(PocketHUDPolicy.isVisible(count: 0, hideWhenEmpty: false), "empty stack stays as launcher when setting off")
+    check(!PocketHUDPolicy.isVisible(count: -2, hideWhenEmpty: true), "negative count treated as empty")
+    check(PocketHUDPolicy.opacity(idleFade: true, hovered: false) == 0.55, "idle fade faint when enabled + not hovered")
+    check(PocketHUDPolicy.opacity(idleFade: true, hovered: true) == 1.0, "hover restores full opacity")
+    check(PocketHUDPolicy.opacity(idleFade: false, hovered: false) == 1.0, "fade setting off keeps full opacity")
+    let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    let chip = CGSize(width: 200, height: 36)
+    let p = CGPoint(x: 1000, y: 100)
+    check(PocketHUDPolicy.parseOrigin(PocketHUDPolicy.formatOrigin(p)) == p, "origin round-trips through persistence string")
+    check(PocketHUDPolicy.parseOrigin(nil) == nil && PocketHUDPolicy.parseOrigin("abc") == nil
+          && PocketHUDPolicy.parseOrigin("1,2,3") == nil && PocketHUDPolicy.parseOrigin("") == nil,
+          "malformed persisted origins rejected")
+    let clampedFar = PocketHUDPolicy.clampedOrigin(CGPoint(x: 5000, y: 5000), panelSize: chip, visibleFrame: screen)
+    check(clampedFar == CGPoint(x: screen.maxX - chip.width, y: screen.maxY - chip.height),
+          "off-screen point pulled back inside")
+    let clampedNeg = PocketHUDPolicy.clampedOrigin(CGPoint(x: -500, y: -300), panelSize: chip, visibleFrame: screen)
+    check(clampedNeg == CGPoint(x: 0, y: 0), "negative origin pulled back inside")
+    let tiny = CGRect(x: 0, y: 0, width: 50, height: 20)
+    check(PocketHUDPolicy.clampedOrigin(CGPoint(x: 10, y: 10), panelSize: chip, visibleFrame: tiny) == CGPoint(x: 0, y: 0),
+          "frame smaller than panel clamps to minX/minY without flipping")
+}
+
 print(failures == 0 ? "\nALL PASS ✅" : "\n\(failures) FAILURE(S) ❌")
 exit(failures == 0 ? 0 : 1)

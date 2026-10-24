@@ -2,14 +2,53 @@ import AppKit
 import SwiftUI
 import BeamhopCore
 
-/// Bottom-right pocket chip (2026-10-19 UI pass): 「先留着」 previously vanished without a
-/// trace — the user couldn't see the hold stack existed. While the pocket holds anything,
-/// this small capsule sits at the screen's bottom-right: 「📥 口袋 · N  ⌘⇧P」. Click opens the
-/// full Pocket window; it hides itself the moment the stack is empty. Hidden, never destroyed.
+/// Bottom-right pocket chip (2026-10-19 UI pass; behavior/UX pass 2026-10-24): 「先留着」
+/// previously vanished without a trace — the chip exists so the user can see the hold stack.
+/// Current rules (owner-driven, both toggleable from the menu-bar "Pocket chip" submenu):
+///   - HIDE WHEN EMPTY (default ON): count == 0 → the chip orders out and never occupies
+///     screen space.
+///   - FADE WHEN IDLE (default ON): 55% opacity until the mouse enters, so it stops drawing
+///     the eye while still signalling the stack exists.
+///   - DRAGGABLE: press-drag anywhere on the chip moves the panel (local leftMouseDragged
+///     monitor — SwiftUI Buttons swallow AppKit background-drag, so isMovableByWindowBackground
+///     never engaged in practice, owner-verified 2026-10-24). The dragged position persists
+///     across launches (UserDefaults), clamped to the visible frame so it can never be lost.
+///   - Click opens the full Pocket window; ⌘⇧P works whether or not the chip is visible.
 final class PocketHUDController {
+    static let hideWhenEmptyKey = PocketHUDPolicy.defaultsKeyHideWhenEmpty
+    static let idleFadeKey = PocketHUDPolicy.defaultsKeyIdleFade
+    private static let originKey = "pocketHUD.origin"
+
     private var panel: NSPanel?
     private let model = PocketHUDModel()
+    private var lastCount = 0
+    private var defaultsObserver: NSObjectProtocol?
+    private var dragMonitor: Any?
     var onOpen: (() -> Void)?
+
+    static var hideWhenEmptyEnabled: Bool { UserDefaults.standard.bool(forKey: hideWhenEmptyKey) }
+    static var idleFadeEnabled: Bool { UserDefaults.standard.bool(forKey: idleFadeKey) }
+
+    init() {
+        UserDefaults.standard.register(defaults: PocketHUDPolicy.registeredDefaults)
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.model.idleFade = Self.idleFadeEnabled
+            self.applyVisibility()
+        }
+        // Press-drag moves the chip. A LOCAL monitor is enough: drag events on our own panel
+        // are delivered to our app even when it is not the active app (nonactivating panel).
+        dragMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDragged) { [weak self] event in
+            guard let self, let panel = self.panel, event.window === panel else { return event }
+            var origin = panel.frame.origin
+            origin.x += event.deltaX
+            origin.y -= event.deltaY   // AppKit origin is bottom-left; event deltas are not
+            panel.setFrameOrigin(origin)
+            return event
+        }
+    }
 
     private func makePanel() -> NSPanel {
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 36),
@@ -19,38 +58,69 @@ final class PocketHUDController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
-        p.isMovableByWindowBackground = false
         p.backgroundColor = .clear
         p.hasShadow = true
         p.contentView = NSHostingView(rootView: PocketHUDView(model: model) { [weak self] in
             self?.onOpen?()
         })
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: p, queue: .main
+        ) { [weak p] _ in
+            guard let origin = p?.frame.origin else { return }
+            UserDefaults.standard.set(PocketHUDPolicy.formatOrigin(origin), forKey: Self.originKey)
+        }
         return p
     }
 
-    /// count > 0 → show at bottom-right; 0 → hide. Idempotent, safe from any thread.
+    /// count > 0 → show (restoring the user's dragged position, default bottom-right);
+    /// count == 0 → hide unless "hide when empty" is switched off. Idempotent, thread-safe.
+    /// `hasRecords` is accepted for call-site compatibility; visibility is count-driven.
     func update(count: Int, hasRecords: Bool = false) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.model.count = count
-            if self.panel == nil { self.panel = self.makePanel() }
-            guard let panel = self.panel else { return }
-            let sf = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame ?? .zero
-            let size = panel.frame.size
-            panel.setFrameOrigin(NSPoint(x: sf.maxX - size.width - 16,
-                                         y: sf.minY + 16))
-            panel.orderFrontRegardless()
+            self.lastCount = max(0, count)
+            self.model.count = self.lastCount
+            self.model.idleFade = Self.idleFadeEnabled
+            self.applyVisibility()
         }
+    }
+
+    private func applyVisibility() {
+        guard PocketHUDPolicy.isVisible(count: lastCount, hideWhenEmpty: Self.hideWhenEmptyEnabled) else {
+            panel?.orderOut(nil)   // empty stack (per setting): never occupy the screen
+            return
+        }
+        if panel == nil { panel = makePanel() }
+        guard let panel else { return }
+        if let origin = Self.savedOrigin(panelSize: panel.frame.size) {
+            panel.setFrameOrigin(origin)
+        } else {
+            let sf = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame ?? .zero
+            panel.setFrameOrigin(NSPoint(x: sf.maxX - panel.frame.width - 16,
+                                         y: sf.minY + 16))
+        }
+        panel.orderFrontRegardless()
+    }
+
+    /// Persisted drag position, clamped into the current visible frame so a stale or
+    /// off-screen point (display rearrangement, resolution change) can't strand the chip.
+    private static func savedOrigin(panelSize: CGSize) -> NSPoint? {
+        guard let visibleFrame = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame,
+              let origin = PocketHUDPolicy.parseOrigin(UserDefaults.standard.string(forKey: originKey))
+        else { return nil }
+        return PocketHUDPolicy.clampedOrigin(origin, panelSize: panelSize, visibleFrame: visibleFrame)
     }
 }
 
 final class PocketHUDModel: ObservableObject {
     @Published var count: Int = 0
+    @Published var idleFade: Bool = true
 }
 
 private struct PocketHUDView: View {
     @ObservedObject var model: PocketHUDModel
     let onOpen: () -> Void
+    @State private var hovered = false
 
     var body: some View {
         Button(action: onOpen) {
@@ -65,9 +135,14 @@ private struct PocketHUDView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
+            .contentShape(Rectangle())
             .background(.regularMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
+        .opacity(PocketHUDPolicy.opacity(idleFade: model.idleFade, hovered: hovered))
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) { hovered = hovering }
+        }
     }
 }
