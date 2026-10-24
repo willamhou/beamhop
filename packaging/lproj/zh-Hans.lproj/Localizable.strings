@@ -353,3 +353,8 @@
 "These drafts changed or are being handed off. Select them again." = "这些草稿已更新或正在投递，请重新选择。";
 "Copy (%lld)" = "复制（%lld）";
 "Fill draft (%lld)" = "填入（%lld）";
+
+// Pocket chip settings (menu bar, 2026-10-24)
+"Pocket chip" = "Pocket 角标";
+"Hide chip when Pocket is empty" = "Pocket 无内容时隐藏角标";
+"Fade chip when idle" = "闲置时透明";

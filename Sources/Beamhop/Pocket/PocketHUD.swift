@@ -2,23 +2,56 @@ import AppKit
 import SwiftUI
 import BeamhopCore
 
-/// Bottom-right pocket chip (2026-10-19 UI pass, behavior fixed 2026-10-24): 「先留着」
+/// Bottom-right pocket chip (2026-10-19 UI pass; behavior/UX pass 2026-10-24): 「先留着」
 /// previously vanished without a trace — the chip exists so the user can see the hold stack.
-/// Rules (owner-requested UI pass 2026-10-24):
-///   - VISIBLE ONLY WHEN NON-EMPTY: count == 0 → the chip orders out and never occupies
-///     screen space (the implementation regressed to always-show; the doc comment always
-///     promised hide-when-empty).
-///   - DRAGGABLE: movable by window background; the dragged position persists across
-///     launches (UserDefaults), clamped to the visible frame so it can never be lost.
-///   - IDLE-FAINT: fades to 55% opacity until the mouse enters, so it stops drawing the eye
-///     while still signalling the stack exists. Click still opens the full Pocket window;
-///     the ⌘⇧P shortcut works whether or not the chip is visible.
+/// Current rules (owner-driven, both toggleable from the menu-bar "Pocket chip" submenu):
+///   - HIDE WHEN EMPTY (default ON): count == 0 → the chip orders out and never occupies
+///     screen space.
+///   - FADE WHEN IDLE (default ON): 55% opacity until the mouse enters, so it stops drawing
+///     the eye while still signalling the stack exists.
+///   - DRAGGABLE: press-drag anywhere on the chip moves the panel (local leftMouseDragged
+///     monitor — SwiftUI Buttons swallow AppKit background-drag, so isMovableByWindowBackground
+///     never engaged in practice, owner-verified 2026-10-24). The dragged position persists
+///     across launches (UserDefaults), clamped to the visible frame so it can never be lost.
+///   - Click opens the full Pocket window; ⌘⇧P works whether or not the chip is visible.
 final class PocketHUDController {
+    static let hideWhenEmptyKey = "pocketHUD.hideWhenEmpty"
+    static let idleFadeKey = "pocketHUD.idleFade"
+    private static let originKey = "pocketHUD.origin"
+
     private var panel: NSPanel?
     private let model = PocketHUDModel()
+    private var lastCount = 0
+    private var defaultsObserver: NSObjectProtocol?
+    private var dragMonitor: Any?
     var onOpen: (() -> Void)?
 
-    private static let originKey = "pocketHUD.origin"
+    static var hideWhenEmptyEnabled: Bool { UserDefaults.standard.bool(forKey: hideWhenEmptyKey) }
+    static var idleFadeEnabled: Bool { UserDefaults.standard.bool(forKey: idleFadeKey) }
+
+    init() {
+        UserDefaults.standard.register(defaults: [
+            Self.hideWhenEmptyKey: true,
+            Self.idleFadeKey: true,
+        ])
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.model.idleFade = Self.idleFadeEnabled
+            self.applyVisibility()
+        }
+        // Press-drag moves the chip. A LOCAL monitor is enough: drag events on our own panel
+        // are delivered to our app even when it is not the active app (nonactivating panel).
+        dragMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDragged) { [weak self] event in
+            guard let self, let panel = self.panel, event.window === panel else { return event }
+            var origin = panel.frame.origin
+            origin.x += event.deltaX
+            origin.y -= event.deltaY   // AppKit origin is bottom-left; event deltas are not
+            panel.setFrameOrigin(origin)
+            return event
+        }
+    }
 
     private func makePanel() -> NSPanel {
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 36),
@@ -28,13 +61,11 @@ final class PocketHUDController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
-        p.isMovableByWindowBackground = true   // drag anywhere on the chip (not just title bar)
         p.backgroundColor = .clear
         p.hasShadow = true
-        let hosting = PocketHUDHostingView(rootView: PocketHUDView(model: model) { [weak self] in
+        p.contentView = NSHostingView(rootView: PocketHUDView(model: model) { [weak self] in
             self?.onOpen?()
         })
-        p.contentView = hosting
         NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: p, queue: .main
         ) { [weak p] _ in
@@ -45,27 +76,33 @@ final class PocketHUDController {
     }
 
     /// count > 0 → show (restoring the user's dragged position, default bottom-right);
-    /// count == 0 → hide. Idempotent, safe from any thread. `hasRecords` is accepted for
-    /// call-site compatibility; visibility is deliberately count-driven (drafts/held items).
+    /// count == 0 → hide unless "hide when empty" is switched off. Idempotent, thread-safe.
+    /// `hasRecords` is accepted for call-site compatibility; visibility is count-driven.
     func update(count: Int, hasRecords: Bool = false) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.model.count = max(0, count)
-            guard self.model.count > 0 else {
-                self.panel?.orderOut(nil)   // empty stack: never occupy the screen
-                return
-            }
-            if self.panel == nil { self.panel = self.makePanel() }
-            guard let panel = self.panel else { return }
-            if let origin = Self.savedOrigin(panelSize: panel.frame.size) {
-                panel.setFrameOrigin(origin)
-            } else {
-                let sf = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame ?? .zero
-                panel.setFrameOrigin(NSPoint(x: sf.maxX - panel.frame.width - 16,
-                                             y: sf.minY + 16))
-            }
-            panel.orderFrontRegardless()
+            self.lastCount = max(0, count)
+            self.model.count = self.lastCount
+            self.model.idleFade = Self.idleFadeEnabled
+            self.applyVisibility()
         }
+    }
+
+    private func applyVisibility() {
+        guard lastCount > 0 || !Self.hideWhenEmptyEnabled else {
+            panel?.orderOut(nil)   // empty stack (per setting): never occupy the screen
+            return
+        }
+        if panel == nil { panel = makePanel() }
+        guard let panel else { return }
+        if let origin = Self.savedOrigin(panelSize: panel.frame.size) {
+            panel.setFrameOrigin(origin)
+        } else {
+            let sf = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame ?? .zero
+            panel.setFrameOrigin(NSPoint(x: sf.maxX - panel.frame.width - 16,
+                                         y: sf.minY + 16))
+        }
+        panel.orderFrontRegardless()
     }
 
     /// Persisted drag position, clamped into the current visible frame so a stale or
@@ -81,14 +118,9 @@ final class PocketHUDController {
     }
 }
 
-/// Without this, SwiftUI content swallows mouse-down and the panel's movable-by-background
-/// never engages; with it, a press-drag moves the chip and a plain click still fires the button.
-private final class PocketHUDHostingView<Content: View>: NSHostingView<Content> {
-    override var mouseDownCanMoveWindow: Bool { true }
-}
-
 final class PocketHUDModel: ObservableObject {
     @Published var count: Int = 0
+    @Published var idleFade: Bool = true
 }
 
 private struct PocketHUDView: View {
@@ -114,7 +146,7 @@ private struct PocketHUDView: View {
             .overlay(Capsule().strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .opacity(hovered ? 1.0 : 0.55)
+        .opacity(model.idleFade && !hovered ? 0.55 : 1.0)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) { hovered = hovering }
         }
