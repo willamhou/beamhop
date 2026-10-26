@@ -262,8 +262,8 @@ struct HopPocketView: View {
                     if prepareChange() { model.deliverSelection() }
                 }.disabled(!model.canDeliver)
             }.font(.callout)
-            Toggle("Request a conclusion back via MCP", isOn: $model.requestsResultReturn)
-                .font(.caption).disabled(model.isDelivering).accessibilityIdentifier("pocket.result-return")
+            PanelCheckbox(title: "Request a conclusion back via MCP", identifier: "pocket.result-return",
+                          isOn: $model.requestsResultReturn).disabled(model.isDelivering)
             if model.requestsResultReturn {
                 Text("Optional: the receiving agent needs Beamhop MCP. Returned conclusions appear in Inbox and handoff history; they do not verify task completion.")
                     .font(.caption2).foregroundStyle(.secondary)
@@ -285,19 +285,16 @@ struct HopPocketView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(model.records.prefix(model.historyLimit))) { record in
                             VStack(alignment: .leading, spacing: 6) {
-                                Button {
-                                    viewState.expandedID = viewState.expandedID == record.id ? nil : record.id
-                                    model.conclusions.showHandoff(viewState.expandedID)
-                                } label: {
-                                    HStack {
+                                HStack {
+                                    Button { toggleHistory(record.id) } label: {
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(title(record.draft)).font(.system(size: 12, weight: .medium)).lineLimit(1)
                                             Text(record.label).font(.caption2).foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.down").font(.caption2)
-                                    }.contentShape(Rectangle())
-                                }.buttonStyle(.plain).accessibilityIdentifier("pocket.history.\(record.id)")
+                                        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                                    }.buttonStyle(.plain)
+                                    PocketActionButton(title: L10n.s("Show handoff backup"), symbol: "chevron.down",
+                                                       identifier: "pocket.history.\(record.id)") { toggleHistory(record.id) }
+                                }
                                 if viewState.expandedID == record.id {
                                     Text(metadata(record.draft)).font(.caption2).foregroundStyle(.secondary)
                                     if record.envelopeVersion != nil {
@@ -343,6 +340,10 @@ struct HopPocketView: View {
                 }
             }
         }
+    }
+    private func toggleHistory(_ id: String) {
+        viewState.expandedID = viewState.expandedID == id ? nil : id
+        model.conclusions.showHandoff(viewState.expandedID)
     }
     private func tryDelete(_ ids: Set<String>) {
         perform { try library.deleteRecords(ids); model.conclusions.refresh() }

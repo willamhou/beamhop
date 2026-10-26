@@ -103,8 +103,8 @@ struct CapturePanelView: View {
                 if model.receiverChanged && !model.rebindAcknowledged {
                     Text("Confirm the receiving app for this work before continuing.").font(.caption).foregroundStyle(.orange)
                 }
-                Toggle("Request a conclusion back via MCP", isOn: $model.requestsResultReturn)
-                    .font(.caption).accessibilityIdentifier("capture.result-return")
+                PanelCheckbox(title: "Request a conclusion back via MCP", identifier: "capture.result-return",
+                              isOn: $model.requestsResultReturn)
                 if model.requestsResultReturn {
                     Text("Optional: the receiving agent needs Beamhop MCP. Returned conclusions appear in Inbox and handoff history; they do not verify task completion.")
                         .font(.caption2).foregroundStyle(.secondary)

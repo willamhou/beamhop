@@ -370,6 +370,7 @@
 "Handoff ID: %@" = "交接编号：%@";
 "Agent-reported conclusion · not verified task completion" = "Agent 返回的结论 · 不代表任务已验证完成";
 "Frozen handoff copy" = "交接时的冻结副本";
+"Show handoff backup" = "查看交接备份";
 "Could not load handoff conclusions. Try Refresh again." = "无法加载交接结论，请重试刷新。";
 "Delete backup and conclusions" = "删除备份和结论";
 "Delete these handoff backups and their returned conclusions? Drafts and Inbox materials stay intact." = "删除这些交接备份及其返回的结论？草稿和 Inbox 原始材料会保留。";
