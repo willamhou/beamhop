@@ -358,3 +358,18 @@
 "Pocket chip" = "Pocket 角标";
 "Hide chip when Pocket is empty" = "Pocket 无内容时隐藏角标";
 "Fade chip when idle" = "闲置时透明";
+
+// Hop identity and optional conclusion return (2026-10-26)
+"Request a conclusion back via MCP" = "通过 MCP 请求结论回流";
+"Optional: the receiving agent needs Beamhop MCP. Returned conclusions appear in Inbox and handoff history; they do not verify task completion." = "可选：接收 Agent 需要支持 Beamhop MCP。返回的结论显示在 Inbox 和交接历史中，不代表任务已验证完成。";
+"Captures" = "抓取记录";
+"Handoff conclusions" = "交接结论";
+"No handoff conclusions yet" = "暂无交接结论";
+"Enable optional conclusion return before a Hop. The receiving agent needs Beamhop MCP and must choose to write back." = "在交接前开启可选结论回流。接收 Agent 需要支持 Beamhop MCP，并实际调用写回工具。";
+"Select a handoff conclusion" = "选择一条交接结论";
+"Handoff ID: %@" = "交接编号：%@";
+"Agent-reported conclusion · not verified task completion" = "Agent 返回的结论 · 不代表任务已验证完成";
+"Frozen handoff copy" = "交接时的冻结副本";
+"Could not load handoff conclusions. Try Refresh again." = "无法加载交接结论，请重试刷新。";
+"Delete backup and conclusions" = "删除备份和结论";
+"Delete these handoff backups and their returned conclusions? Drafts and Inbox materials stay intact." = "删除这些交接备份及其返回的结论？草稿和 Inbox 原始材料会保留。";

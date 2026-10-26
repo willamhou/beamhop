@@ -1,9 +1,21 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for current status, verification boundaries and next steps.
-> Last updated: 2026-10-22 — product implementation baseline: PR #8 / `3cb279a`, including trial-build engineering from PR #10 / `5c6f829`. Documentation-only commits may follow; check Git for the actual `main` tip. Read [AGENTS.md](AGENTS.md) for current collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
+> Last updated: 2026-10-26 — this change starts from `main@66dea66` (PR #16), after the Kimi and Pocket HUD follow-ups. Check Git for the actual merged tip. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
 
-## Current merged baseline: Inline Hop, Pocket and trial engineering
+## Ordinary Hop identity and optional conclusions (2026-10-26)
+
+New handoff attempts append a durable identity after literal instructions/edited material. Conclusion return is explicit opt-in in the panel and batch controls, preserved with drafts and exact-snapshot equality. A mixed-consent selection defaults off. Recovery and retries get fresh attempt IDs. The existing manual copy/prepare, attachment fallback and no-auto-send policies remain unchanged.
+
+Additive v10 stores append-only `handoff_results` against frozen `hop_records`, independently of captures and transport receipts. New MCP tools read only an allowlisted edited snapshot and save/fetch conclusions by an exact opted-in handoff ID. Unknown, legacy, non-opted-in and deleted origins are rejected; the helper does not migrate/create the Inbox. Original capture bodies and local attachment paths are not included. Old capture tools and old backup payloads remain compatible. Deleting a backup removes its conclusions, not active input or source captures.
+
+Inbox has a separate handoff-conclusions section; Pocket history shows scoped conclusions, identity and the frozen outgoing payload. Both poll external writes while visible, support long answers/paging, and keep agent-reported answers distinct from task completion. Upgrade the app and helper together and deliberately reload receiving MCP sessions; availability is not inferred from registration. As with v9, old binaries do not roll back the schema. No acceptance bundle, real Inbox, TCC or Claude configuration was changed for this work.
+
+Regression scope approved by the owner: identity/actual output; restart/retry/edits and correct result association; MCP/UI behavior, invalid origins, compatibility and truthful receipts. Mirrored XCTest/SelfTest cover these public contracts. A new actual-stdio smoke test uses only explicit temporary databases, including missing/pre-v10 schema checks. Hosted native fixtures exercise the consent controls and external conclusion refresh. A small equivalent `StateObject` container replaces the baseline Pocket HUD's `@State` usage to support the local CLT SwiftUI build; hover/fade behavior is unchanged.
+
+Local evidence so far: full `swift build` and SelfTest passed before the final pagination/native-fixture refinements; the new actual MCP round-trip passed. Final validation, two-axis review and latest-head hosted CI remain required before merge. Native fixtures have not been run in the user's active desktop session. Logged-in MCP-agent tool discovery and optional write-back, real capture/TCC, focus/fullscreen/multidisplay acceptance remain manual; this is not a verified task-completion protocol. [Contract and test surfaces](docs/superpowers/specs/2026-10-26-hop-result-return.md).
+
+## Earlier merged baseline: Inline Hop, Pocket and trial engineering
 
 [PR #8](https://github.com/willamhou/beamhop/pull/8) was squash-merged on October 22 as `3cb279a`, after both workflows for final head `cd88c8a` passed: [PR CI](https://github.com/willamhou/beamhop/actions/runs/39709892162), [branch CI](https://github.com/willamhou/beamhop/actions/runs/39709887477). Its four earlier review findings were checked against the fixes/tests and resolved. [PR #10](https://github.com/willamhou/beamhop/pull/10) had already merged trial-build engineering as `5c6f829`. Start new branches from current `main`, not either old workstream branch.
 

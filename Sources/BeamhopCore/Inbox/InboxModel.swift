@@ -4,6 +4,7 @@ import Combine
 /// Inbox state is independent of AppKit so selection and external MCP writes can be tested
 /// against a temporary DB. The window owns refresh scheduling; callers use the main thread.
 public final class InboxModel: ObservableObject {
+    public let handoffConclusions = HandoffResultsModel()
     @Published public private(set) var captures: [Capture] = []
     @Published public private(set) var deliveries: [String: [Delivery]] = [:]
     @Published public private(set) var resultCounts: [String: Int] = [:]
@@ -35,11 +36,12 @@ public final class InboxModel: ObservableObject {
 
     public init() {}
 
-    public func configure(store: CaptureStore, events: EventStore?,
+    public func configure(store: CaptureStore, events: EventStore?, handoffs: HandoffResultStore? = nil,
                           onDeliver: @escaping (Capture, DeliveryTarget) -> Void) {
         self.store = store
         self.events = events
         self.onDeliver = onDeliver
+        if let handoffs { handoffConclusions.configure(store: handoffs) }
     }
 
     public func logOpened() { events?.record(name: EventStore.Name.inboxOpened) }
@@ -75,6 +77,7 @@ public final class InboxModel: ObservableObject {
     /// Re-query rather than relying on in-process notifications: MCP writes in another process.
     /// This must not log a new visit/search/view every two seconds.
     public func refreshSelectedDetails() {
+        handoffConclusions.refresh()
         guard let store, let id = selected?.id else {
             selectedResults = []
             detailErrorMessage = nil

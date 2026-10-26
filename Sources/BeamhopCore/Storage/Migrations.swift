@@ -249,6 +249,20 @@ enum Migrations {
                                arguments: [try JSONEncoder().encode(state)])
             }
         }
+        m.registerMigration("v10-handoff-results") { db in
+            try db.execute(sql: """
+                CREATE TABLE handoff_results (
+                    id TEXT PRIMARY KEY,
+                    handoff_id TEXT NOT NULL REFERENCES hop_records(id) ON DELETE CASCADE,
+                    agent TEXT NOT NULL,
+                    session_id TEXT,
+                    content TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX idx_handoff_results_origin ON handoff_results(handoff_id, created_at DESC, id DESC);
+                CREATE INDEX idx_handoff_results_created ON handoff_results(created_at DESC, id DESC);
+                """)
+        }
         return m
     }
 }

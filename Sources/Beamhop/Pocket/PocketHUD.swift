@@ -117,10 +117,16 @@ final class PocketHUDModel: ObservableObject {
     @Published var idleFade: Bool = true
 }
 
+// Match the panel's CLT-compatible state container: some SDKs declare @State as a
+// macro without shipping its plugin. This does not change hover/fade behavior.
+private final class PocketHUDViewState: ObservableObject {
+    @Published var hovered = false
+}
+
 private struct PocketHUDView: View {
     @ObservedObject var model: PocketHUDModel
     let onOpen: () -> Void
-    @State private var hovered = false
+    @StateObject private var viewState = PocketHUDViewState()
 
     var body: some View {
         Button(action: onOpen) {
@@ -140,9 +146,9 @@ private struct PocketHUDView: View {
             .overlay(Capsule().strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
-        .opacity(PocketHUDPolicy.opacity(idleFade: model.idleFade, hovered: hovered))
+        .opacity(PocketHUDPolicy.opacity(idleFade: model.idleFade, hovered: viewState.hovered))
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) { hovered = hovering }
+            withAnimation(.easeInOut(duration: 0.15)) { viewState.hovered = hovering }
         }
     }
 }

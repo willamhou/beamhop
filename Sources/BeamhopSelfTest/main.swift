@@ -21,6 +21,25 @@ if let i = CommandLine.arguments.firstIndex(of: "--seed"), i + 1 < CommandLine.a
     exit(0)
 }
 
+// Explicit disposable protocol fixture; no registration or default-path access.
+if let i = CommandLine.arguments.firstIndex(of: "--seed-hop"), i + 1 < CommandLine.arguments.count {
+    let db = try Database(path: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    let source = Capture(source: .ax, appBundleID: "fixture.source", appName: "Browser",
+                         selectedText: "never-export-original", extractedBody: "unselected body", pid: 1, captureMethod: "fixture")
+    try CaptureStore(db).insert(source)
+    var material = HopMaterial(capture: source); material.text = "edited snapshot"
+    let library = try HopLibrary(db)
+    let enabled = try library.begin(HopDraft(materials: [material,
+        HopMaterial(name: "fixture.png", path: "/private/fixture/hidden.png", image: true, bytes: 1)],
+        instruction: "/review\nkeep literal", route: .init(target: .clipboard), requestsResultReturn: true))
+    let disabled = try library.begin(HopDraft(materials: [HopMaterial(text: "disabled")], route: .init(target: .clipboard)))
+    try library.finish(enabled.id, status: .copied)
+    try library.finish(disabled.id, status: .copied)
+    let ids = ["enabled": enabled.id, "disabled": disabled.id, "capture": source.id]
+    print(String(decoding: try JSONSerialization.data(withJSONObject: ids), as: UTF8.self))
+    exit(0)
+}
+
 // `--dogfood <db> [--days N]`: print the dogfood gate report (evolution-decisions §3) from a
 // real inbox.sqlite and exit. Thin wrapper: scripts/dogfood-metrics.sh calls this.
 if let i = CommandLine.arguments.firstIndex(of: "--dogfood"), i + 1 < CommandLine.arguments.count {
@@ -1154,6 +1173,9 @@ do {
     check(PocketHUDPolicy.clampedOrigin(CGPoint(x: 10, y: 10), panelSize: chip, visibleFrame: tiny) == CGPoint(x: 0, y: 0),
           "frame smaller than panel clamps to minX/minY without flipping")
 }
+
+do { try runHopReturnRegression() }
+catch { check(false, "Hop return regression: \(error)") }
 
 print(failures == 0 ? "\nALL PASS ✅" : "\n\(failures) FAILURE(S) ❌")
 exit(failures == 0 ? 0 : 1)

@@ -112,7 +112,7 @@ public final class HopLibrary: ObservableObject {
         try change(records: [record]) { $0.records.append(record) }
         return record
     }
-    public func beginBatch(_ drafts: [HopDraft], route: HopRoute) throws -> HopRecord {
+    public func beginBatch(_ drafts: [HopDraft], route: HopRoute, requestsResultReturn: Bool? = nil) throws -> HopRecord {
         guard route.target != nil, !drafts.isEmpty, drafts.allSatisfy({ state.pocket.contains($0) && !inFlightIDs.contains($0.id) }) else {
             throw PocketError.changed
         }
@@ -129,6 +129,7 @@ public final class HopLibrary: ObservableObject {
             }
             combined = HopDraft(materials: materials, route: route)
         }
+        combined.requestsResultReturn = requestsResultReturn ?? drafts.allSatisfy(\.requestsResultReturn)
         var record = HopRecord(draft: combined)
         record.pocketSources = drafts
         try change(records: [record]) { $0.records.append(record) }

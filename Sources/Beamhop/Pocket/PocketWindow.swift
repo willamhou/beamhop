@@ -6,6 +6,7 @@ import BeamhopCore
 final class PocketWindowController {
     private(set) var panel: HandoffPanel?
     private var resignObserver: NSObjectProtocol?
+    private var refreshTimer: Timer?
     let model = PocketModel()
     var library: HopLibrary? { didSet { hopModel = library.map(HopPocketModel.init) } }
     private(set) var hopModel: HopPocketModel?
@@ -53,9 +54,19 @@ final class PocketWindowController {
             panel.setFrameOrigin(NSPoint(x: frame.maxX - panel.frame.width - 16, y: frame.minY + 64))
         }
         panel?.makeKeyAndOrderFront(nil)
+        refreshTimer?.invalidate()
+        hopModel?.conclusions.refresh()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self, self.panel?.isVisible == true else { return }
+            self.hopModel?.conclusions.refresh()
+        }
     }
 
-    func hide() { panel?.orderOut(nil) }
+    func hide() { refreshTimer?.invalidate(); refreshTimer = nil; panel?.orderOut(nil) }
+    deinit {
+        refreshTimer?.invalidate()
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+    }
 }
 
 private final class HopPocketViewState: ObservableObject {
@@ -251,6 +262,12 @@ struct HopPocketView: View {
                     if prepareChange() { model.deliverSelection() }
                 }.disabled(!model.canDeliver)
             }.font(.callout)
+            Toggle("Request a conclusion back via MCP", isOn: $model.requestsResultReturn)
+                .font(.caption).disabled(model.isDelivering).accessibilityIdentifier("pocket.result-return")
+            if model.requestsResultReturn {
+                Text("Optional: the receiving agent needs Beamhop MCP. Returned conclusions appear in Inbox and handoff history; they do not verify task completion.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             if model.isDelivering { ProgressView().controlSize(.small) }
             if model.hasAttachments {
                 Text("Attachments stay here. Edit a draft to copy text and add its files in the receiving app.").font(.caption2).foregroundStyle(.secondary)
@@ -268,7 +285,10 @@ struct HopPocketView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(model.records.prefix(model.historyLimit))) { record in
                             VStack(alignment: .leading, spacing: 6) {
-                                Button { viewState.expandedID = viewState.expandedID == record.id ? nil : record.id } label: {
+                                Button {
+                                    viewState.expandedID = viewState.expandedID == record.id ? nil : record.id
+                                    model.conclusions.showHandoff(viewState.expandedID)
+                                } label: {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(title(record.draft)).font(.system(size: 12, weight: .medium)).lineLimit(1)
@@ -277,15 +297,23 @@ struct HopPocketView: View {
                                         Spacer()
                                         Image(systemName: "chevron.down").font(.caption2)
                                     }.contentShape(Rectangle())
-                                }.buttonStyle(.plain)
+                                }.buttonStyle(.plain).accessibilityIdentifier("pocket.history.\(record.id)")
                                 if viewState.expandedID == record.id {
                                     Text(metadata(record.draft)).font(.caption2).foregroundStyle(.secondary)
+                                    if record.envelopeVersion != nil {
+                                        Text(L10n.f("Handoff ID: %@", record.id)).font(.caption2.monospaced()).textSelection(.enabled)
+                                    }
                                     if let detail = record.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
-                                    ScrollView { Text(record.draft.textFallback).font(.caption).textSelection(.enabled) }.frame(height: 90)
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text(record.textFallback).font(.caption).textSelection(.enabled)
+                                            HandoffConclusionsList(model: model.conclusions)
+                                        }
+                                    }.frame(height: 150)
                                     HStack {
                                         Button("Restore backup") { perform(open: true) { try library.recover(record) } }
                                         Spacer()
-                                        Button("Delete record", role: .destructive) { perform { try library.deleteRecords([record.id]) } }
+                                        Button("Delete backup and conclusions", role: .destructive) { tryDelete([record.id]) }
                                     }.font(.caption).disabled(record.status == .preparing)
                                 }
                             }.padding(.vertical, 9)
@@ -295,14 +323,14 @@ struct HopPocketView: View {
                             Button("Show older records") { model.historyLimit += 20 }.font(.caption).padding(.vertical, 6)
                         }
                     }
-                }.frame(height: min(CGFloat(min(model.records.count, model.historyLimit)) * 55 + (viewState.expandedID == nil ? 0 : 150), 290))
+                }.frame(height: min(CGFloat(min(model.records.count, model.historyLimit)) * 55 + (viewState.expandedID == nil ? 0 : 210), 290))
                 if viewState.confirmingHistoryDeletion {
-                    Text("Delete these handoff backups? Drafts and Inbox materials stay intact.").font(.caption)
+                    Text("Delete these handoff backups and their returned conclusions? Drafts and Inbox materials stay intact.").font(.caption)
                     HStack {
                         Button("Cancel") { viewState.confirmingHistoryDeletion = false }
                         Spacer()
                         Button("Delete records", role: .destructive) {
-                            perform { try library.deleteRecords(Set(model.records.map(\.id))) }
+                            tryDelete(Set(model.records.map(\.id)))
                             viewState.confirmingHistoryDeletion = false
                         }
                     }.font(.caption)
@@ -315,6 +343,9 @@ struct HopPocketView: View {
                 }
             }
         }
+    }
+    private func tryDelete(_ ids: Set<String>) {
+        perform { try library.deleteRecords(ids); model.conclusions.refresh() }
     }
     private func title(_ draft: HopDraft) -> String {
         if !draft.instruction.isEmpty { return draft.instruction }

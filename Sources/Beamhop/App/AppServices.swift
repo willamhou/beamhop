@@ -65,7 +65,7 @@ final class AppServices {
             self.workStore = workStore
             self.capture = CaptureService(store: store)
             self.delivery = DeliveryService(store: store)
-            inbox.model.configure(store: store, events: events) { [weak self] capture, target in
+            inbox.model.configure(store: store, events: events, handoffs: HandoffResultStore(db.queue)) { [weak self] capture, target in
                 // delivery does AX activation + usleep — never on the main thread
                 DispatchQueue.global(qos: .userInitiated).async {
                     self?.delivery?.deliver(capture, to: target)

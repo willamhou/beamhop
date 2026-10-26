@@ -32,6 +32,7 @@ final class HopCoordinator {
             try legacy.remove(id: item.id)
         }
         pocket.library = library
+        pocket.hopModel?.conclusions.configure(store: HandoffResultStore(database.queue))
         pocket.hopModel?.onDeliver = { [weak self] record, completion in
             guard let self else { completion(false); return }
             self.deliver(record, completion: completion)
@@ -158,7 +159,7 @@ final class HopCoordinator {
         if draft.route.session == .newInApp || target == .claudeCode {
             // No verified create-session API exists. Copy once and open the real app;
             // never clear its composer, synthesize New Chat, or claim a session was created.
-            guard copy(draft.textFallback) else {
+            guard copy(record.textFallback) else {
                 let detail = L10n.s("Could not copy materials")
                 finish(record, status: .failed, detail: detail, completion: completion)
                 Notifier.error(detail, L10n.s("The handoff backup is preserved."))
@@ -193,7 +194,7 @@ final class HopCoordinator {
                                     selectedText: draft.outgoingText, pid: 0, captureMethod: "manual")
                 try captures.insert(added); sources = [added]
             }
-            let handoff = Handoff(items: sources.map { .init(capture: $0) }, editedText: draft.outgoingText)
+            let handoff = Handoff(items: sources.map { .init(capture: $0) }, editedText: record.outgoingText)
             delivery.deliver(handoff, to: target) { [weak self] _, succeeded in
                 DispatchQueue.main.async {
                     self?.finish(record, status: succeeded ? (target == .clipboard || target == .cowork ? .copied : .prepared) : .failed,
@@ -220,7 +221,7 @@ final class HopCoordinator {
         do {
             try library.saveActive(draft)
             let record = try library.begin(draft)
-            let copied = copy(draft.textFallback)
+            let copied = copy(record.textFallback)
             // Keep the open editor intact; copying is not consumption of a material batch.
             try library.finish(record.id, status: copied ? .copied : .failed)
             try library.saveActive(draft)

@@ -47,8 +47,19 @@ public struct HopDraft: Codable, Equatable, Identifiable, Sendable {
     public var materials: [HopMaterial]
     public var instruction: String
     public var route: HopRoute
-    public init(materials: [HopMaterial], instruction: String = "", route: HopRoute = .init()) {
+    public var requestsResultReturn: Bool
+    public init(materials: [HopMaterial], instruction: String = "", route: HopRoute = .init(), requestsResultReturn: Bool = false) {
         self.materials = materials; self.instruction = instruction; self.route = route
+        self.requestsResultReturn = requestsResultReturn
+    }
+    enum CodingKeys: String, CodingKey { case id, materials, instruction, route, requestsResultReturn }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        materials = try values.decode([HopMaterial].self, forKey: .materials)
+        instruction = try values.decode(String.self, forKey: .instruction)
+        route = try values.decode(HopRoute.self, forKey: .route)
+        requestsResultReturn = try values.decodeIfPresent(Bool.self, forKey: .requestsResultReturn) ?? false
     }
     public var hasContent: Bool { !materials.isEmpty || !instruction.isEmpty }
     public var attachments: [HopMaterial] { materials.filter { $0.kind != .text } }
@@ -61,20 +72,53 @@ public struct HopDraft: Codable, Equatable, Identifiable, Sendable {
         }).joined(separator: "\n\n")
     }
     public var textFallback: String {
-        outgoingText + (attachments.isEmpty ? "" : "\n\n" + L10n.s("Attachments to add manually:") + "\n" + attachments.map(\.name).joined(separator: "\n"))
+        outgoingText + attachmentReminder
+    }
+    fileprivate var attachmentReminder: String {
+        attachments.isEmpty ? "" : "\n\n" + L10n.s("Attachments to add manually:") + "\n" + attachments.map(\.name).joined(separator: "\n")
     }
 }
 
 public struct HopRecord: Codable, Equatable, Identifiable, Sendable {
     public enum Status: String, Codable, Sendable { case preparing, prepared, copied, failed }
-    public var id = UUID().uuidString
+    public let id: String
     public let draft: HopDraft
     public var status: Status
     public var detail: String?
     /// Frozen Pocket inputs for a combined handoff. Older receipts decode this as nil.
     public var pocketSources: [HopDraft]?
+    /// Missing on pre-identity backups: never imply metadata was part of their payload.
+    public let envelopeVersion: Int?
+    /// Freeze localized outgoing strings too: an MCP process or a later app language
+    /// must not regenerate a different payload from the immutable draft.
+    private let frozenOutgoingText: String?
+    private let frozenAttachmentReminder: String?
     public init(draft: HopDraft, status: Status = .preparing, detail: String? = nil) {
+        let id = UUID().uuidString
+        self.id = id
         self.draft = draft; self.status = status; self.detail = detail
+        self.envelopeVersion = 1
+        self.frozenOutgoingText = Self.makeOutgoingText(draft: draft, id: id)
+        self.frozenAttachmentReminder = draft.attachmentReminder
+    }
+    public var acceptsResultReturn: Bool { envelopeVersion == 1 && draft.requestsResultReturn }
+    public var outgoingText: String {
+        guard envelopeVersion == 1 else { return draft.outgoingText }
+        return frozenOutgoingText ?? Self.makeOutgoingText(draft: draft, id: id)
+    }
+    private static func makeOutgoingText(draft: HopDraft, id: String) -> String {
+        var metadata = "--- Beamhop handoff ---\nHandoff ID: \(id)"
+        if draft.requestsResultReturn {
+            metadata += "\nOptional conclusion return: if the Beamhop MCP tool save_handoff_result is available, "
+                + "you may call it with handoff_id='\(id)', content=your conclusion, agent=your identifier. "
+                + "Use the edited materials above, not the original captures. "
+                + "If the tool is unavailable, answer normally; do not claim a result was saved. "
+                + "A returned conclusion is not independent proof of task completion."
+        }
+        return [draft.outgoingText, metadata].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+    public var textFallback: String {
+        outgoingText + (envelopeVersion == 1 ? frozenAttachmentReminder ?? draft.attachmentReminder : draft.attachmentReminder)
     }
     public var label: String {
         switch status {
