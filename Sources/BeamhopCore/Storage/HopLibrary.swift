@@ -18,6 +18,7 @@ public final class HopLibrary: ObservableObject {
     }
     @Published public private(set) var state: State
     public var onChange: (() -> Void)?
+    public var onActivity: ((HopActivity) -> Void)?
     private let database: Database
     public init(_ database: Database) throws {
         self.database = database
@@ -42,7 +43,12 @@ public final class HopLibrary: ObservableObject {
                     value.records[index] = updates[value.records[index].id]!
                 }
             }
+            for record in interrupted { recordActivity(HopActivity(.interrupted, id: record.id)) }
         }
+    }
+    private func recordActivity(_ activity: HopActivity) {
+        EventStore(database).recordHop(activity)
+        onActivity?(activity)
     }
     private func change(records: [HopRecord] = [], deletingRecords: Set<String> = [], _ edit: (inout State) -> Void) throws {
         var next = state; edit(&next)
@@ -76,10 +82,18 @@ public final class HopLibrary: ObservableObject {
         }
     }
     public func hold(_ draft: HopDraft) throws {
+        try hold(draft, trackUsage: true)
+    }
+    /// Legacy restoration is not a new user's Pocket save action.
+    public func importLegacyDraft(_ draft: HopDraft) throws {
+        try hold(draft, trackUsage: false)
+    }
+    private func hold(_ draft: HopDraft, trackUsage: Bool) throws {
         try change { value in
             Self.park(draft, in: &value)
             if value.active?.id == draft.id { value.active = nil }
         }
+        if trackUsage { recordActivity(HopActivity(.saved, id: draft.id)) }
     }
     public func restore(_ id: String) throws {
         guard let draft = state.pocket.first(where: { $0.id == id }) else { return }
@@ -88,6 +102,7 @@ public final class HopLibrary: ObservableObject {
             Self.park(value.active, in: &value)
             value.active = draft
         }
+        recordActivity(HopActivity(.restored, id: id))
     }
     public func addMaterials(from draft: HopDraft) throws {
         try change { value in
@@ -95,10 +110,12 @@ public final class HopLibrary: ObservableObject {
             active.materials += draft.materials.map { var copy = $0; copy.id = UUID().uuidString; return copy }
             value.active = active
         }
+        recordActivity(HopActivity(.reused, id: draft.id))
     }
     public func recover(_ record: HopRecord) throws {
         var draft = record.draft; draft.id = UUID().uuidString
         try start(draft)
+        recordActivity(HopActivity(.recovered, id: record.id))
     }
     public func remember(_ route: HopRoute) throws {
         try change { value in
@@ -110,6 +127,7 @@ public final class HopLibrary: ObservableObject {
     public func begin(_ draft: HopDraft) throws -> HopRecord {
         let record = HopRecord(draft: draft)
         try change(records: [record]) { $0.records.append(record) }
+        recordActivity(HopActivity(.started, id: record.id))
         return record
     }
     public func beginBatch(_ drafts: [HopDraft], route: HopRoute, requestsResultReturn: Bool? = nil) throws -> HopRecord {
@@ -133,6 +151,7 @@ public final class HopLibrary: ObservableObject {
         var record = HopRecord(draft: combined)
         record.pocketSources = drafts
         try change(records: [record]) { $0.records.append(record) }
+        recordActivity(HopActivity(.started, id: record.id, sourceDraftIDs: drafts.map(\.id)))
         return record
     }
     public enum PocketError: LocalizedError {
@@ -173,6 +192,7 @@ public final class HopLibrary: ObservableObject {
     }
     public func finish(_ id: String, status: HopRecord.Status, detail: String? = nil) throws {
         guard let index = state.records.firstIndex(where: { $0.id == id }) else { return }
+        let previous = state.records[index]
         var record = state.records[index]
         record.status = status; record.detail = detail
         try change(records: [record]) { value in
@@ -184,6 +204,16 @@ public final class HopLibrary: ObservableObject {
                 let sources = record.pocketSources ?? [record.draft]
                 value.pocket.removeAll { sources.contains($0) }
             }
+        }
+        if previous.status != status || previous.detail != detail {
+            let kind: HopActivity.Kind
+            switch status {
+            case .preparing: return
+            case .copied: kind = .copied
+            case .prepared: kind = .prepared
+            case .failed: kind = .failed
+            }
+            recordActivity(HopActivity(kind, id: id, readableFailure: detail?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false))
         }
     }
 }

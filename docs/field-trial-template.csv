@@ -1,0 +1,1 @@
+participant_code,task_code,local_date,build_commit,scenario,source_type,receiver,baseline_steps,baseline_observed_or_estimated,beamhop_steps,handoff_receipt,result_found,task_outcome_self_reported,failure_recovered,pocket_reused,would_use_again,blocker_category

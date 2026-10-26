@@ -9,6 +9,7 @@ import GRDB
 public final class EventStore {
     /// Canonical event names (queried by DogfoodReport).
     public enum Name {
+        public static let hopActivity = "hop_activity_v1"
         public static let captureCompleted = "capture_completed"
         public static let captureDuplicate = "capture_duplicate"
         public static let captureRejected = "capture_rejected"

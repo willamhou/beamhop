@@ -28,7 +28,7 @@ final class HopCoordinator {
             var draft = HopDraft(materials: [HopMaterial(capture: capture)], instruction: item.note ?? "",
                                  route: .init(target: item.intendedTarget, project: item.workName ?? ""))
             draft.id = "legacy-" + item.id
-            try library.hold(draft)
+            try library.importLegacyDraft(draft)
             try legacy.remove(id: item.id)
         }
         pocket.library = library

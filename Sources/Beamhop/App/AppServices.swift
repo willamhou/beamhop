@@ -34,7 +34,8 @@ final class AppServices {
     private(set) lazy var panel = CapturePanelController()   // Week 3 floating window
     private(set) lazy var firstRun = FirstRunWindowController(
         permissions: permissions,
-        onOpenDiagnostics: { [weak self] in self?.diagnostics.show() })
+        onOpenDiagnostics: { [weak self] in self?.diagnostics.show() },
+        onOpenPocket: { [weak self] in self?.pocket.show() })
 
     func bootstrap() {
         openDatabase()
@@ -45,6 +46,7 @@ final class AppServices {
             onInbox: { [weak self] in self?.inbox.show() },
             onPocket: { [weak self] in self?.pocket.show() },
             onDiagnostics: { [weak self] in self?.diagnostics.show() },
+            onGettingStarted: { [weak self] in self?.firstRun.show() },
             onCompatibility: { [weak self] in self?.compatibility.show() }
         )
         firstLaunchIfNeeded()
@@ -73,6 +75,10 @@ final class AppServices {
             }
             self.hop = try HopCoordinator(database: db, panel: panel, pocket: pocket, hud: pocketHUD,
                                           delivery: self.delivery!, captures: store, legacy: pocketStore)
+            self.hop?.library.onActivity = { [weak self] activity in
+                if Thread.isMainThread { self?.firstRun.model.observe(activity) }
+                else { DispatchQueue.main.async { self?.firstRun.model.observe(activity) } }
+            }
             log.info("database opened at \(AppPaths.databaseURL.path, privacy: .public) recovered=\(db.recoveredFromCorruption)")
         } catch {
             log.error("database open failed: \(String(describing: error), privacy: .public)")
@@ -99,7 +105,7 @@ final class AppServices {
     }
 
     private func firstLaunchIfNeeded() {
-        let key = "beamhop.didFirstLaunch"
+        let key = "beamhop.didShowHandoffGuide.v1"
         if !UserDefaults.standard.bool(forKey: key) {
             UserDefaults.standard.set(true, forKey: key)
             firstRun.show()
@@ -164,6 +170,7 @@ final class AppServices {
     }
 
     private func showPanel(_ cap: Capture, delivery: DeliveryService) {
+        firstRun.model.captureSaved()
         let started = Date()
         hop?.capture(cap)
         let elapsed = Int(Date().timeIntervalSince(started) * 1000)
