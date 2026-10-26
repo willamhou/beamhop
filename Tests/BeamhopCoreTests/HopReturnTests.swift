@@ -3,6 +3,48 @@ import XCTest
 @testable import BeamhopCore
 
 final class HopReturnTests: XCTestCase {
+    func testExistingOnlyWriterSurvivesDisappearingAndEncodedPaths() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let missing = directory.appendingPathComponent("missing.sqlite")
+        do {
+            _ = try Database.openExistingReadWrite(path: missing)
+            XCTAssertTrue(false, "existing-only opener rejects a missing file")
+        } catch {}
+        XCTAssertTrue(!FileManager.default.fileExists(atPath: missing.path), "SQLite does not create a missing Inbox")
+        let path = directory.appendingPathComponent("space # ? % 数据.sqlite")
+        let db = try Database(path: path)
+        let source = Capture(
+            source: .ax, appBundleID: "fixture", appName: "Fixture", selectedText: "capture", pid: 1,
+            captureMethod: "fixture")
+        try CaptureStore(db).insert(source)
+        let library = try HopLibrary(db)
+        let record = try library.begin(HopDraft(materials: [HopMaterial(text: "edited")], requestsResultReturn: true))
+        let store = try HandoffResultStore.open(path: path)
+        try store.insert(HandoffResult(handoffID: record.id, agent: "fixture", content: "kept"))
+        XCTAssertTrue(try store.count() == 1, "percent-encoded existing paths remain writable")
+        let legacy = try ResultStore.open(path: path)
+        try legacy.insert(CaptureResult(originCaptureID: source.id, agent: "fixture", content: "legacy kept"))
+        let moved = directory.appendingPathComponent("moved.sqlite")
+        try FileManager.default.moveItem(at: path, to: moved)
+        // Exercise the SQLite open itself after disappearance, not a cached fileExists result.
+        do {
+            _ = try Database.openExistingReadWrite(path: path)
+            XCTAssertTrue(false, "removed file must not reopen")
+        } catch {}
+        do {
+            _ = try HandoffResultStore.open(path: path)
+            XCTAssertTrue(false, "removed handoff store must not reopen")
+        } catch {}
+        do {
+            _ = try ResultStore.open(path: path)
+            XCTAssertTrue(false, "removed legacy store must not reopen")
+        } catch {}
+        XCTAssertTrue(
+            !FileManager.default.fileExists(atPath: path.path), "writers do not recreate an Inbox moved by the app")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: moved.path), "original database stays preserved")
+    }
     func testReturnGuardsRecoveryAndLateConsentEdit() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

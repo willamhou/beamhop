@@ -8,10 +8,7 @@ public final class HandoffResultStore {
     public init(_ queue: DatabaseQueue) { self.queue = queue }
 
     public static func open(path: URL) throws -> HandoffResultStore {
-        guard FileManager.default.fileExists(atPath: path.path) else { throw DatabaseError.fileNotFound }
-        var config = Configuration()
-        config.foreignKeysEnabled = true
-        let queue = try DatabaseQueue(path: path.path, configuration: config)
+        let queue = try Database.openExistingReadWrite(path: path)
         guard try queue.read({ db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('hop_records', 'handoff_results')")
         }) == 2 else { throw DatabaseError.schemaOutdated }
