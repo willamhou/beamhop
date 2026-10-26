@@ -1,7 +1,21 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
 > Single entry point for current status, verification boundaries and next steps.
-> Last updated: 2026-10-26 — this change starts from `main@66dea66` (PR #16), after the Kimi and Pocket HUD follow-ups. Check Git for the actual merged tip. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
+> Last updated: 2026-10-26 — merged baseline `main@4573b52` (PR #17), including ordinary Hop identity/optional return. Field-trial metrics and onboarding below are branch work pending review and latest-head CI, not a new acceptance package. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
+
+## Field trial metrics and first handoff onboarding work (2026-10-26)
+
+Work starts from merged `main@4573b52`, not the superseded `66dea66` proposal. Scope: distinguish ordinary Hop receipts from legacy delivery-row metrics; provide a private manual real-task trial protocol; guide permission, real capture, receiver choice, manual handoff and failure recovery. The empty CSV template and README protocol do not claim recruited participants, completed tasks or automatic upload.
+
+The owner approved three public regression surfaces: truthful separated metrics, Pocket/retry accounting, and durable first-run progress with live permission refresh/recovery. Implementation is on `codex/trial-metrics-onboarding`. Typed local events track persisted Hop starts and transport outcomes without material/project/session names, paths or error text. Retries get new attempt IDs; repeated completion callbacks do not inflate counts. Failed batches do not establish successful Pocket reuse, legacy imports do not count as new saves, interrupted attempts remain unknown, and deleting backups does not erase usage events. Retained returned conclusions, legacy delivery rows and real participant/task evidence have separate meanings and denominators. No migration or historical backfill is added.
+
+The reporting CLI now opens only existing read-only databases and rejects invalid 1–180 day windows. Future events are excluded consistently; missing/pre-upgrade schemas produce a readable error without creating/migrating a database. Missing telemetry is explicitly labeled rather than asserted as zero historical activity. The manual field-trial template is header-only and belongs outside Git once filled; the first-five-task review precedes the proposed 3–5-user/about-50-task study.
+
+First-use guidance is reopenable from Getting Started, refreshes permission while visible, follows real capture and typed handoff callbacks, and stores only preparation progress/opaque handoff identity in local preferences. Pending preparation after restart opens recovery guidance; late old outcomes cannot replace a newer attempt's state. The guide never claims an agent received/completed a task, never grants permission, and never registers tools or auto-sends. Its four offscreen states (permission/capture/recovery/manual submission) are added to the hosted language/appearance fixtures.
+
+[PR #18](https://github.com/willamhou/beamhop/pull/18) tracks integration. Independent Standards and Spec reviews of `9c229e3` against `4573b52` each reported zero actionable findings. A wording-only follow-up makes the source action explicitly hide the guide and leave source selection to the user; it does not claim to activate another app. Latest-head hosted checks remain the merge gate.
+
+Local validation: full build, SelfTest, actual MCP temporary-database regression, read-only metrics CLI regression, provenance 9 tests, signing safety 7 cases, localization lint and whitespace checks passed. Mirrored XCTest was attempted but the installed CLT cannot resolve XCTest. Hosted XCTest/native rendering and per-package real-device acceptance remain pending; no UI fixture was run in the active desktop session. The owner subsequently authorized commit/push/PR, two-axis review, latest-head CI-gated merge and safe local synchronization. No new acceptance package was requested. Existing acceptance apps, MCP registrations, real Inbox, historical-data investigation and backups remain untouched. Formal signing/notarization and actual recruitment are separate work.
 
 ## Ordinary Hop identity and optional conclusions (2026-10-26)
 

@@ -6,9 +6,10 @@ import GRDB
 /// delivery success / readable-failure coverage (`deliveries`), Inbox accumulation
 /// and engagement (`captures` + `events`).
 ///
-/// Everything is computed inside `days` days of "now" except Inbox total, which is
-/// cumulative by definition (gate: ≥ 200 captures).
+/// The window is bounded on both ends. Inbox total and untracked retained backups
+/// are cumulative. Transport rows can overlap Hop attempts; never add their totals.
 public struct DogfoodReport {
+    public let hops: HopUsage
     public let days: Int
     public let windowStartMs: Int64
 
@@ -25,7 +26,8 @@ public struct DogfoodReport {
     public let panelP95ms: Int?
     public let panelCount: Int
 
-    // Delivery (chosen-target attempts; a fallback records failed + a clipboard row)
+    // Legacy transport rows, which can include per-material rows for ordinary Hop.
+    // Their denominator is not a task count or a whole-product handoff count.
     public let attempts: Int
     public let chosenTargetFailures: Int
     public var successRate: Double? { attempts > 0 ? Double(attempts - chosenTargetFailures) / Double(attempts) : nil }
@@ -45,36 +47,46 @@ public struct DogfoodReport {
     public let viewedCount: Int
     public let redeliverCount: Int
 
-    public static func generate(db: Database, days: Int = 14) throws -> DogfoodReport {
-        let windowStart = Int64(Date().timeIntervalSince1970 * 1000) - Int64(days) * 24 * 3600 * 1000
+    public enum Invalid: Error { case days }
+    public static func generate(db: Database, days: Int = 14, now: Date = Date()) throws -> DogfoodReport {
+        try generate(queue: db.queue, days: days, now: now)
+    }
+    /// Reporting never creates, repairs or migrates the user's Inbox.
+    public static func generate(path: URL, days: Int = 14, now: Date = Date()) throws -> DogfoodReport {
+        try generate(queue: Database.openReadOnly(path: path), days: days, now: now)
+    }
+    private static func generate(queue: DatabaseQueue, days: Int, now: Date) throws -> DogfoodReport {
+        guard (1...180).contains(days) else { throw Invalid.days }
+        let end = Int64(now.timeIntervalSince1970 * 1000)
+        let windowStart = end - Int64(days) * 24 * 3600 * 1000
 
         // Press outcomes in-window, grouped by name.
         var byName: [String: Int] = [:]
-        try db.queue.read { db in
+        try queue.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT name, COUNT(*) AS n FROM events
-                WHERE ts >= ? AND name IN (?, ?, ?)
+                WHERE ts >= ? AND ts <= ? AND name IN (?, ?, ?)
                 GROUP BY name
-                """, arguments: [windowStart, EventStore.Name.captureCompleted,
+                """, arguments: [windowStart, end, EventStore.Name.captureCompleted,
                                  EventStore.Name.captureDuplicate, EventStore.Name.captureRejected])
             for r in rows { byName[r["name"]] = r["n"] }
         }
 
-        let perDayRows: [(String, Int)] = try db.queue.read { db in
+        let perDayRows: [(String, Int)] = try queue.read { db in
             try Row.fetchAll(db, sql: """
                 SELECT date(ts / 1000, 'unixepoch', 'localtime') AS d, COUNT(*) AS n
                 FROM events
-                WHERE ts >= ? AND name IN (?, ?, ?)
+                WHERE ts >= ? AND ts <= ? AND name IN (?, ?, ?)
                 GROUP BY d ORDER BY d
-                """, arguments: [windowStart, EventStore.Name.captureCompleted,
+                """, arguments: [windowStart, end, EventStore.Name.captureCompleted,
                                  EventStore.Name.captureDuplicate, EventStore.Name.captureRejected])
             .map { ($0["d"], $0["n"]) }
         }
 
         // Panel latencies: details are "ms=<int>" (column nullable).
-        let panelMs: [Int] = try db.queue.read { db in
-            let details: [String?] = try String?.fetchAll(db, sql: "SELECT detail FROM events WHERE ts >= ? AND name = ?",
-                                                          arguments: [windowStart, EventStore.Name.panelShown])
+        let panelMs: [Int] = try queue.read { db in
+            let details: [String?] = try String?.fetchAll(db, sql: "SELECT detail FROM events WHERE ts >= ? AND ts <= ? AND name = ?",
+                                                          arguments: [windowStart, end, EventStore.Name.panelShown])
             return details.compactMap { d in
                 guard let d, d.hasPrefix("ms="), let v = Int(d.dropFirst(3)) else { return nil }
                 return v
@@ -84,7 +96,7 @@ public struct DogfoodReport {
         // Deliveries in-window: chosen-target attempts exclude clipboard rows (those are either
         // fallbacks, explicit picks, or the ⌘⇧V emergency channel — none count as gate attempts).
         // COALESCE/CAST: SUM is NULL on zero rows and AVG returns a Double.
-        let (attempts, failures, readable, avgMs) = try db.queue.read { db -> (Int, Int, Int, Int?) in
+        let (attempts, failures, readable, avgMs) = try queue.read { db -> (Int, Int, Int, Int?) in
             let row = try Row.fetchOne(db, sql: """
                 SELECT
                     COUNT(*) AS attempts,
@@ -93,25 +105,27 @@ public struct DogfoodReport {
                                     AND error_message != '' THEN 1 ELSE 0 END), 0) AS readable,
                     CAST(AVG(duration_ms) AS INTEGER) AS avg_ms
                 FROM deliveries
-                WHERE delivered_at >= ? AND target != 'clipboard'
-                """, arguments: [windowStart])!
+                WHERE delivered_at >= ? AND delivered_at <= ? AND target != 'clipboard'
+                """, arguments: [windowStart, end])!
             return (row["attempts"], row["failures"], row["readable"], row["avg_ms"])
         }
 
-        let avgCaptureMs = try db.queue.read { db in
+        let avgCaptureMs = try queue.read { db in
             try Int.fetchOne(db, sql: """
                 SELECT CAST(AVG(capture_duration_ms) AS INTEGER) FROM captures
-                WHERE created_at >= ? AND capture_duration_ms IS NOT NULL
-                """, arguments: [windowStart])
+                WHERE created_at >= ? AND created_at <= ? AND capture_duration_ms IS NOT NULL
+                """, arguments: [windowStart, end])
         }
 
-        let inboxTotal = try CaptureStore(db).count()
-        let inboxOpened = try countEvent(db, EventStore.Name.inboxOpened, since: windowStart)
-        let searches = try countEvent(db, EventStore.Name.inboxSearch, since: windowStart)
-        let viewed = try countEvent(db, EventStore.Name.captureViewed, since: windowStart)
-        let redeliver = try countEvent(db, EventStore.Name.inboxRedeliver, since: windowStart)
+        let inboxTotal = try queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM captures WHERE deleted_at IS NULL") ?? 0 }
+        let hops = try queue.read { try HopUsage.read($0, since: windowStart, until: end) }
+        let inboxOpened = try countEvent(queue, EventStore.Name.inboxOpened, since: windowStart, until: end)
+        let searches = try countEvent(queue, EventStore.Name.inboxSearch, since: windowStart, until: end)
+        let viewed = try countEvent(queue, EventStore.Name.captureViewed, since: windowStart, until: end)
+        let redeliver = try countEvent(queue, EventStore.Name.inboxRedeliver, since: windowStart, until: end)
 
         return DogfoodReport(
+            hops: hops,
             days: days,
             windowStartMs: windowStart,
             capturedCount: byName[EventStore.Name.captureCompleted] ?? 0,
@@ -139,9 +153,9 @@ public struct DogfoodReport {
         return v[idx]
     }
 
-    private static func countEvent(_ db: Database, _ name: String, since: Int64) throws -> Int {
-        try db.queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM events WHERE ts >= ? AND name = ?",
-                                             arguments: [since, name]) ?? 0 }
+    private static func countEvent(_ queue: DatabaseQueue, _ name: String, since: Int64, until: Int64) throws -> Int {
+        try queue.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM events WHERE ts >= ? AND ts <= ? AND name = ?",
+                                             arguments: [since, until, name]) ?? 0 }
     }
 
     /// The §3 gate table as plain text (CLI output). Thresholds mirror evolution-decisions §3
@@ -149,14 +163,22 @@ public struct DogfoodReport {
     public func gateTable() -> String {
         var out: [String] = []
         out.append("Beamhop dogfood report — window: last \(days) day(s)")
+        out.append("Ordinary Hop telemetry — persisted starts and transport receipts, not task completion")
+        out.append("  Attempts \(hops.attempts): copied \(hops.copied), prepared \(hops.prepared), failed \(hops.failed), interrupted/unknown \(hops.interrupted), pending \(hops.pending)")
+        out.append("  Pocket: \(hops.savedDrafts) distinct drafts saved, \(hops.reusedDrafts) distinct drafts reused, \(hops.pocketHandoffs) batch attempts, \(hops.recoveredBackups) backup recoveries")
+        out.append("  Retained conclusions written in window: \(hops.retainedConclusions) for \(hops.returnedHandoffs) handoffs (not a completion rate)")
+        out.append("  Retained backups without start telemetry (all dates): \(hops.untrackedBackups); malformed events in window: \(hops.ignoredEvents)")
+        out.append("  Tracking begins with this build; old attempts are not backfilled. Local events retain 180 days; missing telemetry is not zero historical usage.")
+        out.append("  Real participants, tasks, steps saved and repeat-use intent require the private field-trial record; fixtures are not real tasks.")
+        out.append("Legacy delivery rows — may overlap Hop transport; do not add denominators or infer whole-product success")
 
         func mark(_ ok: Bool) -> String { ok ? "✓" : "✗" }
         func fmt(_ v: Double, _ digits: Int = 1) -> String { String(format: "%.\(digits)f", v) }
 
         out.append("")
-        out.append("Gate (evolution-decisions §3)                    value      threshold")
+        out.append("Historical gates (legacy transport only, not release acceptance)     value      threshold")
         out.append("  \(mark(pressesPerDay >= 10)) ⌘⇧Space frequency               \(fmt(pressesPerDay))/day    ≥ 10/day")
-        out.append("  \(mark((successRate ?? 0) >= 0.95)) chosen-target delivery success   \(successRate.map { fmt($0 * 100) + "%" } ?? "n/a")       ≥ 95%")
+        out.append("  \(mark((successRate ?? 0) >= 0.95)) legacy nonfailed target rows     \(successRate.map { fmt($0 * 100) + "%" } ?? "n/a")       ≥ 95%")
         out.append("  \(mark(inboxTotalCaptures >= 200)) Inbox accumulation              \(inboxTotalCaptures)         ≥ 200")
         out.append("  \(mark(inboxVisitsPerWeek >= 3)) Inbox revisits                 \(fmt(inboxVisitsPerWeek))/week  ≥ 3/week")
         let coverageOK = chosenTargetFailures == 0 || readableFailures == chosenTargetFailures
@@ -172,15 +194,9 @@ public struct DogfoodReport {
         if !perDay.isEmpty {
             out.append("Per day: " + perDay.map { "\($0.day)=\($0.presses)" }.joined(separator: "  "))
         }
-        var budget = "Hotkey→agent budget (MVP ≤ 5s): "
-        if let c = avgCaptureMs, let d = avgDeliveryMs {
-            budget += "avg capture \(c)ms + avg delivery \(d)ms = \((c + d))ms (excludes user think time in panel)"
-        } else {
-            budget += "avg capture \(avgCaptureMs.map { "\($0)ms" } ?? "n/a") + avg delivery \(avgDeliveryMs.map { "\($0)ms" } ?? "n/a")"
-        }
-        out.append(budget)
+        out.append("Component averages: capture \(avgCaptureMs.map { "\($0)ms" } ?? "n/a"); legacy delivery \(avgDeliveryMs.map { "\($0)ms" } ?? "n/a"). Different sample sets; do not sum into end-to-end latency.")
         out.append("Panel samples: \(panelCount)   Inbox: \(searchCount) searches, \(viewedCount) detail views, \(redeliverCount) re-deliveries")
-        out.append("Clipboard fallback rate: \(attempts > 0 ? fmt(Double(chosenTargetFailures) / Double(attempts) * 100) + "%" : "n/a") of chosen-target attempts")
+        out.append("Legacy failed-row fraction (not verified fallback frequency): \(attempts > 0 ? fmt(Double(chosenTargetFailures) / Double(attempts) * 100) + "%" : "n/a") of chosen-target attempts")
         out.append("")
         out.append("All local. No data leaves this machine.")
         return out.joined(separator: "\n")

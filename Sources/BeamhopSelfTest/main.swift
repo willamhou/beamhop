@@ -44,12 +44,19 @@ if let i = CommandLine.arguments.firstIndex(of: "--seed-hop"), i + 1 < CommandLi
 // real inbox.sqlite and exit. Thin wrapper: scripts/dogfood-metrics.sh calls this.
 if let i = CommandLine.arguments.firstIndex(of: "--dogfood"), i + 1 < CommandLine.arguments.count {
     var days = 14
-    if let d = CommandLine.arguments.firstIndex(of: "--days"), d + 1 < CommandLine.arguments.count,
-       let n = Int(CommandLine.arguments[d + 1]), n > 0 {
+    if let d = CommandLine.arguments.firstIndex(of: "--days") {
+        guard d + 1 < CommandLine.arguments.count, let n = Int(CommandLine.arguments[d + 1]), (1...180).contains(n) else {
+            fputs("--days must be an integer from 1 through 180.\n", stderr)
+            exit(2)
+        }
         days = n
     }
-    let db = try Database(path: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
-    print(try DogfoodReport.generate(db: db, days: days).gateTable())
+    do {
+        print(try DogfoodReport.generate(path: URL(fileURLWithPath: CommandLine.arguments[i + 1]), days: days).gateTable())
+    } catch {
+        fputs("Report unavailable. Select an app-upgraded Inbox and a 1...180 day window; reporting never creates or migrates it.\n", stderr)
+        exit(2)
+    }
     exit(0)
 }
 
@@ -1174,6 +1181,8 @@ do {
           "frame smaller than panel clamps to minX/minY without flipping")
 }
 
+do { try runTrialWorkflowRegression() }
+catch { check(false, "Trial workflow regression: \(error)") }
 do { try runHopReturnRegression() }
 catch { check(false, "Hop return regression: \(error)") }
 

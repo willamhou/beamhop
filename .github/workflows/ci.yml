@@ -23,6 +23,10 @@ jobs:
         run: |
           binary_dir="$(swift build --show-bin-path)"
           python3 scripts/hop-return-smoke.py --mcp-binary "$binary_dir/BeamhopMCP" --seed-binary "$binary_dir/BeamhopSelfTest"
+      - name: Read-only trial metrics CLI regression
+        run: |
+          binary_dir="$(swift build --show-bin-path)"
+          python3 scripts/trial-metrics-smoke.py --binary "$binary_dir/BeamhopSelfTest"
       - name: Native messaging host compiles
         run: swiftc -O host/main.swift -o /tmp/beamhop-bridge
       - name: Native manifest installer smoke test

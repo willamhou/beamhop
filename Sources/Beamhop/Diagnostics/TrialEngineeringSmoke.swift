@@ -33,6 +33,25 @@ enum TrialEngineeringSmoke {
         try snapshot(DiagnosticExportView(json: json, onCancel: {}, onSave: {}),
                      size: NSSize(width: 780, height: 650),
                      output: output.appendingPathComponent("export-\(suffix).png"), dark: dark)
+        let suite = "beamhop-onboarding-smoke-" + UUID().uuidString
+        guard let defaults = UserDefaults(suiteName: suite) else { throw NSError(domain: "TrialSmoke", code: 5) }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let guide = OnboardingModel(defaults: defaults)
+        func snapshotGuide(_ state: String) throws {
+            try snapshot(FirstRunView(model: guide, onOpenAX: {}, onOpenDiagnostics: {}, onOpenPocket: {}, onContinue: {}),
+                         size: NSSize(width: 540, height: 650),
+                         output: output.appendingPathComponent("onboarding-\(state)-\(suffix).png"), dark: dark)
+        }
+        try snapshotGuide("permission")
+        guide.refreshAccessibility(granted: true)
+        guide.captureSaved()
+        try snapshotGuide("captured")
+        guide.observe(HopActivity(.started, id: "fixture-failed"))
+        guide.observe(HopActivity(.failed, id: "fixture-failed"))
+        try snapshotGuide("recovery")
+        guide.observe(HopActivity(.started, id: "fixture-copy"))
+        guide.observe(HopActivity(.copied, id: "fixture-copy"))
+        try snapshotGuide("manual-submission")
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == front else {
             throw NSError(domain: "TrialSmoke", code: 2, userInfo: [NSLocalizedDescriptionKey: "Offscreen smoke changed foreground app"])
         }
