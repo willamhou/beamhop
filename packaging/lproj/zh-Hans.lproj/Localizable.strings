@@ -377,7 +377,7 @@
 "Allow this exact app in System Settings, then return here. Permission status refreshes automatically. Screen Recording is optional for text." = "在系统设置中允许当前版本的 App，然后回到这里。权限状态会自动刷新；纯文本抓取不需要录屏权限。";
 "Capture real material" = "抓取真实材料";
 "Switch to a disposable note or browser page, select text and press ⌘⇧Space. Capture from the source app, not this guide." = "切换到测试笔记或浏览器页面，选中文字并按 ⌘⇧Space。请从来源应用抓取，不要抓取此引导窗口。";
-"Go to source app" = "返回来源应用";
+"Hide guide and choose a source" = "收起引导并选择来源";
 "Choose a receiver and prepare" = "选择接收方并准备交接";
 "Review the edited material. Return adds a newline; ⌘Return copies or prepares it. Clipboard works without MCP. Projects are not verified agent sessions." = "检查编辑后的材料。回车换行，⌘回车复制或准备草稿。剪贴板无需 MCP；项目名称不代表已验证的 Agent 会话。";
 "Continue manually" = "手动继续交接";

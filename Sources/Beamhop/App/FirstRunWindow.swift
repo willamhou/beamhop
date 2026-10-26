@@ -94,7 +94,7 @@ struct FirstRunView: View {
                     index: "2", title: "Capture real material",
                     detail:
                         "Switch to a disposable note or browser page, select text and press ⌘⇧Space. Capture from the source app, not this guide.",
-                    ready: model.progress.hasCaptured, actionTitle: "Go to source app", action: onContinue)
+                    ready: model.progress.hasCaptured, actionTitle: "Hide guide and choose a source", action: onContinue)
                 FirstRunRow(
                     index: "3", title: "Choose a receiver and prepare",
                     detail:
