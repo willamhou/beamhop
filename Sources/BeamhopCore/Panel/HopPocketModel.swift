@@ -5,14 +5,16 @@ import Combine
 public final class HopPocketModel: ObservableObject {
     public enum Section: Hashable { case drafts, history }
     public let library: HopLibrary
+    public let conclusions = HandoffResultsModel()
     @Published public var section: Section = .drafts
     /// SwiftUI's search-field binding writes the unchanged value back on view updates
     /// (observed on macOS 15.7: writeback fires during delivery state changes); only a
     /// real query edit may clear the selection, or a failed handoff loses it silently.
-    @Published public var query = "" { didSet { guard oldValue != query else { return }; selectedIDs = []; route = nil } }
+    @Published public var query = "" { didSet { guard oldValue != query else { return }; selectedIDs = []; route = nil; requestsResultReturn = false } }
     @Published public private(set) var selectedIDs: Set<String> = []
     @Published public private(set) var route: HopRoute?
     @Published public private(set) var isDelivering = false
+    @Published public var requestsResultReturn = false
     @Published public var error: String?
     @Published public var blockedDraftIDs: Set<String> = []
     @Published public var historyLimit = 20
@@ -60,18 +62,19 @@ public final class HopPocketModel: ObservableObject {
     }
     private func inferRoute() {
         route = mixedRoutes ? nil : selection.first?.route
+        requestsResultReturn = !selection.isEmpty && selection.allSatisfy(\.requestsResultReturn)
         error = nil
     }
     public func chooseRoute(_ route: HopRoute) { self.route = route }
     public func deleteSelection() throws {
         guard !isDelivering, !blockedSelection else { throw HopLibrary.PocketError.changed }
         try library.deleteDrafts(selectedIDs)
-        selectedIDs = []; route = nil
+        selectedIDs = []; route = nil; requestsResultReturn = false
     }
     public func deliverSelection() {
         guard canDeliver, let route, let onDeliver else { return }
         do {
-            let record = try library.beginBatch(selection, route: route)
+            let record = try library.beginBatch(selection, route: route, requestsResultReturn: requestsResultReturn)
             isDelivering = true; error = nil
             onDeliver(record) { [weak self] succeeded in
                 guard let self else { return }

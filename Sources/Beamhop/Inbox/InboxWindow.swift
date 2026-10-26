@@ -54,6 +54,18 @@ struct InboxView: View {
     @ObservedObject var model: InboxModel
 
     var body: some View {
+        TabView {
+            CaptureInboxView(model: model).tabItem { Label("Captures", systemImage: "tray") }
+            HandoffResultsView(model: model.handoffConclusions)
+                .tabItem { Label("Handoff conclusions", systemImage: "arrow.uturn.backward.circle") }
+        }.frame(minWidth: 820, minHeight: 520)
+    }
+}
+
+private struct CaptureInboxView: View {
+    @ObservedObject var model: InboxModel
+
+    var body: some View {
         NavigationSplitView {
             Group {
                 if model.captures.isEmpty {

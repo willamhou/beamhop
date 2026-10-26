@@ -24,6 +24,10 @@ A native macOS menu-bar app for handing material from the app you are using to a
 
 Your Inbox keeps the originals, notes, delivery history and agent results written back through MCP. Selected conclusions refresh while the Inbox is active; long answers can be expanded and earlier results loaded. A failed shelf handoff preserves the material and selection for retry.
 
+Each new ordinary Hop includes its own handoff ID after the literal instructions and edited material. Enable **Request a conclusion back via MCP** in the panel or Pocket batch controls to invite an optional return; it is off by default. Mixed-consent batches do not opt in automatically. An agent with the updated Beamhop MCP helper can use `fetch_handoff(handoff_id)`, `save_handoff_result(handoff_id, content, agent, session_id?)` and `fetch_handoff_results(handoff_id, limit?)`. These tools require that exact opted-in handoff, not the latest capture, and expose only its edited outgoing snapshot. Existing capture tools remain compatible.
+
+Returned conclusions appear under **Inbox → Handoff conclusions** and the matching Pocket history entry, separate from copied/prepared receipts. They are agent-reported answers, not verified completion. Retries have new identities; late returns do not change newer drafts. Deleting a handoff backup also deletes its conclusions. Old backups retain their original payload without retroactive identity metadata. The app owns the additive v10 migration; the helper never creates or upgrades an Inbox. Upgrade the app and helper together, then deliberately restart the receiving MCP session to load its new tool list; no registration or live-session capability is assumed. Back up before upgrading: an older binary is not a migration rollback.
+
 Beamhop handles context and handoff; reasoning and execution stay with your external tools. A project remembers local route choices, not a verified conversation address. Preparing a draft brings the receiver forward for review; an unavailable receiver requires an explicit choice or manual fallback. **Copied** and **prepared** receipts do not mean an agent has received or completed the task.
 
 ## Get Beamhop
@@ -68,7 +72,8 @@ CI runs Swift tests, protocol smoke checks, packaging and native UI interactions
 - [Product essays on Pages](https://willamhou.github.io/beamhop/index.en.html) — interactive explorations of destinations, context and the corner shelf; [Chinese edition](https://willamhou.github.io/beamhop/).
 - [Native macOS gallery](https://willamhou.github.io/beamhop/native-ui/) — production views with fixture data and downloadable check reports.
 - [Repository guidance](AGENTS.md) — synchronization, architecture, validation, privacy and CI-gated merge rules for coding agents.
-- [Progress and next steps](PROGRESS.md) — PR #8/#10 merged baseline, pending acceptance and evidence boundaries. New work branches from current `main`.
+- [Progress and next steps](PROGRESS.md) — current implementation, pending acceptance and revision-specific evidence. New work branches from current `main`.
+- [Hop identity and optional return contract](docs/superpowers/specs/2026-10-26-hop-result-return.md) — consent, edited-payload boundaries, independent results and regression scope.
 - [Compact handoff specification](docs/superpowers/specs/2026-10-20-compact-handoff.md) — historical compact-panel baseline; Inline Hop/Pocket changes and current evidence are recorded in PROGRESS.
 - [Product positioning](docs/product-positioning.md) · [Roadmap](docs/superpowers/roadmap.md) · [Compatibility evidence](spike/compatibility-matrix-v0.json).
 - [MVP design](docs/zh/superpowers/specs/2026-06-03-beamhop-mvp-design.md) · [Historical engineering convergence](docs/superpowers/specs/2026-09-14-engineering-convergence.md). Current merge policy is in AGENTS; CI-green `main` does not certify real-device acceptance.

@@ -25,6 +25,7 @@ public final class CapturePanelModel: ObservableObject {
     @Published public var note: String = "" { didSet { draftChanged() } }
     @Published public var materials: [HopMaterial] = [] { didSet { draftChanged() } }
     @Published public var session: HopRoute.Session = .currentWindow { didSet { draftChanged() } }
+    @Published public var requestsResultReturn = false { didSet { draftChanged() } }
     @Published public var draftError: String?
     @Published public var pendingImportCount = 0
     @Published public var savedRoutes: [HopRoute] = []
@@ -51,7 +52,8 @@ public final class CapturePanelModel: ObservableObject {
             allMaterials.append(added)
         }
         var draft = HopDraft(materials: allMaterials, instruction: note,
-                             route: HopRoute(target: unavailableTarget ?? selectedTarget, project: workName, session: session))
+                             route: HopRoute(target: unavailableTarget ?? selectedTarget, project: workName, session: session),
+                             requestsResultReturn: requestsResultReturn)
         draft.id = draftID
         return draft
     }
@@ -60,6 +62,7 @@ public final class CapturePanelModel: ObservableObject {
         restoring = true
         draftID = draft.id; materials = draft.materials; note = draft.instruction; additionalText = ""
         workName = draft.route.project; session = draft.route.session
+        requestsResultReturn = draft.requestsResultReturn
         selectedTarget = draft.route.target
         unavailableTarget = draft.route.target.flatMap { visibleTargets.contains($0) ? nil : $0 }
         restoring = false

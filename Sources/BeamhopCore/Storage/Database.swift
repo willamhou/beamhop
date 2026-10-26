@@ -5,6 +5,8 @@ public enum DatabaseError: Error, Equatable {
     case fts5Unavailable
     case trigramUnavailable
     case fileNotFound
+    /// Existing-file writers require SQLite URI mode=rw support; never fall back to create.
+    case uriFilenamesUnavailable
     /// MCP write path: the DB predates the v3 results migration (app not restarted yet).
     case schemaOutdated
 }
@@ -59,6 +61,34 @@ public final class Database {
         var config = Configuration()
         config.readonly = true
         return try DatabaseQueue(path: path.path, configuration: config)
+    }
+
+    /// Existing-file-only writer for MCP. GRDB's normal writable flags include CREATE;
+    /// SQLite's mode=rw URI overrides that flag atomically, even if the app moves the
+    /// Inbox during open. Never use a separate existence check as the safety boundary.
+    /// https://www.sqlite.org/uri.html
+    public static func openExistingReadWrite(path: URL) throws -> DatabaseQueue {
+        // GRDB also relies on URI support for named in-memory queues. Verify our
+        // system SQLite build before opening a path; this app never disables URI mode.
+        let probe = try DatabaseQueue()
+        guard try probe.read({ try Int.fetchOne($0, sql: "SELECT sqlite_compileoption_used('USE_URI')") }) == 1 else {
+            throw DatabaseError.uriFilenamesUnavailable
+        }
+        guard path.isFileURL,
+              var uri = URLComponents(url: path.standardizedFileURL, resolvingAgainstBaseURL: false) else {
+            throw DatabaseError.fileNotFound
+        }
+        uri.queryItems = [URLQueryItem(name: "mode", value: "rw")]
+        guard let filename = uri.string else { throw DatabaseError.fileNotFound }
+        var config = Configuration()
+        config.foreignKeysEnabled = true
+        do { return try DatabaseQueue(path: filename, configuration: config) }
+        catch {
+            // Preserve the old public missing-file error. This classification runs
+            // after the atomic no-create open, never authorizes a creating retry.
+            if !FileManager.default.fileExists(atPath: path.path) { throw DatabaseError.fileNotFound }
+            throw error
+        }
     }
 
     /// In-memory probe that the linked SQLite supports FTS5 and the `trigram` tokenizer.

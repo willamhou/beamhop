@@ -11,6 +11,10 @@ import BeamhopCore
 //   tool  fetch_results(origin_id?)   -> agent write-backs for a capture (or latest across all)
 //   tool  save_result(origin, content, agent, session_id?)
 //                                     -> agent writes a conclusion back into the Inbox
+//   tool  fetch_handoff(handoff_id)   -> opted-in edited handoff snapshot only
+//   tool  save_handoff_result(handoff_id, content, agent, session_id?)
+//   tool  fetch_handoff_results(handoff_id, limit?)
+// Ordinary Hop conclusions use the frozen attempt ID, never a guessed latest capture.
 // Resource capture://latest, capture://{id} unchanged.
 // Captures are read through a READ-ONLY connection; results go through a lazily opened
 // read-write ResultStore that never migrates (the app owns the DB). Reads inbox.sqlite.
@@ -54,6 +58,17 @@ func resultsStore() -> ResultStore? {
         return nil
     }
     return resultStore
+}
+
+var handoffResultStore: HandoffResultStore?
+func handoffStore() -> HandoffResultStore? {
+    if let handoffResultStore { return handoffResultStore }
+    guard let dbPath else { return nil }
+    do {
+        let store = try HandoffResultStore.open(path: dbPath)
+        handoffResultStore = store
+        return store
+    } catch { return nil }
 }
 
 func send(_ obj: [String: Any]) {
@@ -140,13 +155,36 @@ func handle(_ msg: [String: Any]) {
                     "required": ["origin_capture_id", "content", "agent"]
                 ]
             ],
+            [
+                "name": "fetch_handoff",
+                "description": "Read the exact edited Hop handoff by ID, only when the user enabled optional conclusion return. Does not expose original captures or local file paths. Never substitute fetch_capture for these edited materials.",
+                "inputSchema": ["type": "object", "properties": ["handoff_id": ["type": "string"]], "required": ["handoff_id"]]
+            ],
+            [
+                "name": "save_handoff_result",
+                "description": "Optionally return your conclusion for the exact Hop handoff the user shared. Requires return opt-in. This only appends an agent-reported conclusion; it does not verify completion or alter copied/prepared status. If unavailable, answer normally without claiming a saved result.",
+                "inputSchema": ["type": "object", "properties": [
+                    "handoff_id": ["type": "string"], "content": ["type": "string"],
+                    "agent": ["type": "string"], "session_id": ["type": "string"]
+                ], "required": ["handoff_id", "content", "agent"]]
+            ],
+            [
+                "name": "fetch_handoff_results",
+                "description": "Read returned conclusions for an exact opted-in Hop handoff. Requires its ID; no latest-handoff guessing.",
+                "inputSchema": ["type": "object", "properties": [
+                    "handoff_id": ["type": "string"], "limit": ["type": "integer", "minimum": 1, "maximum": 100]
+                ], "required": ["handoff_id"]]
+            ],
         ]]])
 
     case "tools/call":
         let params = msg["params"] as? [String: Any]
         let name = params?["name"] as? String ?? ""
         let args = params?["arguments"] as? [String: Any]
-        let limit = (args?["limit"] as? Int) ?? (args?["limit"] as? Double).map(Int.init)
+        let limit: Int?
+        if let value = (args?["limit"] as? NSNumber)?.doubleValue, value.isFinite {
+            limit = Int(min(100, max(1, value)))
+        } else { limit = nil }
 
         func reply(_ text: String, isError: Bool = false) {
             var result: [String: Any] = ["content": [["type": "text", "text": text]]]
@@ -155,6 +193,33 @@ func handle(_ msg: [String: Any]) {
         }
 
         switch name {
+        case "fetch_handoff", "save_handoff_result", "fetch_handoff_results":
+            guard let handoffID = args?["handoff_id"] as? String, !handoffID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                reply("This tool requires an exact handoff_id.", isError: true); break
+            }
+            guard let store = handoffStore() else {
+                reply("Hop results unavailable. Open the updated Beamhop app to migrate its database; MCP never creates or migrates it.", isError: true); break
+            }
+            do {
+                let snapshot = try store.snapshot(handoffID: handoffID)
+                if name == "fetch_handoff" { reply(CaptureReader.renderJSON(snapshot)) }
+                else if name == "fetch_handoff_results" {
+                    reply(CaptureReader.renderJSON(try store.results(handoffID: handoffID, limit: limit ?? 20)))
+                } else {
+                    guard let content = args?["content"] as? String, let agent = args?["agent"] as? String else {
+                        reply("save_handoff_result requires content and agent strings.", isError: true); break
+                    }
+                    let result = HandoffResult(handoffID: handoffID, agent: agent,
+                                               sessionID: args?["session_id"] as? String, content: content)
+                    try store.insert(result)
+                    reply(CaptureReader.renderJSON(result))
+                }
+            } catch let error as HandoffResultStore.ReturnError {
+                reply(error.localizedDescription, isError: true)
+            } catch {
+                reply("Could not read or save a handoff conclusion. Check Beamhop and retry; no completion is implied.", isError: true)
+            }
+
         case "fetch_capture":
             let r = captureText(id: args?["id"] as? String)
             reply(r.text, isError: r.isError)

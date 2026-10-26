@@ -63,6 +63,17 @@ enum NativeUISmoke {
             (element.accessibilityAttributeValue(.identifier) as? String)
                 ?? (element as? NSAccessibilityProtocol)?.accessibilityIdentifier()
         }
+        func pressControl(_ id: String, in panel: NSPanel?) -> Bool {
+            guard let panel, let node = accessibilityNodes(panel).first(where: { identifier($0) == id }) else { return false }
+            let selector = NSSelectorFromString("accessibilityPerformPress")
+            if node.responds(to: selector) {
+                typealias Press = @convention(c) (AnyObject, Selector) -> Bool
+                let press = unsafeBitCast(node.method(for: selector), to: Press.self)
+                guard press(node, selector) else { return false }
+            } else { node.accessibilityPerformAction(.press) }
+            settle()
+            return true
+        }
         func capture(_ panel: NSPanel?, name: String, expectedWidth: CGFloat) throws {
             guard let panel, let view = panel.contentView else {
                 check(name + " exists", false)
@@ -157,6 +168,11 @@ enum NativeUISmoke {
                                     atomically: true, encoding: .utf8)
         let destination = nodes.first { identifier($0) == "capture.destination" }
         check("destination control accessible", destination != nil)
+        check("optional return starts disabled", controller.currentModel?.requestsResultReturn == false)
+        check("optional return control works", pressControl("capture.result-return", in: controller.panel)
+              && controller.currentModel?.snapshot.requestsResultReturn == true)
+        check("optional return can be disabled", pressControl("capture.result-return", in: controller.panel)
+              && controller.currentModel?.requestsResultReturn == false)
         // Exercise native menu tracking and its actual action, including focus-loss behavior.
         var menuChosen = false
         let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
@@ -295,6 +311,7 @@ enum NativeUISmoke {
         try capture(draftShelf.panel, name: "pocket-recovery", expectedWidth: 380)
         // Exercise the replacement shelf's real controls, not only its storage methods.
         let shelfModel = draftShelf.hopModel!
+        shelfModel.conclusions.configure(store: HandoffResultStore(db.queue))
         shelfModel.availableTargets = [.clipboard, .kimiWork]
         var batchRecord: HopRecord?
         var batchDone: ((Bool) -> Void)?
@@ -304,20 +321,11 @@ enum NativeUISmoke {
             let nodes = accessibilityNodes(panel)
             let dump = nodes.map { "\(type(of: $0)) id=\(identifier($0) ?? "-") actions=\($0.accessibilityActionNames())" }.joined(separator: "\n")
             try? dump.write(to: output.appendingPathComponent("pocket-accessibility-\(suffix).txt"), atomically: true, encoding: .utf8)
-            guard let node = nodes.first(where: { identifier($0) == id }) else {
+            guard nodes.contains(where: { identifier($0) == id }) else {
                 print("[native-ui] missing Pocket accessibility node: \(id)")
                 return false
             }
-            // SwiftUI buttons implement the modern informal press selector; the legacy
-            // accessibilityPerformAction path used by NSButton can silently do nothing.
-            let selector = NSSelectorFromString("accessibilityPerformPress")
-            if node.responds(to: selector) {
-                typealias Press = @convention(c) (AnyObject, Selector) -> Bool
-                let press = unsafeBitCast(node.method(for: selector), to: Press.self)
-                guard press(node, selector) else { return false }
-            } else { node.accessibilityPerformAction(.press) }
-            settle()
-            return true
+            return pressControl(id, in: panel)
         }
         try library.duplicate(secondDraft)
         settle()
@@ -327,7 +335,9 @@ enum NativeUISmoke {
         check("Pocket delete control works", pressShelf("pocket.delete") && library.state.pocket.isEmpty)
         check("Pocket undo restores selected drafts", pressShelf("pocket.undo") && library.state.pocket.count == 2)
         _ = pressShelf("pocket.select-all")
+        check("Pocket optional batch return control works", pressShelf("pocket.result-return") && shelfModel.requestsResultReturn)
         check("Pocket batch handoff button works", pressShelf("pocket.deliver") && batchRecord?.pocketSources?.count == 2)
+        check("Pocket batch carries explicit return choice", batchRecord?.acceptsResultReturn == true)
         if let batchRecord {
             try library.finish(batchRecord.id, status: .failed); batchDone?(false)
         }
@@ -346,6 +356,13 @@ enum NativeUISmoke {
         // History is separate and bounded; a long archive cannot expand the draft shelf.
         shelfModel.section = .history
         settle()
+        if let batchRecord {
+            let writer = try HandoffResultStore.open(path: temporary.appendingPathComponent("fixture.sqlite"))
+            try writer.insert(HandoffResult(handoffID: batchRecord.id, agent: "native-fixture", content: "Returned batch conclusion <>&"))
+            check("Pocket opens frozen handoff history", pressShelf("pocket.history." + batchRecord.id))
+            check("Pocket displays externally written conclusion", shelfModel.conclusions.results.first?.content == "Returned batch conclusion <>&")
+            check("Pocket return does not change copied receipt", library.state.records.last?.status == .copied)
+        }
         try capture(draftShelf.panel, name: "pocket-history", expectedWidth: 380)
         shelfModel.section = .drafts
         for index in 1...8 {

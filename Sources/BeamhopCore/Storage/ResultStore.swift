@@ -12,15 +12,10 @@ public final class ResultStore {
     private let queue: DatabaseQueue
     public init(_ queue: DatabaseQueue) { self.queue = queue }
 
-    /// Open read-write from a DB path. Throws `fileNotFound` if the DB doesn't exist,
-    /// `schemaOutdated` if migration v3 hasn't run yet.
+    /// Open an existing DB only (SQLite mode=rw); never recreate a disappeared Inbox.
+    /// Throws `schemaOutdated` if the results migration hasn't run yet.
     public static func open(path: URL) throws -> ResultStore {
-        guard FileManager.default.fileExists(atPath: path.path) else {
-            throw DatabaseError.fileNotFound
-        }
-        var config = Configuration()
-        config.foreignKeysEnabled = true
-        let queue = try DatabaseQueue(path: path.path, configuration: config)
+        let queue = try Database.openExistingReadWrite(path: path)
         let store = ResultStore(queue)
         guard try queue.read({ db in
             try Int.fetchOne(db, sql:

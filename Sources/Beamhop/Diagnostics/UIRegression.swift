@@ -34,7 +34,8 @@ enum UIRegression {
             try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: temp) }
             let path = temp.appendingPathComponent("inbox.sqlite")
-            let store = CaptureStore(try Database(path: path))
+            let database = try Database(path: path)
+            let store = CaptureStore(database)
 
             try verifyReceiverLaunch(in: temp)
 
@@ -112,7 +113,7 @@ enum UIRegression {
             panel.currentModel?.cancel()
 
             let inbox = InboxWindowController()
-            inbox.model.configure(store: store, events: nil, onDeliver: { _, _ in })
+            inbox.model.configure(store: store, events: nil, handoffs: HandoffResultStore(database.queue), onDeliver: { _, _ in })
             try show()
             inbox.show()
             // A key-window change can precede the foreground activation notification.
@@ -141,6 +142,20 @@ enum UIRegression {
                 inbox.model.selectedResults.count == 2
             }
             try expect(inbox.model.resultCounts[cap.id] == 2, "Inbox badge tracks both agents")
+            let library = try HopLibrary(database)
+            let handoff = try library.begin(HopDraft(materials: [HopMaterial(text: "Edited ordinary Hop")], requestsResultReturn: true))
+            try library.finish(handoff.id, status: .copied)
+            let handoffWriter = try HandoffResultStore.open(path: path)
+            inbox.model.selectedID = nil
+            try handoffWriter.insert(HandoffResult(handoffID: handoff.id, agent: "native-fixture", content: "Ordinary Hop conclusion"))
+            try wait("Inbox polls external handoff conclusions without a capture selection", timeout: 4) {
+                inbox.model.handoffConclusions.results.count == 1
+            }
+            let returned = inbox.model.handoffConclusions.results[0]
+            inbox.model.handoffConclusions.selectedID = returned.id
+            try expect(inbox.model.handoffConclusions.selectedRecord?.id == handoff.id, "Inbox conclusion selects the frozen handoff")
+            try expect(inbox.model.handoffConclusions.selectedRecord?.status == .copied, "Inbox conclusion is separate from transport receipt")
+            inbox.model.selectedID = cap.id
             if let window = NSApp.keyWindow {
                 window.setContentSize(NSSize(width: 1400, height: 950))
                 window.appearance = NSAppearance(named: .aqua)
