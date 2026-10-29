@@ -7,6 +7,12 @@ public final class HopPocketModel: ObservableObject {
     public let library: HopLibrary
     public let conclusions = HandoffResultsModel()
     @Published public var section: Section = .drafts
+    @Published public var taskIDFilter: String? {
+        didSet {
+            guard oldValue != taskIDFilter else { return }
+            selectedIDs = []; route = nil; requestsResultReturn = false; historyLimit = 20
+        }
+    }
     /// SwiftUI's search-field binding writes the unchanged value back on view updates
     /// (observed on macOS 15.7: writeback fires during delivery state changes); only a
     /// real query edit may clear the selection, or a failed handoff loses it silently.
@@ -27,22 +33,33 @@ public final class HopPocketModel: ObservableObject {
         subscription = library.$state.dropFirst().sink { [weak self] state in
             guard let self else { return }
             self.selectedIDs.formIntersection(Set(state.pocket.map(\.id)))
+            if let taskID = self.taskIDFilter, !state.tasks.contains(where: { $0.id == taskID }) {
+                self.taskIDFilter = nil
+            }
             self.objectWillChange.send()
         }
     }
     public var selection: [HopDraft] { library.state.pocket.filter { selectedIDs.contains($0.id) } }
     private func matches(_ draft: HopDraft) -> Bool {
+        guard taskIDFilter == nil || draft.task?.id == taskIDFilter else { return false }
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return term.isEmpty || ([draft.instruction, draft.route.project, draft.route.target?.displayName ?? ""]
-            + draft.materials.map { $0.text + " " + $0.name }).contains { $0.localizedCaseInsensitiveContains(term) }
+        if term.isEmpty { return true }
+        var fields: [String] = [draft.instruction, draft.route.project]
+        fields.append(draft.route.target?.displayName ?? "")
+        fields.append(draft.task?.title ?? "")
+        fields.append(draft.task?.id ?? "")
+        fields.append(draft.relay?.text ?? "")
+        fields += draft.materials.map { $0.text + " " + $0.name }
+        return fields.contains { $0.localizedCaseInsensitiveContains(term) }
     }
     public var drafts: [HopDraft] { library.state.pocket.filter(matches) }
     public var records: [HopRecord] { library.state.records.reversed().filter { matches($0.draft) } }
     public var mixedRoutes: Bool { guard let first = selection.first else { return false }; return selection.contains { $0.route != first.route } }
+    public var mixedTasks: Bool { guard let first = selection.first else { return false }; return selection.contains { $0.task?.id != first.task?.id } }
     public var hasAttachments: Bool { selection.contains { !$0.attachments.isEmpty } }
     public var blockedSelection: Bool { !selectedIDs.isDisjoint(with: blockedDraftIDs.union(library.inFlightIDs)) }
     public var canDeliver: Bool {
-        !isDelivering && !selection.isEmpty && !blockedSelection && !hasAttachments
+        !isDelivering && !selection.isEmpty && !blockedSelection && !hasAttachments && !mixedTasks
             && route?.target.map { availableTargets.contains($0) } == true && onDeliver != nil
     }
     public func toggle(_ id: String) {

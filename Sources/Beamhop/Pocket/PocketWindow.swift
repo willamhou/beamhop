@@ -150,6 +150,10 @@ struct HopPocketView: View {
                 Text("Drafts").tag(HopPocketModel.Section.drafts)
                 Text("Handoff history").tag(HopPocketModel.Section.history)
             }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("pocket.section")
+            if !library.tasks.isEmpty {
+                TaskChoicePicker(tasks: library.tasks, emptyTitle: "All tasks", identifier: "pocket.task-filter",
+                                 selectedID: $model.taskIDFilter).disabled(model.isDelivering)
+            }
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Search materials, instructions or projects", text: $model.query)
@@ -236,6 +240,9 @@ struct HopPocketView: View {
     private var batchActions: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
+            if model.mixedTasks {
+                Text("Different tasks. Edit their task association or hand them off separately.").font(.caption).foregroundStyle(.orange)
+            }
             if model.mixedRoutes && model.route == nil {
                 Text("Different destinations. Choose where to hand off this selection.").font(.caption).foregroundStyle(.secondary)
             }
@@ -297,6 +304,7 @@ struct HopPocketView: View {
                                 }
                                 if viewState.expandedID == record.id {
                                     Text(metadata(record.draft)).font(.caption2).foregroundStyle(.secondary)
+                                    TaskIdentityView(task: record.draft.task)
                                     if record.envelopeVersion != nil {
                                         Text(L10n.f("Handoff ID: %@", record.id)).font(.caption2.monospaced()).textSelection(.enabled)
                                     }
@@ -305,6 +313,17 @@ struct HopPocketView: View {
                                         VStack(alignment: .leading, spacing: 8) {
                                             Text(record.textFallback).font(.caption).textSelection(.enabled)
                                             HandoffConclusionsList(model: model.conclusions)
+                                            if record.draft.task != nil {
+                                                PocketActionButton(title: L10n.s("Continue task with this copy"), identifier: "pocket.continue.\(record.id)") {
+                                                    perform(open: true) { try library.continueTask(handoffID: record.id) }
+                                                }
+                                                ForEach(model.conclusions.results) { result in
+                                                    PocketActionButton(title: L10n.f("Continue with conclusion %@", result.agent + " · " + String(result.id.suffix(8))),
+                                                                       identifier: "pocket.continue-result.\(result.id)") {
+                                                        perform(open: true) { try library.continueTask(handoffID: record.id, resultID: result.id) }
+                                                    }.help(String(result.content.prefix(300)))
+                                                }
+                                            }
                                         }
                                     }.frame(height: 150)
                                     HStack {
@@ -363,7 +382,8 @@ struct HopPocketView: View {
     }
     private func metadata(_ draft: HopDraft) -> String {
         let types = draft.materials.map { $0.kind == .text ? L10n.s("Text") : $0.name }.prefix(2).joined(separator: ", ")
-        return routeLabel(draft.route) + " · " + L10n.f("Materials · %lld", Int64(draft.materials.count)) + " · " + types
+        return [draft.task?.displayLabel, routeLabel(draft.route), L10n.f("Materials · %lld", Int64(draft.materials.count)), types]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 

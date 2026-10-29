@@ -173,6 +173,24 @@ enum NativeUISmoke {
               && controller.currentModel?.snapshot.requestsResultReturn == true)
         check("optional return can be disabled", pressControl("capture.result-return", in: controller.panel)
               && controller.currentModel?.requestsResultReturn == false)
+        check("task relay editor opens through native control", pressControl("capture.task-relay", in: controller.panel))
+        controller.currentModel?.createTask(title: "Fixture task")
+        controller.currentModel?.relayText = "Constraints: manual handoff only"
+        settle()
+        check("task relay editor is accessible", accessibilityNodes(controller.panel!).contains { identifier($0) == "capture.relay-text" })
+        if let picker = accessibilityNodes(controller.panel!).compactMap({ $0 as? NSPopUpButton }).first(where: { identifier($0) == "capture.task-choice" }) {
+            check("new task is represented by the native picker", picker.indexOfSelectedItem > 0
+                  && picker.titleOfSelectedItem?.contains("Fixture task") == true)
+        } else { check("new task is represented by the native picker", false) }
+        if let editor = accessibilityNodes(controller.panel!).compactMap({ $0 as? NSTextView }).first(where: { identifier($0) == "capture.relay-text" }) {
+            editor.string = "Constraints: manual handoff only · edited natively"
+            editor.didChangeText(); settle()
+            check("native relay editing updates the outgoing snapshot", controller.currentModel?.snapshot.relay?.text == "Constraints: manual handoff only · edited natively")
+        } else { check("native relay editing updates the outgoing snapshot", false) }
+        check("relay preview uses actual edited material", controller.currentModel?.snapshot.outgoingText.contains("Constraints: manual handoff only") == true)
+        try capture(controller.panel, name: "capture-task-relay", expectedWidth: 480)
+        _ = pressControl("capture.task-relay", in: controller.panel)
+        controller.currentModel?.task = nil; controller.currentModel?.relay = nil
         // Exercise native menu tracking and its actual action, including focus-loss behavior.
         var menuChosen = false
         let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
@@ -282,11 +300,13 @@ enum NativeUISmoke {
         try capture(shelf.panel, name: "shelf-remaining", expectedWidth: 360)
         shelf.hide()
         let library = try HopLibrary(db)
-        let firstDraft = HopDraft(materials: [HopMaterial(capture: sample)],
+        var firstDraft = HopDraft(materials: [HopMaterial(capture: sample)],
                                   instruction: chinese ? "对照这些材料，修改方案" : "Compare these materials and update the plan",
                                   route: .init(target: .kimiWork, project: work.name))
-        let secondDraft = HopDraft(materials: [HopMaterial(text: chinese ? "当前未发送的材料" : "Current unsent material")],
+        var secondDraft = HopDraft(materials: [HopMaterial(text: chinese ? "当前未发送的材料" : "Current unsent material")],
                                    route: .init(target: .clipboard, project: chinese ? "项目 B" : "Project B"))
+        let fixtureTask = HopTask(title: chinese ? "回归任务" : "Regression task")
+        firstDraft.task = fixtureTask; secondDraft.task = fixtureTask
         try library.hold(firstDraft)
         try library.start(secondDraft)
         // A history receipt belongs to an earlier batch, not the unsent Pocket draft.
@@ -362,8 +382,27 @@ enum NativeUISmoke {
             check("Pocket opens frozen handoff history", pressShelf("pocket.history." + batchRecord.id))
             check("Pocket displays externally written conclusion", shelfModel.conclusions.results.first?.content == "Returned batch conclusion <>&")
             check("Pocket return does not change copied receipt", library.state.records.last?.status == .copied)
+            shelfModel.taskIDFilter = fixtureTask.id
+            settle()
+            check("Pocket filters history by task identity", shelfModel.records.contains { $0.id == batchRecord.id }
+                  && shelfModel.records.allSatisfy { $0.draft.task?.id == fixtureTask.id })
+            check("Pocket task filter is accessible", accessibilityNodes(draftShelf.panel!).contains { identifier($0) == "pocket.task-filter" })
+            if let picker = accessibilityNodes(draftShelf.panel!).compactMap({ $0 as? NSPopUpButton }).first(where: { identifier($0) == "pocket.task-filter" }) {
+                picker.selectItem(at: 0)
+                picker.sendAction(picker.action, to: picker.target)
+                check("native task filter resets to All tasks", shelfModel.taskIDFilter == nil)
+            } else { check("native task filter resets to All tasks", false) }
+            shelfModel.taskIDFilter = nil
         }
         try capture(draftShelf.panel, name: "pocket-history", expectedWidth: 380)
+        if let result = shelfModel.conclusions.results.first, let batchRecord {
+            check("Pocket continues with selected conclusion", pressShelf("pocket.continue-result." + result.id)
+                  && library.state.active?.task?.id == fixtureTask.id
+                  && library.state.active?.relay?.sourceResultID == result.id
+                  && library.state.active?.requestsResultReturn == false)
+            check("continuing preserves the old receipt", library.state.records.last?.id == batchRecord.id
+                  && library.state.records.last?.status == .copied)
+        }
         shelfModel.section = .drafts
         for index in 1...8 {
             try library.hold(HopDraft(materials: [HopMaterial(text: (chinese ? "材料 " : "Material ") + String(index))], route: secondDraft.route))

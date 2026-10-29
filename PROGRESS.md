@@ -1,5 +1,59 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
+## Task context relay (2026-10-29)
+
+First Router slice starts from `main@5436f7b` on `codex/task-context-relay` in an
+isolated worktree. Scope is explicit local task identity, editable relay packages,
+frozen handoff linkage and task-filtered Pocket history/Inbox conclusion identity.
+No external session reader, routing model, autonomous execution or configuration
+changes. Existing acceptance apps, real Inbox and unrelated original-worktree
+documentation/research remain untouched.
+
+Tasks are retained associations in drafts/receipts; old JSON stays unassigned and
+old frozen output is never upgraded retrospectively. Same-task batches retain
+relay text, mixed-task batches block. Explicit continuation can select one scoped
+conclusion as unverified edited context and keeps earlier relay constraints. It
+parks current input and defaults return consent off; receipt recovery preserves
+its saved consent. Existing handoff-scoped MCP tools and result deletion semantics
+remain unchanged, including independently retained edited relay copies.
+
+The owner approved HopDraft/HopRecord, HopLibrary and panel/Pocket presentation as
+the three regression seams. Red/green runs established missing interfaces and a
+lost-constraint regression before implementation/fix. Mirrored SelfTest/XCTest and
+hosted native fixture additions track the [contract](docs/superpowers/specs/2026-10-29-task-context-relay.md).
+Local full `swift build`, SelfTest, actual temporary-database MCP protocol and
+read-only trial metrics CLI regressions passed. Provenance (9 tests), development
+signing safety (7 cases) and `git diff --check` passed. `swift test` was attempted
+but CLT cannot resolve XCTest. Hosted XCTest/native fixtures and independent
+Standards/Spec review remain merge gates; no native fixture ran in the user's
+active desktop session. These checks do not establish real-device acceptance.
+
+Initial two-axis review of `8a3c23b` found the same P2 on both axes: deleting a
+task's final association left a stale, now-hidden filter. A mirrored failing
+regression reproduced it; the fix validates against the incoming published state
+and restores All tasks without losing unassigned drafts. Initial hosted build
+also exposed a Swift type-check timeout on its older compiler in the expanded
+search expression; explicitly typed incremental fields replace that expression.
+Fresh-head review and hosted CI are required after these fixes.
+
+Independent Standards and Spec re-reviews of `eef49fa` reported zero remaining
+findings; the connected GitHub review also reported no major issues. Both review
+axes' original filter finding was verified fixed before resolving its thread.
+Hosted `eef49fa` build/XCTest/SelfTest/protocol/metrics passed, but native fixtures
+correctly rejected missing accessibility identities on the new SwiftUI editor
+and task picker. Native NSTextView/NSPopUpButton controls now replace those two
+controls; the original assertions remain, augmented by actual native edit/reset
+actions. Final-head validation and merge evidence are tracked in
+[PR #19](https://github.com/willamhou/beamhop/pull/19), not inferred from the earlier
+green core tests. No manual acceptance is claimed.
+
+Both hosted workflows passed all checks on `71be16b`. Final screenshot inspection
+then found a fixture/public-model state gap: a newly created task could be absent
+from the supplied catalog and the native picker showed unassigned. The panel now
+includes its current task in selectable options, independent of catalog refresh;
+mirrored public-interface and actual native selected-item assertions cover this.
+The next head must pass fresh CI/re-review; `71be16b` green is not reused for merge.
+
 > Single entry point for current status, verification boundaries and next steps.
 > Last updated: 2026-10-26 — merged baseline `main@4573b52` (PR #17), including ordinary Hop identity/optional return. Field-trial metrics and onboarding below are branch work pending review and latest-head CI, not a new acceptance package. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
 

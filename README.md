@@ -30,6 +30,35 @@ Returned conclusions appear under **Inbox → Handoff conclusions** and the matc
 
 Beamhop handles context and handoff; reasoning and execution stay with your external tools. A project remembers local route choices, not a verified conversation address. Preparing a draft brings the receiver forward for review; an unavailable receiver requires an explicit choice or manual fallback. **Copied** and **prepared** receipts do not mean an agent has received or completed the task.
 
+## Task context relay
+
+Open **Task and relay context** in Hop to explicitly create/select a local task and
+edit the context that should travel. Task IDs link multiple handoff attempts; they
+are not project names or external conversation addresses. Preview the outgoing
+content before confirming. Instructions and edited materials remain literal and
+first; task and fresh handoff IDs are appended at confirmation. Relay text labels
+agent claims unverified. No agent histories are read and no model/API key is needed.
+
+Pocket filters drafts/history by task and shows the task ID beside each frozen
+handoff. Different tasks (including assigned plus unassigned drafts) cannot be
+combined: edit their association or hand them off separately. Same-task batches
+retain each draft's relay text. Old records remain unassigned and keep their old
+payload; restore one and explicitly select a task to start tracking future attempts.
+
+In an expanded task-linked history entry, **Continue task with this copy** restores
+an editable new draft. Alternatively select one specific returned conclusion to
+add as unverified relay text, retaining earlier relay constraints. Current input
+is parked, not overwritten. Each continuation defaults MCP return off; backup
+recovery retains its saved consent. Inbox conclusions show the linked task too.
+Result write-back remains optional and scoped to a single handoff, never proof of
+task completion. Deleting a backup deletes its conclusions; separately selected
+editable relay copies in other drafts/history remain until those copies are deleted.
+
+This first Router slice has no separate task lifecycle, session discovery,
+automatic routing, sending or completion detection. Tasks are listed from retained
+drafts/history, not inferred from historical activity. See the
+[task relay contract](docs/superpowers/specs/2026-10-29-task-context-relay.md).
+
 ## Get Beamhop
 
 **Development preview · macOS 14 or later.** There is no tagged release yet. [Releases](https://github.com/willamhou/beamhop/releases) is the home for future versions; the merged baseline is `main`, with builds available through [GitHub Actions](https://github.com/willamhou/beamhop/actions/workflows/ci.yml?query=branch%3Amain).

@@ -1185,6 +1185,8 @@ do { try runTrialWorkflowRegression() }
 catch { check(false, "Trial workflow regression: \(error)") }
 do { try runHopReturnRegression() }
 catch { check(false, "Hop return regression: \(error)") }
+do { try runTaskRelayRegression() }
+catch { check(false, "Task relay regression: \(error)") }
 
 print(failures == 0 ? "\nALL PASS ✅" : "\n\(failures) FAILURE(S) ❌")
 exit(failures == 0 ? 0 : 1)

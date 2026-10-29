@@ -10,6 +10,9 @@ private final class CapturePanelViewState: ObservableObject {
     @Published var imagePreviews: Set<String> = []
     @Published var projectName = ""
     @Published var newTarget: DeliveryTarget = .clipboard
+    @Published var showRelay = false
+    @Published var taskTitle = ""
+    @Published var showPreview = false
 }
 
 struct CapturePanelView: View {
@@ -72,6 +75,13 @@ struct CapturePanelView: View {
                     }.padding(.vertical, 3)
                 }.frame(height: min(220, CGFloat(max(1, model.materials.count)) * 62 + 32))
             }.padding(16)
+            VStack(alignment: .leading, spacing: 6) {
+                PanelCheckbox(title: "Task and relay context", identifier: "capture.task-relay", isOn: $viewState.showRelay)
+                if let task = model.task {
+                    Text(task.displayLabel).font(.caption).lineLimit(1)
+                }
+                if viewState.showRelay { relayEditor }
+            }.padding(.horizontal, 16).padding(.bottom, 8)
             if model.isCreating { creation }
             Divider()
             VStack(alignment: .leading, spacing: 10) {
@@ -146,6 +156,37 @@ struct CapturePanelView: View {
                 }
             }
             return !providers.isEmpty
+        }
+    }
+
+    private var relayEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TaskIdentityView(task: model.task)
+            TaskChoicePicker(tasks: model.taskOptions, emptyTitle: "No task association", identifier: "capture.task-choice",
+                             selectedID: Binding(get: { model.task?.id }, set: { id in
+                                 model.task = model.taskOptions.first { $0.id == id }
+                             }))
+            HStack {
+                TextField("New task title", text: $viewState.taskTitle).textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("capture.task-title")
+                Button("Create task") {
+                    model.createTask(title: viewState.taskTitle); viewState.taskTitle = ""
+                }.disabled(viewState.taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            Text("Relay context · editable, agent claims unverified").font(.caption)
+            RelayTextEditor(text: $model.relayText).frame(height: 70)
+            if let source = model.relay?.sourceHandoffID {
+                Text(L10n.f("Selected from handoff: %@", source)).font(.caption2).textSelection(.enabled)
+            }
+            Text("Add goals, constraints, confirmed decisions, unverified claims and next steps. Only this edited text travels; no agent history is read.")
+                .font(.caption2).foregroundStyle(.secondary)
+            PanelCheckbox(title: "Preview outgoing package", identifier: "capture.relay-preview", isOn: $viewState.showPreview)
+            if viewState.showPreview {
+                Text("Task and fresh handoff IDs are appended when confirmed. Nothing is sent automatically.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                ScrollView { Text(model.snapshot.textFallback).font(.caption).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                    .frame(height: 90)
+            }
         }
     }
 
