@@ -28,6 +28,11 @@ public final class CapturePanelModel: ObservableObject {
     @Published public var requestsResultReturn = false { didSet { draftChanged() } }
     @Published public var task: HopTask? { didSet { draftChanged() } }
     @Published public var taskChoices: [HopTask] = []
+    /// The selected task must remain visible even before the saved catalog refreshes.
+    public var taskOptions: [HopTask] {
+        guard let task, !taskChoices.contains(where: { $0.id == task.id }) else { return taskChoices }
+        return [task] + taskChoices
+    }
     @Published public var relay: HopRelayContext? { didSet { draftChanged() } }
     public var relayText: String {
         get { relay?.text ?? "" }

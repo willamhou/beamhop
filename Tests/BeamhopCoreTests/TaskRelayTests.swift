@@ -100,6 +100,9 @@ final class TaskRelayTests: XCTestCase {
             "preview is the actual editable outgoing package")
         panel.createTask(title: "  New task  ")
         XCTAssertTrue(
+            panel.taskOptions.contains { $0.id == panel.snapshot.task?.id },
+            "new task remains represented in the picker before a catalog refresh")
+        XCTAssertTrue(
             panel.snapshot.task?.title == "New task" && panel.snapshot.task?.id != task.id,
             "explicit new task creates an independent identity")
     }

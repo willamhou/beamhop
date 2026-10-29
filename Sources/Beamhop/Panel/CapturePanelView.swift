@@ -162,9 +162,9 @@ struct CapturePanelView: View {
     private var relayEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             TaskIdentityView(task: model.task)
-            TaskChoicePicker(tasks: model.taskChoices, emptyTitle: "No task association", identifier: "capture.task-choice",
+            TaskChoicePicker(tasks: model.taskOptions, emptyTitle: "No task association", identifier: "capture.task-choice",
                              selectedID: Binding(get: { model.task?.id }, set: { id in
-                                 model.task = model.taskChoices.first { $0.id == id }
+                                 model.task = model.taskOptions.first { $0.id == id }
                              }))
             HStack {
                 TextField("New task title", text: $viewState.taskTitle).textFieldStyle(.roundedBorder)

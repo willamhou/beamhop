@@ -47,6 +47,13 @@ actions. Final-head validation and merge evidence are tracked in
 [PR #19](https://github.com/willamhou/beamhop/pull/19), not inferred from the earlier
 green core tests. No manual acceptance is claimed.
 
+Both hosted workflows passed all checks on `71be16b`. Final screenshot inspection
+then found a fixture/public-model state gap: a newly created task could be absent
+from the supplied catalog and the native picker showed unassigned. The panel now
+includes its current task in selectable options, independent of catalog refresh;
+mirrored public-interface and actual native selected-item assertions cover this.
+The next head must pass fresh CI/re-review; `71be16b` green is not reused for merge.
+
 > Single entry point for current status, verification boundaries and next steps.
 > Last updated: 2026-10-26 — merged baseline `main@4573b52` (PR #17), including ordinary Hop identity/optional return. Field-trial metrics and onboarding below are branch work pending review and latest-head CI, not a new acceptance package. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
 

@@ -178,6 +178,10 @@ enum NativeUISmoke {
         controller.currentModel?.relayText = "Constraints: manual handoff only"
         settle()
         check("task relay editor is accessible", accessibilityNodes(controller.panel!).contains { identifier($0) == "capture.relay-text" })
+        if let picker = accessibilityNodes(controller.panel!).compactMap({ $0 as? NSPopUpButton }).first(where: { identifier($0) == "capture.task-choice" }) {
+            check("new task is represented by the native picker", picker.indexOfSelectedItem > 0
+                  && picker.titleOfSelectedItem?.contains("Fixture task") == true)
+        } else { check("new task is represented by the native picker", false) }
         if let editor = accessibilityNodes(controller.panel!).compactMap({ $0 as? NSTextView }).first(where: { identifier($0) == "capture.relay-text" }) {
             editor.string = "Constraints: manual handoff only · edited natively"
             editor.didChangeText(); settle()
