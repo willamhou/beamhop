@@ -32,6 +32,7 @@ struct HandoffResultsView: View {
                         Text(L10n.f("Handoff ID: %@", result.handoffID)).font(.caption.monospaced()).textSelection(.enabled)
                         Text("Agent-reported conclusion · not verified task completion").font(.caption).foregroundStyle(.secondary)
                         if let record = model.selectedRecord {
+                            TaskIdentityView(task: record.draft.task)
                             Text(record.label).font(.callout).foregroundStyle(.secondary)
                             if let detail = record.detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
                             Divider()
@@ -42,6 +43,20 @@ struct HandoffResultsView: View {
                 }
             } else {
                 ContentUnavailableView("Select a handoff conclusion", systemImage: "doc.text.magnifyingglass")
+            }
+        }
+    }
+}
+
+struct TaskIdentityView: View {
+    let task: HopTask?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let task {
+                Text(task.title).font(.callout.weight(.semibold))
+                Text(L10n.f("Task ID: %@", task.id)).font(.caption2.monospaced()).textSelection(.enabled)
+            } else {
+                Text("No task association").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }

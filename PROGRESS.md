@@ -1,5 +1,33 @@
 # Beamhop — Progress & Resume Guide (PROGRESS)
 
+## Task context relay (2026-10-29, in progress)
+
+First Router slice starts from `main@5436f7b` on `codex/task-context-relay` in an
+isolated worktree. Scope is explicit local task identity, editable relay packages,
+frozen handoff linkage and task-filtered Pocket history/Inbox conclusion identity.
+No external session reader, routing model, autonomous execution or configuration
+changes. Existing acceptance apps, real Inbox and unrelated original-worktree
+documentation/research remain untouched.
+
+Tasks are retained associations in drafts/receipts; old JSON stays unassigned and
+old frozen output is never upgraded retrospectively. Same-task batches retain
+relay text, mixed-task batches block. Explicit continuation can select one scoped
+conclusion as unverified edited context and keeps earlier relay constraints. It
+parks current input and defaults return consent off; receipt recovery preserves
+its saved consent. Existing handoff-scoped MCP tools and result deletion semantics
+remain unchanged, including independently retained edited relay copies.
+
+The owner approved HopDraft/HopRecord, HopLibrary and panel/Pocket presentation as
+the three regression seams. Red/green runs established missing interfaces and a
+lost-constraint regression before implementation/fix. Mirrored SelfTest/XCTest and
+hosted native fixture additions track the [contract](docs/superpowers/specs/2026-10-29-task-context-relay.md).
+Local full `swift build`, SelfTest, actual temporary-database MCP protocol and
+read-only trial metrics CLI regressions passed. Provenance (9 tests), development
+signing safety (7 cases) and `git diff --check` passed. `swift test` was attempted
+but CLT cannot resolve XCTest. Hosted XCTest/native fixtures and independent
+Standards/Spec review remain merge gates; no native fixture ran in the user's
+active desktop session. These checks do not establish real-device acceptance.
+
 > Single entry point for current status, verification boundaries and next steps.
 > Last updated: 2026-10-26 — merged baseline `main@4573b52` (PR #17), including ordinary Hop identity/optional return. Field-trial metrics and onboarding below are branch work pending review and latest-head CI, not a new acceptance package. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
 

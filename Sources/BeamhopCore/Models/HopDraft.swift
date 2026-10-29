@@ -48,11 +48,13 @@ public struct HopDraft: Codable, Equatable, Identifiable, Sendable {
     public var instruction: String
     public var route: HopRoute
     public var requestsResultReturn: Bool
+    public var task: HopTask?
+    public var relay: HopRelayContext?
     public init(materials: [HopMaterial], instruction: String = "", route: HopRoute = .init(), requestsResultReturn: Bool = false) {
         self.materials = materials; self.instruction = instruction; self.route = route
         self.requestsResultReturn = requestsResultReturn
     }
-    enum CodingKeys: String, CodingKey { case id, materials, instruction, route, requestsResultReturn }
+    enum CodingKeys: String, CodingKey { case id, materials, instruction, route, requestsResultReturn, task, relay }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(String.self, forKey: .id)
@@ -60,8 +62,10 @@ public struct HopDraft: Codable, Equatable, Identifiable, Sendable {
         instruction = try values.decode(String.self, forKey: .instruction)
         route = try values.decode(HopRoute.self, forKey: .route)
         requestsResultReturn = try values.decodeIfPresent(Bool.self, forKey: .requestsResultReturn) ?? false
+        task = try values.decodeIfPresent(HopTask.self, forKey: .task)
+        relay = try values.decodeIfPresent(HopRelayContext.self, forKey: .relay)
     }
-    public var hasContent: Bool { !materials.isEmpty || !instruction.isEmpty }
+    public var hasContent: Bool { !materials.isEmpty || !instruction.isEmpty || task != nil || !(relay?.outgoingText ?? "").isEmpty }
     public var attachments: [HopMaterial] { materials.filter { $0.kind != .text } }
     public var hasNativeCommand: Bool { instruction.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/") }
     /// Instruction stays literal and first, including slash commands and newlines.
@@ -69,7 +73,7 @@ public struct HopDraft: Codable, Equatable, Identifiable, Sendable {
         ([instruction].filter { !$0.isEmpty } + materials.filter { $0.kind == .text }.map { material in
             let source = material.original.map { [$0.appName, $0.url].compactMap { $0 }.joined(separator: " · ") } ?? L10n.s("Added text")
             return "Source: \(source)\n\(material.text)"
-        }).joined(separator: "\n\n")
+        } + [relay?.outgoingText ?? ""].filter { !$0.isEmpty }).joined(separator: "\n\n")
     }
     public var textFallback: String {
         outgoingText + attachmentReminder
@@ -108,6 +112,7 @@ public struct HopRecord: Codable, Equatable, Identifiable, Sendable {
     }
     private static func makeOutgoingText(draft: HopDraft, id: String) -> String {
         var metadata = "--- Beamhop handoff ---\nHandoff ID: \(id)"
+        if let task = draft.task { metadata += "\nTask ID: \(task.id)\nTask: \(task.title)" }
         if draft.requestsResultReturn {
             metadata += "\nOptional conclusion return: if the Beamhop MCP tool save_handoff_result is available, "
                 + "you may call it with handoff_id='\(id)', content=your conclusion, agent=your identifier. "

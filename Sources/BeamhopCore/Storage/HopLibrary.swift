@@ -19,6 +19,43 @@ public final class HopLibrary: ObservableObject {
     @Published public private(set) var state: State
     public var onChange: (() -> Void)?
     public var onActivity: ((HopActivity) -> Void)?
+    /// Retained local associations only; never guess a task for an old record.
+    public var tasks: [HopTask] {
+        let drafts = [state.active].compactMap { $0 } + state.pocket + state.records.reversed().map(\.draft)
+        var seen = Set<String>()
+        return drafts.compactMap(\.task).filter { seen.insert($0.id).inserted }
+    }
+    public func history(taskID: String) -> [HopRecord] {
+        state.records.reversed().filter { $0.draft.task?.id == taskID }
+    }
+    public enum TaskError: LocalizedError {
+        case unavailableSource, mixedTasks
+        public var errorDescription: String? {
+            switch self {
+            case .unavailableSource: return L10n.s("The task or selected conclusion is no longer available.")
+            case .mixedTasks: return L10n.s("Different tasks. Edit their task association or hand them off separately.")
+            }
+        }
+    }
+    /// Explicit continuation: select exactly one retained conclusion, never all history.
+    public func continueTask(handoffID: String, resultID: String? = nil) throws {
+        guard let record = state.records.first(where: { $0.id == handoffID }), record.draft.task != nil else {
+            throw TaskError.unavailableSource
+        }
+        var draft = record.draft
+        draft.id = UUID().uuidString
+        draft.requestsResultReturn = false
+        if let resultID {
+            guard let result = try HandoffResultStore(database.queue).result(id: resultID), result.handoffID == handoffID else {
+                throw TaskError.unavailableSource
+            }
+            let text = [draft.relay?.outgoingText ?? "", "Agent-reported conclusion (unverified):\n" + result.content]
+                .filter { !$0.isEmpty }.joined(separator: "\n\n")
+            draft.relay = HopRelayContext(text: text,
+                                        sourceHandoffID: handoffID, sourceResultID: result.id)
+        }
+        try start(draft)
+    }
     private let database: Database
     public init(_ database: Database) throws {
         self.database = database
@@ -134,18 +171,20 @@ public final class HopLibrary: ObservableObject {
         guard route.target != nil, !drafts.isEmpty, drafts.allSatisfy({ state.pocket.contains($0) && !inFlightIDs.contains($0.id) }) else {
             throw PocketError.changed
         }
+        guard drafts.allSatisfy({ $0.task?.id == drafts.first?.task?.id }) else { throw TaskError.mixedTasks }
         var combined: HopDraft
         if drafts.count == 1 { combined = drafts[0]; combined.route = route }
         else {
             // Preserve each instruction next to its own material, in shelf order.
             let materials = drafts.flatMap { draft -> [HopMaterial] in
-                let context = [draft.route.project, draft.instruction].filter { !$0.isEmpty }.joined(separator: "\n")
+                let context = [draft.route.project, draft.instruction, draft.relay?.outgoingText ?? ""].filter { !$0.isEmpty }.joined(separator: "\n")
                 let copied = draft.materials.map { material -> HopMaterial in
                     var copy = material; copy.id = UUID().uuidString; return copy
                 }
                 return (context.isEmpty ? [] : [HopMaterial(text: context)]) + copied
             }
             combined = HopDraft(materials: materials, route: route)
+            combined.task = drafts.first?.task
         }
         combined.requestsResultReturn = requestsResultReturn ?? drafts.allSatisfy(\.requestsResultReturn)
         var record = HopRecord(draft: combined)

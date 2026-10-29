@@ -26,6 +26,20 @@ public final class CapturePanelModel: ObservableObject {
     @Published public var materials: [HopMaterial] = [] { didSet { draftChanged() } }
     @Published public var session: HopRoute.Session = .currentWindow { didSet { draftChanged() } }
     @Published public var requestsResultReturn = false { didSet { draftChanged() } }
+    @Published public var task: HopTask? { didSet { draftChanged() } }
+    @Published public var taskChoices: [HopTask] = []
+    @Published public var relay: HopRelayContext? { didSet { draftChanged() } }
+    public var relayText: String {
+        get { relay?.text ?? "" }
+        set {
+            var value = relay ?? HopRelayContext(text: "")
+            value.text = newValue; relay = value
+        }
+    }
+    public func createTask(title: String) {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        task = HopTask(title: title)
+    }
     @Published public var draftError: String?
     @Published public var pendingImportCount = 0
     @Published public var savedRoutes: [HopRoute] = []
@@ -55,6 +69,7 @@ public final class CapturePanelModel: ObservableObject {
                              route: HopRoute(target: unavailableTarget ?? selectedTarget, project: workName, session: session),
                              requestsResultReturn: requestsResultReturn)
         draft.id = draftID
+        draft.task = task; draft.relay = relay
         return draft
     }
     private func draftChanged() { if !restoring { onDraftChange?(snapshot) } }
@@ -63,6 +78,7 @@ public final class CapturePanelModel: ObservableObject {
         draftID = draft.id; materials = draft.materials; note = draft.instruction; additionalText = ""
         workName = draft.route.project; session = draft.route.session
         requestsResultReturn = draft.requestsResultReturn
+        task = draft.task; relay = draft.relay
         selectedTarget = draft.route.target
         unavailableTarget = draft.route.target.flatMap { visibleTargets.contains($0) ? nil : $0 }
         restoring = false

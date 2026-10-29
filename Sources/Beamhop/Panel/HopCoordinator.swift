@@ -90,8 +90,13 @@ final class HopCoordinator {
             model.pendingImportCount = self.pendingImports[model.snapshot.id] ?? 0
             model.savedRoutes = self.library.state.routes
             model.projects = self.library.state.projects
+            model.taskChoices = self.library.tasks
             model.onDraftChange = { [weak self, weak model] draft in
-                do { try self?.library.saveActive(draft); model?.draftError = nil }
+                do {
+                    try self?.library.saveActive(draft)
+                    model?.taskChoices = self?.library.tasks ?? []
+                    model?.draftError = nil
+                }
                 catch { model?.draftError = L10n.s("Could not save draft") + ": " + error.localizedDescription }
             }
             model.onRememberRoute = { [weak self, weak model] route in
