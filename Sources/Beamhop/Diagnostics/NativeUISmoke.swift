@@ -178,6 +178,11 @@ enum NativeUISmoke {
         controller.currentModel?.relayText = "Constraints: manual handoff only"
         settle()
         check("task relay editor is accessible", accessibilityNodes(controller.panel!).contains { identifier($0) == "capture.relay-text" })
+        if let editor = accessibilityNodes(controller.panel!).compactMap({ $0 as? NSTextView }).first(where: { identifier($0) == "capture.relay-text" }) {
+            editor.string = "Constraints: manual handoff only · edited natively"
+            editor.didChangeText(); settle()
+            check("native relay editing updates the outgoing snapshot", controller.currentModel?.snapshot.relay?.text == "Constraints: manual handoff only · edited natively")
+        } else { check("native relay editing updates the outgoing snapshot", false) }
         check("relay preview uses actual edited material", controller.currentModel?.snapshot.outgoingText.contains("Constraints: manual handoff only") == true)
         try capture(controller.panel, name: "capture-task-relay", expectedWidth: 480)
         _ = pressControl("capture.task-relay", in: controller.panel)
@@ -378,6 +383,11 @@ enum NativeUISmoke {
             check("Pocket filters history by task identity", shelfModel.records.contains { $0.id == batchRecord.id }
                   && shelfModel.records.allSatisfy { $0.draft.task?.id == fixtureTask.id })
             check("Pocket task filter is accessible", accessibilityNodes(draftShelf.panel!).contains { identifier($0) == "pocket.task-filter" })
+            if let picker = accessibilityNodes(draftShelf.panel!).compactMap({ $0 as? NSPopUpButton }).first(where: { identifier($0) == "pocket.task-filter" }) {
+                picker.selectItem(at: 0)
+                picker.sendAction(picker.action, to: picker.target)
+                check("native task filter resets to All tasks", shelfModel.taskIDFilter == nil)
+            } else { check("native task filter resets to All tasks", false) }
             shelfModel.taskIDFilter = nil
         }
         try capture(draftShelf.panel, name: "pocket-history", expectedWidth: 380)

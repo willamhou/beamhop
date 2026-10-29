@@ -151,10 +151,8 @@ struct HopPocketView: View {
                 Text("Handoff history").tag(HopPocketModel.Section.history)
             }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("pocket.section")
             if !library.tasks.isEmpty {
-                Picker("Task", selection: $model.taskIDFilter) {
-                    Text("All tasks").tag(String?.none)
-                    ForEach(library.tasks) { task in Text(task.displayLabel).tag(Optional(task.id)) }
-                }.font(.caption).accessibilityIdentifier("pocket.task-filter").disabled(model.isDelivering)
+                TaskChoicePicker(tasks: library.tasks, emptyTitle: "All tasks", identifier: "pocket.task-filter",
+                                 selectedID: $model.taskIDFilter).disabled(model.isDelivering)
             }
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)

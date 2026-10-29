@@ -162,14 +162,10 @@ struct CapturePanelView: View {
     private var relayEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             TaskIdentityView(task: model.task)
-            Menu {
-                Button("No task association") { model.task = nil }
-                ForEach(model.taskChoices) { task in
-                    Button(task.displayLabel) { model.task = task }
-                }
-            } label: {
-                Text(model.task?.displayLabel ?? L10n.s("Choose an existing task"))
-            }.accessibilityIdentifier("capture.task-choice")
+            TaskChoicePicker(tasks: model.taskChoices, emptyTitle: "No task association", identifier: "capture.task-choice",
+                             selectedID: Binding(get: { model.task?.id }, set: { id in
+                                 model.task = model.taskChoices.first { $0.id == id }
+                             }))
             HStack {
                 TextField("New task title", text: $viewState.taskTitle).textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("capture.task-title")
@@ -178,8 +174,7 @@ struct CapturePanelView: View {
                 }.disabled(viewState.taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             Text("Relay context · editable, agent claims unverified").font(.caption)
-            TextEditor(text: $model.relayText).font(.system(size: 12)).frame(height: 70)
-                .accessibilityLabel("Relay context").accessibilityIdentifier("capture.relay-text")
+            RelayTextEditor(text: $model.relayText).frame(height: 70)
             if let source = model.relay?.sourceHandoffID {
                 Text(L10n.f("Selected from handoff: %@", source)).font(.caption2).textSelection(.enabled)
             }
