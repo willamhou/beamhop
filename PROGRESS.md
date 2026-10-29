@@ -28,6 +28,14 @@ but CLT cannot resolve XCTest. Hosted XCTest/native fixtures and independent
 Standards/Spec review remain merge gates; no native fixture ran in the user's
 active desktop session. These checks do not establish real-device acceptance.
 
+Initial two-axis review of `8a3c23b` found the same P2 on both axes: deleting a
+task's final association left a stale, now-hidden filter. A mirrored failing
+regression reproduced it; the fix validates against the incoming published state
+and restores All tasks without losing unassigned drafts. Initial hosted build
+also exposed a Swift type-check timeout on its older compiler in the expanded
+search expression; explicitly typed incremental fields replace that expression.
+Fresh-head review and hosted CI are required after these fixes.
+
 > Single entry point for current status, verification boundaries and next steps.
 > Last updated: 2026-10-26 — merged baseline `main@4573b52` (PR #17), including ordinary Hop identity/optional return. Field-trial metrics and onboarding below are branch work pending review and latest-head CI, not a new acceptance package. Read [AGENTS.md](AGENTS.md) for collaboration, safety and CI-gated merge rules. Historical specifications and acceptance records below do not certify every current build.
 

@@ -3,6 +3,27 @@ import XCTest
 @testable import BeamhopCore
 
 final class TaskRelayTests: XCTestCase {
+    func testDeletedTaskFilter() throws {
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = try HopLibrary(
+            Database(path: directory.appendingPathComponent("filter.sqlite")))
+        let unassigned = HopDraft(materials: [HopMaterial(text: "must stay discoverable")])
+        try library.hold(unassigned)
+        var assigned = HopDraft(materials: [HopMaterial(text: "task")])
+        assigned.task = HopTask(title: "Temporary task")
+        let record = try library.begin(assigned)
+        try library.finish(record.id, status: .copied)
+        let pocket = HopPocketModel(library: library)
+        pocket.taskIDFilter = assigned.task?.id
+        try library.deleteRecords([record.id])
+        XCTAssertTrue(
+            pocket.taskIDFilter == nil && pocket.drafts == [unassigned],
+            "deleting last task restores access to unassigned drafts")
+    }
     func testLegacyTaskRelay() throws {
 
         let legacy =

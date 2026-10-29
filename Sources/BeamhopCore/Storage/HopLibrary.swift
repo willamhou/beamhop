@@ -15,16 +15,18 @@ public final class HopLibrary: ObservableObject {
         public var deletedDrafts: [HopDraft]?
         public var deletedDraftPositions: [String: Int]?
         public init() {}
+        /// Use the incoming value in @Published observers, before library.state changes.
+        public var tasks: [HopTask] {
+            let drafts = [active].compactMap { $0 } + pocket + records.reversed().map(\.draft)
+            var seen = Set<String>()
+            return drafts.compactMap(\.task).filter { seen.insert($0.id).inserted }
+        }
     }
     @Published public private(set) var state: State
     public var onChange: (() -> Void)?
     public var onActivity: ((HopActivity) -> Void)?
     /// Retained local associations only; never guess a task for an old record.
-    public var tasks: [HopTask] {
-        let drafts = [state.active].compactMap { $0 } + state.pocket + state.records.reversed().map(\.draft)
-        var seen = Set<String>()
-        return drafts.compactMap(\.task).filter { seen.insert($0.id).inserted }
-    }
+    public var tasks: [HopTask] { state.tasks }
     public func history(taskID: String) -> [HopRecord] {
         state.records.reversed().filter { $0.draft.task?.id == taskID }
     }

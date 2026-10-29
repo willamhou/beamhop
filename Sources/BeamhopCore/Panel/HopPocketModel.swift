@@ -33,6 +33,9 @@ public final class HopPocketModel: ObservableObject {
         subscription = library.$state.dropFirst().sink { [weak self] state in
             guard let self else { return }
             self.selectedIDs.formIntersection(Set(state.pocket.map(\.id)))
+            if let taskID = self.taskIDFilter, !state.tasks.contains(where: { $0.id == taskID }) {
+                self.taskIDFilter = nil
+            }
             self.objectWillChange.send()
         }
     }
@@ -40,9 +43,14 @@ public final class HopPocketModel: ObservableObject {
     private func matches(_ draft: HopDraft) -> Bool {
         guard taskIDFilter == nil || draft.task?.id == taskIDFilter else { return false }
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return term.isEmpty || ([draft.instruction, draft.route.project, draft.route.target?.displayName ?? "",
-                                draft.task?.title ?? "", draft.task?.id ?? "", draft.relay?.text ?? ""]
-            + draft.materials.map { $0.text + " " + $0.name }).contains { $0.localizedCaseInsensitiveContains(term) }
+        if term.isEmpty { return true }
+        var fields: [String] = [draft.instruction, draft.route.project]
+        fields.append(draft.route.target?.displayName ?? "")
+        fields.append(draft.task?.title ?? "")
+        fields.append(draft.task?.id ?? "")
+        fields.append(draft.relay?.text ?? "")
+        fields += draft.materials.map { $0.text + " " + $0.name }
+        return fields.contains { $0.localizedCaseInsensitiveContains(term) }
     }
     public var drafts: [HopDraft] { library.state.pocket.filter(matches) }
     public var records: [HopRecord] { library.state.records.reversed().filter { matches($0.draft) } }
