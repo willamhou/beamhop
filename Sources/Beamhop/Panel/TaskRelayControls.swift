@@ -66,7 +66,7 @@ struct RelayTextEditor: NSViewRepresentable {
         scroll.drawsBackground = false
         let editor = NSTextView(frame: NSRect(x: 0, y: 0, width: 440, height: 70))
         editor.minSize = NSSize(width: 0, height: 70)
-        editor.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        editor.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         editor.isRichText = false
         editor.drawsBackground = false
         editor.isVerticallyResizable = true
